@@ -27,6 +27,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.fuelLitersForDisplay
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.seatModeToString
@@ -50,6 +51,7 @@ interface DataProvider {
 /** Keys for composite tiles only — same CAN data as public keys, different default decimal places. */
 object DashboardCompositeTileFlowKeys {
     const val ENGINE_TEMP_VOLTAGE_ENGINE = "engineTemperature_voltageEngineTile"
+    const val ENGINE_TEMP_VOLTAGE_ENGINE_CAN = "engineTemperature_voltageEngineTile_can"
     const val GEARBOX_OIL_TEMP_GEAR_TILE = "gearBoxOilTemperature_gearBoxTile"
     const val WHEEL1_PRESSURE_WHEELS_TILE = "wheel1Pressure_wheelsTile"
     const val WHEEL2_PRESSURE_WHEELS_TILE = "wheel2Pressure_wheelsTile"
@@ -61,6 +63,7 @@ object DashboardCompositeTileFlowKeys {
     const val WHEEL4_PRESSURE_WHEELS_TILE_CAN = "wheel4Pressure_wheelsTile_can"
 }
 
+const val VOLTAGE_CAN_FLOW_KEY = "voltage_can"
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
@@ -115,6 +118,24 @@ class TboxDataProvider(
     private val restartFlow = MutableStateFlow(context.getString(R.string.tbox_short)).asStateFlow()
     private val emptyFlow = MutableStateFlow("").asStateFlow()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    /** BLE relay tile text: closed/open by board id; empty when the board is absent. */
+    private fun bleRelayStateText(
+        index: Int,
+        yesLabel: String,
+        noLabel: String,
+    ): StateFlow<String> = combine(
+        vad.dashing.tbox.esp.EspCompanionRepository.bleRelayMasks,
+        vad.dashing.tbox.esp.EspCompanionRepository.bleRelays,
+    ) { masks, relays ->
+        val relay = relays.getOrNull(index) ?: return@combine ""
+        val closed = ((masks[relay.id] ?: relay.mask) and 1) != 0
+        valueToString(closed, booleanTrue = yesLabel, booleanFalse = noLabel)
+    }.distinctUntilChanged().stateIn(
+        scope = viewModel.viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "",
+    )
     private val localTimeFlow = flow {
         val formatter = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
         while (true) {
@@ -155,7 +176,10 @@ class TboxDataProvider(
     private fun createFlowForKey(key: String, accuracy: Int?, dateTimeFormat: String): StateFlow<String> {
         fun eff(defaultDigits: Int) = effectiveDecimalPlaces(defaultDigits, accuracy)
         return when (key) {
-            "voltage" -> canViewModel.voltage.mapState { valueToString(it, eff(1)) }
+            "voltage" -> combine(canViewModel.voltage, HuMcuBoardVoltage.state) { fromTbox, fromHeadUnit ->
+                valueToString(fromTbox ?: fromHeadUnit, eff(1))
+            }.mapState { it }
+            VOLTAGE_CAN_FLOW_KEY -> HuMcuBoardVoltage.state.mapState { valueToString(it, eff(1)) }
             "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, eff(1)) }
             STEER_ANGLE_CAN_FLOW_KEY ->
                 UniversalCanRepository.steerAngleState.mapState { valueToString(it, eff(1)) }
@@ -322,6 +346,8 @@ class TboxDataProvider(
             DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE -> canViewModel.engineTemperature.mapState {
                 valueToString(it, eff(0))
             }
+            DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE_CAN ->
+                UniversalCanRepository.engineTemperatureState.mapState { valueToString(it, eff(0)) }
             "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState {
                 valueToString(it, eff(1))
             }
@@ -433,6 +459,8 @@ class TboxDataProvider(
             "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
                 valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
             }
+            "espBleRelay0" -> bleRelayStateText(0, yesLabel, noLabel)
+            "espBleRelay1" -> bleRelayStateText(1, yesLabel, noLabel)
             else -> emptyFlow
         }
     }

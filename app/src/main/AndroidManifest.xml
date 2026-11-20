@@ -10,6 +10,11 @@
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
+    <!-- Outgoing HFP call via Telecom ACTION_CALL (phoneDialWidget / place_call). -->
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <uses-feature android:name="android.hardware.telephony" android:required="false"/>
+    <!-- Best-effort answer/hangup via TelecomManager; requested together with CALL_PHONE. -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- App List widget: required since Android 9 for ACTION_UNINSTALL_PACKAGE / ACTION_DELETE. -->
@@ -52,6 +57,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="vad.dashing.camd.permission.START" />
     <uses-permission
         android:name="android.car.permission.CAR_INFO"
         tools:ignore="ProtectedPermissions" />
@@ -112,9 +118,29 @@
         tools:ignore="ScopedStorage"
         android:minSdkVersion="30" />
 
-    <!-- Info tab: detect TBox MQTT APK (package visibility on API 30+ / targetSdk 36). -->
+    <!-- Optional DCL permission; user-builds may not enforce it (Binder UID check instead). -->
+    <uses-permission android:name="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
+
+    <!-- Info tab: detect companion APKs (package visibility on API 30+ / targetSdk 36).
+         DCL launcher provider: ContentResolver.call visibility on API 30+ / targetSdk 36.
+         File pickers (AutomationsTab import, MainScreenSettingsTab wallpaper): resolveActivity
+         visibility on API 30+ when the SAF handler is not a platform-signed system app. -->
     <queries>
         <package android:name="vad.dashing.mqtt" />
+        <package android:name="vad.dashing.camd" />
+        <package android:name="ras.dashing.tbox.launcher" />
+        <provider android:authorities="ras.dashing.tbox.launcher.api" />
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
+        </intent>
     </queries>
 
     <application
@@ -254,6 +280,15 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- phoneDialWidget: CALL_PHONE request + confirm dialog; overlay tiles have no Activity. -->
+        <activity
+            android:name="vad.dashing.tbox.phone.PhoneDialCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Callers are checked by Binder uid in code; a permission would not help with a public signing key. -->
         <provider
             android:name="vad.dashing.tbox.externalapi.ExternalApiLocalAccessProvider"
@@ -358,6 +393,18 @@
                 <action android:name="vad.dashing.tbox.DEBUG_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- First Main open after APK update may skip DCL/Adayo cold redirect (fullscreen OK). -->
+        <receiver
+            android:name="vad.dashing.tbox.PackageReplacedReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- DCL UI state push: dynamic receiver only (DclLauncherApiRepository.start). -->
     </application>
 
 </manifest>

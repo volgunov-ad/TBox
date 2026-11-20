@@ -113,6 +113,14 @@ enum class AutomationSignalId(
     RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     HIGH_BEAM("high_beam", AutomationSignalValueType.STATE),
     HAZARD("hazard", AutomationSignalValueType.STATE),
+    TURN_SIGNAL_LEFT("turn_signal_left", AutomationSignalValueType.STATE),
+    TURN_SIGNAL_RIGHT("turn_signal_right", AutomationSignalValueType.STATE),
+    /**
+     * Legacy either-side latch (`on` if left **or** right is latched). Kept so existing
+     * automations with `"signal":"turn_stabilized"` keep decoding after the L/R split.
+     * Hidden from new trigger/condition pickers; prefer [TURN_SIGNAL_LEFT] / [TURN_SIGNAL_RIGHT].
+     */
+    TURN_STABILIZED("turn_stabilized", AutomationSignalValueType.STATE),
     DRL("drl", AutomationSignalValueType.STATE),
     EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
     ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
@@ -226,6 +234,8 @@ enum class AutomationSignalId(
     ESP_GPIO_IN_3("esp_gpio_in_3", AutomationSignalValueType.STATE),
     ESP_RELAY_0("esp_relay_0", AutomationSignalValueType.STATE),
     ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE),
+    ESP_BLE_RELAY_0("esp_ble_relay_0", AutomationSignalValueType.STATE),
+    ESP_BLE_RELAY_1("esp_ble_relay_1", AutomationSignalValueType.STATE),
     ESP_BLE_BOUND("esp_ble_bound", AutomationSignalValueType.STATE),
     ESP_BLE_BATTERY("esp_ble_battery"),
     WIFI_ENABLED("wifi_enabled", AutomationSignalValueType.STATE),
@@ -241,6 +251,37 @@ enum class AutomationSignalId(
     /** SIM readiness from [TboxRepository.netState.simStatus]. */
     MODEM_SIM_STATUS("modem_sim_status", AutomationSignalValueType.STATE),
     FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE),
+    /** DCL ADAS side panel visible (`on`/`off`); Unavailable until DCL UI state arrives. */
+    DCL_ADAS_PANEL_VISIBLE("dcl_adas_panel_visible", AutomationSignalValueType.STATE),
+    /** DCL top chrome bar visible. */
+    DCL_TOP_BAR_VISIBLE("dcl_top_bar_visible", AutomationSignalValueType.STATE),
+    /** DCL bottom chrome bar visible. */
+    DCL_BOTTOM_BAR_VISIBLE("dcl_bottom_bar_visible", AutomationSignalValueType.STATE),
+    /** DCL notification / control-center shade expanded (`on`/`off`). */
+    DCL_NOTIFICATION_SHADE_EXPANDED("dcl_notification_shade_expanded", AutomationSignalValueType.STATE),
+    /** DCL screen mode: `home` / `single` / `full_width` / `fullscreen` / `split`. */
+    DCL_SCREEN_MODE("dcl_screen_mode", AutomationSignalValueType.STATE),
+    /** DCL Smart ACC active (`on`/`off`); not CAN `acc_cruise_state`. */
+    DCL_SMART_ACC_ACTIVE("dcl_smart_acc_active", AutomationSignalValueType.STATE),
+    /** DCL launcher option «Скорость АСС по ограничению» (`on`/`off`). */
+    DCL_SMART_ACC_CONFIG_ENABLED("dcl_smart_acc_config_enabled", AutomationSignalValueType.STATE),
+    /** DCL Smart ACC cruise: `Off` / `Standby` / `Active` / `Override` / `Fault`. */
+    DCL_SMART_ACC_CRUISE_STATE("dcl_smart_acc_cruise_state", AutomationSignalValueType.STATE),
+    /** Effective speed limit from DCL Smart ACC (km/h). */
+    DCL_EFFECTIVE_SPEED_LIMIT("dcl_effective_speed_limit"),
+    /** ADAS ACC speed offset from DCL Smart ACC (km/h). */
+    DCL_SMART_ACC_SPEED_OFFSET("dcl_smart_acc_speed_offset"),
+    /** Target cruise speed from DCL Smart ACC (limit + offset), km/h. */
+    DCL_SMART_ACC_TARGET_SPEED("dcl_smart_acc_target_speed"),
+    /**
+     * Camd dashcam master switch (`REC ON` / prefs). `on`/`off` from STATUS `rec_enabled=`.
+     * Unavailable until camd answers STATUS with that field.
+     */
+    CAMD_RECORDER_ENABLED("camd_recorder_enabled", AutomationSignalValueType.STATE),
+    /**
+     * Camd recording pipeline armed (`rec_active=`). Not the same as [CAMD_RECORDER_ENABLED].
+     */
+    CAMD_RECORDING_ACTIVE("camd_recording_active", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
     APP_THEME("app_theme", AutomationSignalValueType.STATE),
     /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
@@ -254,6 +295,17 @@ enum class AutomationSignalId(
     HU_VOICE_VOLUME("hu_voice_volume"),
     /** Headrest speaker: `only` / `assist` / `off`. */
     HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE),
+    /** HFP Client connected to a bonded phone (`on` / `off`). */
+    PHONE_HFP_CONNECTED("phone_hfp_connected", AutomationSignalValueType.STATE),
+    /**
+     * Normalized call state: idle / dialing / active / incoming / held / unknown.
+     * Observed best-effort via BluetoothHeadsetClient from the app process.
+     */
+    PHONE_CALL_STATE("phone_call_state", AutomationSignalValueType.STATE),
+    /** Call direction: none / outgoing / incoming. */
+    PHONE_CALL_DIRECTION("phone_call_direction", AutomationSignalValueType.STATE),
+    /** Current or last observed call number (string; may be blank). */
+    PHONE_CALL_NUMBER("phone_call_number", AutomationSignalValueType.STATE),
 
     // --- External API / voice gaps G1–G7 (also usable in automations) ---
     /** TBox UDP link up/down; must be `app` (not `tbox`) so offline still yields `off`. */
@@ -318,7 +370,14 @@ enum class AutomationSignalId(
      * APP-only; Unavailable without a match. STATE `on` = inside tunnel, `off` = outside.
      * Raises road-match demand without pose correction; does not start SpeedCam.
      */
-    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE);
+    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE),
+    /**
+     * Whether the matched road edge is inside a settlement / RU:urban zone
+     * ([RoadMatchAnchorState.settlement]). APP-only; Unavailable without a match.
+     * STATE `on` = inside settlement, `off` = outside. Enter/leave = on/off edge,
+     * same as [ROAD_TUNNEL]. Raises road-match demand without pose correction.
+     */
+    ROAD_SETTLEMENT("road_settlement", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -508,6 +567,11 @@ sealed interface AutomationTrigger {
     data class SystemEvent(
         override val id: String = "1",
         val event: AutomationSystemEvent,
+        /**
+         * Continuous hold after the edge: corresponding UI/service presence must stay true
+         * for this long (`0` — fire immediately on the edge), same as [StateEquals.holdMillis].
+         */
+        val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
     ) : AutomationTrigger
 
     /**
@@ -525,10 +589,10 @@ sealed interface AutomationTrigger {
     ) : AutomationTrigger
 
     /**
-     * Fired by OEM A9 mbCAN hardkey events (steering wheel keys, door buttons).
-     * Verified [keyCode] values are listed in docs/MBCAN_VHAL_PARAMETERS_RU.md and
-     * [vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat.mbCanKeyName]; the backend is
-     * available only when the head unit runs the Android 9 mbCAN CAN stack.
+     * Fired by steering-wheel and door buttons. Android 9 sends mbCAN key codes.
+     * Android 10 sends `InputKey` for the wheel and the same door numbers (210/211/212)
+     * from the door-panel VHAL properties. Verified values are in
+     * docs/MBCAN_VHAL_PARAMETERS_RU.md.
      *
      * [keyStatus] may be the raw OEM edge ([PRESSED]/[RELEASED]) or a synthesized
      * gesture ([SINGLE]/[DOUBLE]/[LONG]) derived from press/release timing.
@@ -706,6 +770,15 @@ sealed interface AutomationCondition {
         val automationId: String,
         val enabled: Boolean = true,
     ) : AutomationCondition
+
+    /**
+     * Whether head-unit ADB TCP (:5555) is **actually listening**, not merely the
+     * in-app/settings toggle or `persist.adb.tcp.port` props.
+     * Evaluated only when a rule is already being checked — no dedicated poller.
+     */
+    data class AdbTcp(
+        val listening: Boolean = true,
+    ) : AutomationCondition
 }
 
 enum class AutomationCanBus(val storageKey: String) {
@@ -754,6 +827,9 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     ESP_RELAY_SET("esp_relay_set"),
     ESP_RELAY_TOGGLE("esp_relay_toggle"),
     ESP_RELAY_PULSE("esp_relay_pulse"),
+    ESP_BLE_RELAY_SET("esp_ble_relay_set"),
+    ESP_BLE_RELAY_TOGGLE("esp_ble_relay_toggle"),
+    ESP_BLE_RELAY_PULSE("esp_ble_relay_pulse"),
     MEDIA_PREVIOUS("media_previous"),
     MEDIA_PLAY_PAUSE("media_play_pause"),
     MEDIA_PLAY("media_play"),
@@ -826,7 +902,53 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * Start VAD Voice listening session (exported Intent LISTEN).
      * No parameters. Safe — opens [vad.dashing.voice] if installed.
      */
-    START_VAD_VOICE("start_vad_voice");
+    START_VAD_VOICE("start_vad_voice"),
+    /**
+     * Outgoing HFP call via Telecom `ACTION_CALL`.
+     * [AutomationAction.Builtin.stringValue] = phone number.
+     */
+    PLACE_CALL("place_call"),
+    /**
+     * Answer an incoming HFP call (best-effort; may fail without privileges).
+     * No parameters. Gated by [vad.dashing.tbox.phone.PhoneCallStateRepository] capabilities.
+     */
+    ANSWER_CALL("answer_call"),
+    /**
+     * Hang up / reject the current HFP call (best-effort; may fail without privileges).
+     * No parameters. Gated by [vad.dashing.tbox.phone.PhoneCallStateRepository] capabilities.
+     */
+    HANGUP_CALL("hangup_call"),
+    /**
+     * Open or close a «Камеры ГУ» window.
+     * [AutomationAction.Builtin.intValue] is the camera id (4/5/8/9/0/1/3).
+     * [AutomationAction.Builtin.stringValue] is `open <x> <y> <w> <h>` (screen percent),
+     * `close`, or `close_all`. If the service is not listening, the command asks it to start
+     * and retries. A status poll does not start it.
+     */
+    CAMD_WINDOW("camd_window"),
+    /**
+     * «Держать штатный AVM отключенным».
+     * [AutomationAction.Builtin.boolValue] `true` sends `AVM ON` (keep stopped).
+     * `false` sends `AVM OFF`: raw windows close and stock AVMapp starts.
+     */
+    CAMD_KEEP_AVM("camd_keep_avm"),
+    /**
+     * Dashcam master switch («Камеры ГУ» регистратор).
+     * [AutomationAction.Builtin.boolValue] `true` → `REC ON`, `false` → `REC OFF`.
+     * Not the same as recording-active (see signals `camd_recorder_enabled` /
+     * `camd_recording_active`). Folder and cameras must already be set in camd.
+     */
+    CAMD_RECORDER("camd_recorder"),
+    /**
+     * DCL Smart ACC on/off via `setSmartAcc`.
+     * [AutomationAction.Builtin.boolValue] = enabled.
+     * [AutomationAction.Builtin.intValue] > 0 → optional `targetSpeed` km/h; `0` = omit.
+     * [AutomationAction.Builtin.stringValue]: empty = omit `configEnabled`;
+     * `true` / `false` = set launcher option «Скорость АСС по ограничению».
+     */
+    DCL_SET_SMART_ACC("dcl_set_smart_acc"),
+    /** DCL Smart ACC toggle via `toggleSmartAcc`. No parameters. */
+    DCL_TOGGLE_SMART_ACC("dcl_toggle_smart_acc");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

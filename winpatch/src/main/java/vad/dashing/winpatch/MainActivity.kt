@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
                     onRefresh = viewModel::refresh,
                     onApply = viewModel::apply,
                     onRestore = viewModel::restore,
+                    onLayout = viewModel::setLayout,
                     onReboot = viewModel::reboot,
                 )
             }

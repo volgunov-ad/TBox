@@ -34,6 +34,7 @@ data class EspDeviceInfo(
     val bleKey: Boolean = false,
     val ap: Boolean = false,
     val phone: Boolean = false,
+    val bleRelay: Boolean = false,
 )
 
 sealed interface PhoneUsbEvent {
@@ -199,6 +200,16 @@ object EspCompanionRepository {
     private val _phoneUsbEvents = MutableSharedFlow<PhoneUsbEvent>(extraBufferCapacity = 16)
     val phoneUsbEvents: SharedFlow<PhoneUsbEvent> = _phoneUsbEvents.asSharedFlow()
 
+    /** Paired BLE relay boards (fw 0.13+) from `bleStatus.relays`. */
+    private val _bleRelays = MutableStateFlow<List<EspRelayDevice>>(emptyList())
+    val bleRelays: StateFlow<List<EspRelayDevice>> = _bleRelays.asStateFlow()
+
+    private val _bleRelayMasks = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val bleRelayMasks: StateFlow<Map<String, Int>> = _bleRelayMasks.asStateFlow()
+
+    private val _bleRelayOnline = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val bleRelayOnline: StateFlow<Map<String, Long>> = _bleRelayOnline.asStateFlow()
+
     private val _bleDevices = MutableStateFlow<Map<String, EspBleDeviceRuntime>>(emptyMap())
     val bleDevices: StateFlow<Map<String, EspBleDeviceRuntime>> = _bleDevices.asStateFlow()
 
@@ -296,6 +307,9 @@ object EspCompanionRepository {
             _phones.value = emptyList()
             _phoneLearnActive.value = false
             _pendingPhone.value = null
+            _bleRelays.value = emptyList()
+            _bleRelayMasks.value = emptyMap()
+            _bleRelayOnline.value = emptyMap()
             _bleDevices.value = emptyMap()
             _lastBleBtn.value = null
             if (!_otaBusy.value) {
@@ -335,6 +349,7 @@ object EspCompanionRepository {
         phoneLearn: Boolean = false,
         phones: List<EspPhoneDevice> = emptyList(),
         keyed: List<String> = emptyList(),
+        relays: List<EspRelayDevice> = emptyList(),
     ) {
         _bleKeyedMacs.value = keyed.map(::normalizeEspBleMac).filter { it.isNotEmpty() }.toSet()
         _bleOn.value = on
@@ -344,6 +359,7 @@ object EspCompanionRepository {
         if (!phoneLearn) {
             _pendingPhone.value = null
         }
+        _bleRelays.value = relays
         replaceBleMacs(macs)
         val mac = normalizeEspBleMac(lastMac.orEmpty())
         if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
@@ -374,6 +390,23 @@ object EspCompanionRepository {
         _pendingPhone.value = phone
         touchMessage()
     }
+
+    /**
+     * `relayDev` report: update the channel mask and the online timestamp. The
+     * board list itself comes from bleStatus, so unknown ids are ignored here.
+     */
+    fun applyRelayDev(id: String, mask: Int, flags: Int, uptimeS: Int) {
+        val key = id.trim().lowercase(java.util.Locale.US)
+        if (key.isEmpty()) return
+        _bleRelayMasks.value = _bleRelayMasks.value + (key to (mask and 0xFF))
+        _bleRelayOnline.value = _bleRelayOnline.value + (key to System.currentTimeMillis())
+        touchMessage()
+    }
+
+    fun bleRelayMask(id: String): Int = _bleRelayMasks.value[id.trim().lowercase(java.util.Locale.US)] ?: 0
+
+    fun bleRelayOnline(id: String): Boolean =
+        _bleRelayOnline.value.containsKey(id.trim().lowercase(java.util.Locale.US))
 
     fun clearPendingPhone() {
         _pendingPhone.value = null

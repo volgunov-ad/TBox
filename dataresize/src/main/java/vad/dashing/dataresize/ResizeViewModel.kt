@@ -29,8 +29,12 @@ import vad.dashing.dataresize.gpt.GptPlanner
 import vad.dashing.dataresize.gpt.MovePlan
 import vad.dashing.dataresize.gpt.PartitionState
 import vad.dashing.dataresize.gpt.SECTOR
+import vad.dashing.dataresize.inventory.InventoryVerdict
+import vad.dashing.dataresize.inventory.PartitionInventoryPaths
+import vad.dashing.dataresize.inventory.PartitionInventoryReport
+import vad.dashing.dataresize.inventory.PartitionInventoryRunner
 
-enum class Action { Refresh, Move, Stage2, Rollback, FixSecondary }
+enum class Action { Refresh, Move, Stage2, Rollback, FixSecondary, Inventory }
 
 enum class BannerKind { Info, Warning, Success, Error }
 
@@ -46,6 +50,9 @@ data class UiState(
     val banner: Banner? = null,
     val events: List<String> = emptyList(),
     val journal: List<String> = emptyList(),
+    val inventoryVerdicts: List<InventoryVerdict> = emptyList(),
+    val inventoryPath: String? = null,
+    val inventorySummary: String? = null,
 )
 
 class ResizeViewModel(app: Application) : AndroidViewModel(app) {
@@ -71,6 +78,11 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun fixSecondary() = launch { runFixSecondary() }
 
+    fun inventory() {
+        val keepActions = _state.value.actions
+        launch { runInventory(keepActions) }
+    }
+
     private fun launch(block: suspend () -> Unit) {
         if (job?.isActive == true) return
         job = viewModelScope.launch(Dispatchers.IO) {
@@ -83,13 +95,59 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 val text = e.message ?: e.javaClass.simpleName
                 event("Ошибка: $text")
                 _state.update {
-                    it.copy(banner = Banner(text, BannerKind.Error), actions = setOf(Action.Refresh))
+                    it.copy(
+                        banner = Banner(text, BannerKind.Error),
+                        actions = withInventory(setOf(Action.Refresh)),
+                    )
                 }
             } finally {
                 _state.update { it.copy(busy = false) }
             }
         }
     }
+
+    private suspend fun runInventory(previousActions: Set<Action>) {
+        event("Паспорт разделов: сбор (только чтение)")
+        _state.update {
+            it.copy(
+                banner = Banner("Снимаю паспорт разделов… WP не трогаем", BannerKind.Info),
+                inventoryVerdicts = emptyList(),
+                inventoryPath = null,
+                inventorySummary = null,
+            )
+        }
+        openShell().use { sh ->
+            if (sh.rootText("id -u").trim() != "0") throw IOException("su не дал root")
+            val result = PartitionInventoryRunner.run(sh)
+            val path = result.output?.absolutePath
+            val kind = result.output?.let { PartitionInventoryPaths.kindLabel(it.kind) }
+            val summary = PartitionInventoryReport.summaryText(result.verdicts, path)
+            val banner = when {
+                result.writeError != null && path == null ->
+                    Banner("Отчёт собран, но не записан: ${result.writeError}", BannerKind.Warning)
+                result.writeError != null ->
+                    Banner("Отчёт на экране; запись не удалась: ${result.writeError}", BannerKind.Warning)
+                else ->
+                    Banner("Паспорт разделов записан ($kind): $path", BannerKind.Success)
+            }
+            event(if (path != null) "Отчёт: $path" else "Отчёт: только на экране")
+            val restored = withInventory(
+                (if (previousActions.isEmpty()) setOf(Action.Refresh) else previousActions) + Action.Refresh,
+            )
+            _state.update {
+                it.copy(
+                    banner = banner,
+                    inventoryVerdicts = result.verdicts,
+                    inventoryPath = path,
+                    inventorySummary = summary,
+                    actions = restored,
+                )
+            }
+        }
+    }
+
+    /** Inventory is always offered alongside resize actions. */
+    private fun withInventory(actions: Set<Action>): Set<Action> = actions + Action.Inventory
 
     private fun openShell(): RootShell = RootShell.open(keysDir, "dataresize@${Build.MODEL}")
 
@@ -115,7 +173,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 is PartitionState.AlreadyMoved -> onAlreadyMoved(sh, gpt.entry.first)
                 is PartitionState.MixedCopies -> onMixedCopies(gpt.primaryNew)
                 is PartitionState.NotPossible -> _state.update {
-                    it.copy(banner = Banner(gpt.reason, BannerKind.Error), actions = setOf(Action.Refresh))
+                    it.copy(banner = Banner(gpt.reason, BannerKind.Error), actions = withInventory(setOf(Action.Refresh)))
                 }
             }
         }
@@ -143,11 +201,11 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             poll(sh, run, emptyList())
         } catch (e: IOException) {
             event("Связь с ГУ потеряна: ${e.message}")
-            _state.update { it.copy(actions = setOf(Action.Refresh)) }
+            _state.update { it.copy(actions = withInventory(setOf(Action.Refresh))) }
             return false
         }
         if (failure != null) {
-            _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+            _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = withInventory(setOf(Action.Refresh))) }
             return false
         }
         return true
@@ -166,7 +224,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                         "записями. Резервную копию можно дописать по основной, перезагрузка не нужна.",
                     BannerKind.Warning,
                 ),
-                actions = setOf(Action.FixSecondary, Action.Refresh),
+                actions = withInventory(setOf(Action.FixSecondary, Action.Refresh)),
             )
         }
     }
@@ -282,7 +340,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                     op != null -> Banner("Прошлый перенос не завершён, разметка не изменена", BannerKind.Warning)
                     else -> Banner("Перенос возможен", BannerKind.Info)
                 },
-                actions = setOf(Action.Move, Action.Refresh),
+                actions = withInventory(setOf(Action.Move, Action.Refresh)),
             )
         }
     }
@@ -293,7 +351,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             _state.update {
                 it.copy(
                     banner = Banner("userdata уже в конце диска, но перенос делала не эта программа", BannerKind.Warning),
-                    actions = setOf(Action.Refresh),
+                    actions = withInventory(setOf(Action.Refresh)),
                 )
             }
             return
@@ -307,7 +365,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             _state.update {
                 it.copy(
                     banner = Banner("Таблица уже новая, но ядро видит старый раздел — перезагрузите ГУ", BannerKind.Warning),
-                    actions = setOf(Action.Refresh),
+                    actions = withInventory(setOf(Action.Refresh)),
                 )
             }
             return
@@ -321,7 +379,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update {
                     it.copy(
                         banner = Banner("Раздел перенесён, файловую систему нужно расширить", BannerKind.Info),
-                        actions = setOf(Action.Stage2, Action.Refresh),
+                        actions = withInventory(setOf(Action.Stage2, Action.Refresh)),
                     )
                 }
             }
@@ -339,7 +397,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         launchDetached(sh, run)
         val (op, failure) = poll(sh, run, before)
         if (failure != null) {
-            _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+            _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = withInventory(setOf(Action.Refresh))) }
             return
         }
         showDone(sh, before + op)
@@ -353,7 +411,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 operations = ops,
                 facts = listOf("/data" to "${bytes(size)}, свободно ${bytes(free)}"),
                 banner = Banner("Готово: /data ${bytes(size)}, свободно ${bytes(free)}", BannerKind.Success),
-                actions = setOf(Action.Rollback, Action.Refresh),
+                actions = withInventory(setOf(Action.Rollback, Action.Refresh)),
             )
         }
     }
@@ -391,13 +449,13 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 poll(sh, Journal.RUN_MOVE, emptyList(), prefix = prepared)
             } catch (e: IOException) {
                 event("Связь с ГУ потеряна: ${e.message}. Перенос продолжается без программы.")
-                _state.update { it.copy(actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(actions = withInventory(setOf(Action.Refresh))) }
                 return
             }
             if (failure != null) {
                 pending.set(null)
                 show(prepared, op.steps.drop(1), failure)
-                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = withInventory(setOf(Action.Refresh))) }
             }
         }
     }
@@ -416,12 +474,12 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 poll(sh, Journal.RUN_ROLLBACK, before)
             } catch (e: IOException) {
                 event("Связь с ГУ потеряна: ${e.message}")
-                _state.update { it.copy(actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(actions = withInventory(setOf(Action.Refresh))) }
                 return
             }
             if (failure != null) {
                 pending.set(null)
-                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = withInventory(setOf(Action.Refresh))) }
             }
         }
     }
@@ -439,11 +497,11 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 poll(sh, run, emptyList())
             } catch (e: IOException) {
                 event("Связь с ГУ потеряна: ${e.message}")
-                _state.update { it.copy(actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(actions = withInventory(setOf(Action.Refresh))) }
                 return
             }
             if (failure != null) {
-                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = withInventory(setOf(Action.Refresh))) }
                 return
             }
         }

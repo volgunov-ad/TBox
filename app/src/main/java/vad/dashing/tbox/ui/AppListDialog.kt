@@ -73,6 +73,7 @@ import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.adb.AdbIoErrors
+import vad.dashing.tbox.adb.LocalhostAdbReasons
 import vad.dashing.tbox.adb.PackageAdbActions
 import vad.dashing.tbox.dexopt.AppDexoptCodec
 import vad.dashing.tbox.dexopt.AppDexoptCompiler
@@ -333,8 +334,13 @@ internal fun AppListDialog(
         AdayoStockAppWindow.isAvailable(context)
     }
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
-    val showStockWindowOpen = stockWindowAvailable ||
-        headUnitCanMode == HeadUnitCanMode.Android10Vhal
+    val dclEnvEnabled by
+        settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+    // Env ON: App List Open always uses DCL app_area; hide the stock-window twin button.
+    val showStockWindowOpen = !dclEnvEnabled && (
+        stockWindowAvailable ||
+            headUnitCanMode == HeadUnitCanMode.Android10Vhal
+        )
 
     val apps = if (advancedMode) installedApps else launchableApps
 
@@ -475,9 +481,11 @@ internal fun AppListDialog(
                     adbStatuses = outcome.statuses
                 }
                 is PackageAdbActions.StatusLoadOutcome.Failed -> {
-                    val detail = outcome.detail.ifBlank {
-                        outcome.reason.name
-                    }
+                    val detail = LocalhostAdbReasons.forPackageAdb(
+                        context,
+                        outcome.reason,
+                        outcome.detail,
+                    )
                     if (!AdbIoErrors.shouldSuppressUserFacingFailure(
                             detail,
                             context,
@@ -758,9 +766,11 @@ internal fun AppListDialog(
                                     }
                                 }
                                 is PackageAdbActions.Outcome.Failed -> {
-                                    val detail = outcome.detail.ifBlank {
-                                        outcome.reason.name
-                                    }
+                                    val detail = LocalhostAdbReasons.forPackageAdb(
+                                        context,
+                                        outcome.reason,
+                                        outcome.detail,
+                                    )
                                     if (!AdbIoErrors.shouldSuppressUserFacingFailure(
                                             detail,
                                             context,

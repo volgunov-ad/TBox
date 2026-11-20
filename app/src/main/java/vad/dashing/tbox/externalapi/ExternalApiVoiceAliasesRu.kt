@@ -89,6 +89,12 @@ object ExternalApiVoiceAliasesRu {
             "в тоннеле",
             "туннель",
         ),
+        AutomationSignalId.ROAD_SETTLEMENT to listOf(
+            "населённый пункт",
+            "в населённом пункте",
+            "населенный пункт",
+            "въезд в населённый пункт",
+        ),
         AutomationSignalId.ENGINE_RPM to listOf(
             "обороты",
             "обороты мотора",
@@ -129,6 +135,53 @@ object ExternalApiVoiceAliasesRu {
             "передача",
             "селектор",
             "prnd",
+        ),
+        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE to listOf(
+            "панель ADAS DCL",
+            "ADAS DCL",
+        ),
+        AutomationSignalId.DCL_TOP_BAR_VISIBLE to listOf(
+            "верхняя панель DCL",
+            "верхний бар DCL",
+        ),
+        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE to listOf(
+            "нижняя панель DCL",
+            "нижний бар DCL",
+        ),
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED to listOf(
+            "шторка уведомлений DCL",
+            "шторка DCL",
+            "control center DCL",
+        ),
+        AutomationSignalId.DCL_SCREEN_MODE to listOf(
+            "режим экрана DCL",
+            "экран DCL",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_ACTIVE to listOf(
+            "умный acc",
+            "умный круиз",
+            "smart acc",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED to listOf(
+            "acc по ограничению",
+            "скорость acc по знакам",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE to listOf(
+            "состояние круиза dcl",
+            "статус smart acc",
+        ),
+        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT to listOf(
+            "эффективный лимит",
+            "лимит со знака",
+            "ограничение скорости dcl",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET to listOf(
+            "оффсет acc",
+            "смещение acc",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED to listOf(
+            "целевая скорость acc",
+            "уставка smart acc",
         ),
         AutomationSignalId.TBOX_CONNECTED to listOf(
             "тбокс на связи",
@@ -260,9 +313,40 @@ object ExternalApiVoiceAliasesRu {
             "аварийная сигнализация",
             "аварийные огни",
         ),
+        AutomationSignalId.TURN_SIGNAL_LEFT to listOf(
+            "левый поворотник",
+            "поворотник слева",
+        ),
+        AutomationSignalId.TURN_SIGNAL_RIGHT to listOf(
+            "правый поворотник",
+            "поворотник справа",
+        ),
+        AutomationSignalId.TURN_STABILIZED to listOf(
+            "поворотник",
+            "указатель поворота",
+        ),
         AutomationSignalId.DRL to listOf(
             "дневные ходовые огни",
             "ходовые огни",
+        ),
+        AutomationSignalId.PHONE_HFP_CONNECTED to listOf(
+            "телефон по блютуз",
+            "hfp",
+            "телефон подключён",
+        ),
+        AutomationSignalId.PHONE_CALL_STATE to listOf(
+            "статус звонка",
+            "состояние звонка",
+            "идёт ли разговор",
+        ),
+        AutomationSignalId.PHONE_CALL_DIRECTION to listOf(
+            "направление звонка",
+            "входящий или исходящий",
+        ),
+        AutomationSignalId.PHONE_CALL_NUMBER to listOf(
+            "номер звонка",
+            "кто звонит",
+            "набранный номер",
         ),
     )
 
@@ -280,6 +364,9 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.ESP_RELAY_SET to "Реле ESP установить",
         AutomationBuiltinActionType.ESP_RELAY_TOGGLE to "Реле ESP переключить",
         AutomationBuiltinActionType.ESP_RELAY_PULSE to "Реле ESP импульс",
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET to "BLE реле замкнуть или разомкнуть",
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE to "BLE реле переключить",
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE to "BLE реле импульс",
         AutomationBuiltinActionType.MEDIA_PREVIOUS to "Предыдущий трек",
         AutomationBuiltinActionType.MEDIA_PLAY_PAUSE to "Пауза или воспроизведение",
         AutomationBuiltinActionType.MEDIA_PLAY to "Воспроизведение",
@@ -315,6 +402,14 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED to "Круиз на текущей скорости",
         AutomationBuiltinActionType.CRUISE_NUDGE to "Подстроить круиз",
         AutomationBuiltinActionType.START_VAD_VOICE to "Голосовой помощник",
+        AutomationBuiltinActionType.PLACE_CALL to "Позвонить",
+        AutomationBuiltinActionType.ANSWER_CALL to "Ответить на звонок",
+        AutomationBuiltinActionType.HANGUP_CALL to "Сбросить звонок",
+        AutomationBuiltinActionType.CAMD_WINDOW to "Окно камеры",
+        AutomationBuiltinActionType.CAMD_KEEP_AVM to "Держать штатный AVM отключенным",
+        AutomationBuiltinActionType.CAMD_RECORDER to "Регистратор камер ГУ",
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC to "Умный ACC DCL",
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC to "Переключить Умный ACC DCL",
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(
@@ -329,11 +424,37 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.FINISH_AND_START_TRIP to listOf("новая поездка", "начать поездку"),
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS to listOf("яркость", "сделай ярче", "сделай темнее"),
         AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf("вайфай", "wifi"),
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC to listOf(
+            "умный acc",
+            "smart acc",
+            "acc по знакам",
+        ),
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC to listOf(
+            "переключить умный acc",
+            "toggle smart acc",
+        ),
         AutomationBuiltinActionType.START_VAD_VOICE to listOf(
             "слушай",
             "вад войс",
             "голосовой помощник",
             "включи голос",
+        ),
+        AutomationBuiltinActionType.PLACE_CALL to listOf(
+            "позвони",
+            "набери",
+            "набрать номер",
+            "позвонить",
+        ),
+        AutomationBuiltinActionType.ANSWER_CALL to listOf(
+            "ответь",
+            "принять звонок",
+            "ответить",
+        ),
+        AutomationBuiltinActionType.HANGUP_CALL to listOf(
+            "сбрось",
+            "положить трубку",
+            "завершить звонок",
+            "сбросить",
         ),
     )
 

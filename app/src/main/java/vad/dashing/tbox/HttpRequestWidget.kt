@@ -31,6 +31,14 @@ const val DEFAULT_HTTP_REQUEST_WIDGET_YAML = "url: \"http://\""
 const val DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS = 10
 const val HTTP_REQUEST_POST_ACTION_BLOCK_MS = 500L
 
+/** Default pause after optional pre-request app launch on an HTTP tile: 1 s (1000 ms). */
+const val DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC = 1
+const val MIN_HTTP_LAUNCH_APP_DELAY_SEC = 0
+const val MAX_HTTP_LAUNCH_APP_DELAY_SEC = 30
+
+fun normalizeHttpLaunchAppDelaySec(raw: Int): Int =
+    raw.coerceIn(MIN_HTTP_LAUNCH_APP_DELAY_SEC, MAX_HTTP_LAUNCH_APP_DELAY_SEC)
+
 data class HttpRequestWidgetConfig(
     val url: String,
     val method: String = "get",
@@ -102,7 +110,28 @@ fun parseHttpRequestWidgetYaml(rawYaml: String): Result<HttpRequestWidgetConfig>
 fun browserUrlFromHttpRequestYaml(rawYaml: String): Result<String> =
     parseHttpRequestWidgetYaml(rawYaml).map { it.url }
 
-suspend fun executeHttpRequestWidget(config: HttpRequestWidgetConfig): HttpRequestWidgetResult =
+suspend fun executeHttpRequestWidget(
+    context: Context,
+    config: HttpRequestWidgetConfig,
+): HttpRequestWidgetResult =
+    if (httpRequestWidgetUrlNeedsIntentDispatch(config.url)) {
+        executeHttpRequestWidgetViaIntent(context, config.url)
+    } else {
+        executeHttpRequestWidgetViaHttp(config)
+    }
+
+internal fun httpRequestWidgetUrlNeedsIntentDispatch(url: String): Boolean {
+    val trimmed = url.trim()
+    val colon = trimmed.indexOf(':')
+    if (colon <= 0) return false
+    if (!trimmed[0].isLetter()) return false
+    val scheme = trimmed.substring(0, colon).lowercase(Locale.ROOT)
+    return scheme != "http" && scheme != "https"
+}
+
+private suspend fun executeHttpRequestWidgetViaHttp(
+    config: HttpRequestWidgetConfig,
+): HttpRequestWidgetResult =
     withContext(Dispatchers.IO) {
         runCatching {
             val client = httpRequestClient(config)
@@ -114,6 +143,23 @@ suspend fun executeHttpRequestWidget(config: HttpRequestWidgetConfig): HttpReque
                     HttpRequestWidgetResult.Failure("HTTP ${response.code}", response.code)
                 }
             }
+        }.getOrElse { e ->
+            HttpRequestWidgetResult.Failure(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+private suspend fun executeHttpRequestWidgetViaIntent(
+    context: Context,
+    url: String,
+): HttpRequestWidgetResult =
+    withContext(Dispatchers.Main) {
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+            HttpRequestWidgetResult.Success(code = 0)
         }.getOrElse { e ->
             HttpRequestWidgetResult.Failure(e.message ?: e.javaClass.simpleName)
         }

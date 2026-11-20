@@ -2,20 +2,129 @@ package com.adayo.carplay.view.patch;
 
 import android.app.Activity;
 import android.app.ActivityOptions;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Handler;
+import android.os.Looper;
 import android.hardware.display.DisplayManager;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import com.adayo.carplay.view.ui.activity.MainActivity;
+import java.lang.ref.WeakReference;
 import java.util.Collection;
 
 public final class WindowSurface extends SurfaceView {
     private static final String REDIRECTED = "com.adayo.carplay.view.patch.REDIRECTED";
+    /** Same key the winpatch app writes with `settings put global`. */
+    private static final String LAYOUT_KEY = "tbox_winpatch_layout";
     private static volatile long pendingSurfaceId = 0L;
+    private static final String ACC_OFF = "com.device.accoff";
+    private static final String POWER_OFF = "com.device.poweroff";
+    private static final String ACC_ON = "com.device.accon";
+    private static final String POWER_ON = "com.device.poweron";
+    private static final WeakReference<Activity> NONE = new WeakReference<Activity>(null);
+    private static volatile WeakReference<Activity> shown = NONE;
+    private static volatile boolean suppressUi;
+    private static boolean receiverRegistered;
+    /** Sticky ACC_OFF from an earlier stop is delivered inside registerReceiver. Ignore that copy. */
+    private static volatile boolean accWatchReady;
+
+    /**
+     * While CarPlay is the foreground app, SourceMng cannot enter the stock
+     * fake-shutdown (clock until the door opens) and the head unit powers off at once.
+     */
+    private static void watchAccOff(Context context) {
+        if (receiverRegistered) return;
+        receiverRegistered = true;
+        final IntentFilter filter = new IntentFilter();
+        filter.addAction(ACC_OFF);
+        filter.addAction(POWER_OFF);
+        filter.addAction(ACC_ON);
+        filter.addAction(POWER_ON);
+        final BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context app, Intent intent) {
+                if (!accWatchReady) return;
+                String action = intent == null ? null : intent.getAction();
+                if (ACC_ON.equals(action) || POWER_ON.equals(action)) {
+                    suppressUi = false;
+                    Log.d("CPViewPatch", "ui allowed " + action);
+                    return;
+                }
+                suppressUi = true;
+                Log.d("CPViewPatch", "release ui " + action);
+                releaseUi(app);
+            }
+        };
+        Runnable register = new Runnable() {
+            @Override
+            public void run() {
+                context.getApplicationContext().registerReceiver(receiver, filter);
+            }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            register.run();
+            accWatchReady = true;
+        } else {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    register.run();
+                    accWatchReady = true;
+                }
+            });
+        }
+    }
+
+    private static void releaseUi(Context context) {
+        Activity activity = shown.get();
+        if (activity instanceof MainActivity && !activity.isFinishing()) {
+            ((MainActivity) activity).setNeedTake(false);
+        }
+        if (activity != null && !activity.isFinishing()) {
+            activity.finish();
+        }
+        Intent home = new Intent(Intent.ACTION_MAIN);
+        home.addCategory(Intent.CATEGORY_HOME);
+        home.setPackage("com.adayo.launcher");
+        home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            context.startActivity(home);
+        } catch (RuntimeException error) {
+            Log.e("CPViewPatch", "home after acc off failed", error);
+        }
+    }
+
+    public static boolean barsMode(Context context) {
+        try {
+            return "bars".equals(Settings.Global.getString(context.getContentResolver(), LAYOUT_KEY));
+        } catch (RuntimeException error) {
+            Log.e("CPViewPatch", "layout read failed", error);
+            return false;
+        }
+    }
+
+    /** Keep the status bar and the bottom bar when the activity is on the main display. */
+    public static void keepBars(Activity activity) {
+        if (!barsMode(activity)) return;
+        if (activity.getWindowManager().getDefaultDisplay().getDisplayId() != 0) return;
+        Window window = activity.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        window.addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        Log.d("CPViewPatch", "keepBars");
+    }
 
     private boolean tracking;
     private int lastX;
@@ -37,10 +146,12 @@ public final class WindowSurface extends SurfaceView {
         return -1;
     }
 
-    private static void startOnDisplay(Context context, Intent sourceIntent, int displayId) {
+    private static void startOnDisplay(Context context, Intent sourceIntent, int displayId, boolean multipleTask) {
         Intent target = sourceIntent != null ? new Intent(sourceIntent) : new Intent(context, MainActivity.class);
         target.setClassName("com.adayo.carplay.view", "com.adayo.carplay.view.ui.activity.MainActivity");
-        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        int flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        if (multipleTask) flags |= Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
+        target.setFlags(flags);
         target.putExtra(REDIRECTED, true);
         long sid = pendingSurfaceId;
         if (sid != 0L && target.getLongExtra("surfaceId", 0L) == 0L) {
@@ -51,13 +162,52 @@ public final class WindowSurface extends SurfaceView {
         context.getApplicationContext().startActivity(target, options.toBundle());
     }
 
+    private static void rememberSurfaceId(Intent intent) {
+        if (intent == null) return;
+        long sid = intent.getLongExtra("surfaceId", 0L);
+        if (sid != 0L) pendingSurfaceId = sid;
+    }
+
+    private static boolean alreadyRedirected(Activity activity) {
+        Intent intent = activity.getIntent();
+        return intent != null && intent.getBooleanExtra(REDIRECTED, false);
+    }
+
     public static boolean interceptOnCreate(MainActivity activity) {
+        watchAccOff(activity);
+        shown = new WeakReference<Activity>(activity);
+        if (suppressUi) {
+            Log.d("CPViewPatch", "interceptOnCreate suppressed, acc off");
+            activity.setNeedTake(false);
+            activity.finish();
+            return true;
+        }
         int displayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
+        Intent intent = activity.getIntent();
+        if (barsMode(activity)) {
+            if (displayId == 0) {
+                keepBars(activity);
+                return false;
+            }
+            if (alreadyRedirected(activity)) {
+                Log.e("CPViewPatch", "interceptOnCreate: bars redirect did not reach the main display");
+                return false;
+            }
+            rememberSurfaceId(intent);
+            activity.setNeedTake(false);
+            activity.finish();
+            try {
+                startOnDisplay(activity.getApplicationContext(), intent, 0, false);
+                Log.d("CPViewPatch", "interceptOnCreate display=" + displayId + " -> main");
+            } catch (RuntimeException error) {
+                Log.e("CPViewPatch", "interceptOnCreate bars redirect failed", error);
+            }
+            return true;
+        }
         if (displayId > 0) {
             return false;
         }
-        Intent intent = activity.getIntent();
-        if (intent != null && intent.getBooleanExtra(REDIRECTED, false)) {
+        if (alreadyRedirected(activity)) {
             Log.e("CPViewPatch", "interceptOnCreate: redirect already attempted, staying on display=0");
             return false;
         }
@@ -66,17 +216,12 @@ public final class WindowSurface extends SurfaceView {
             Log.w("CPViewPatch", "interceptOnCreate: virtual display not ready, allowing display=0");
             return false;
         }
-        long sid = 0L;
-        if (intent != null) {
-            sid = intent.getLongExtra("surfaceId", 0L);
-            if (sid != 0L) {
-                pendingSurfaceId = sid;
-            }
-        }
+        rememberSurfaceId(intent);
+        long sid = intent != null ? intent.getLongExtra("surfaceId", 0L) : 0L;
         activity.setNeedTake(false);
         activity.finish();
         try {
-            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay);
+            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay, true);
             Log.d("CPViewPatch", "interceptOnCreate display=0 -> display=" + targetDisplay + " surfaceId=" + sid);
         } catch (RuntimeException error) {
             Log.e("CPViewPatch", "interceptOnCreate redirect failed", error);
@@ -98,9 +243,28 @@ public final class WindowSurface extends SurfaceView {
     }
 
     public static void startInWindow(Context context, Intent intent, Collection<?> activities) {
+        watchAccOff(context);
+        if (suppressUi) {
+            Log.d("CPViewPatch", "startInWindow suppressed, acc off");
+            return;
+        }
         long sid = intent != null ? intent.getLongExtra("surfaceId", 0L) : 0L;
         if (sid != 0L) {
             pendingSurfaceId = sid;
+        }
+        if (barsMode(context)) {
+            for (Object item : activities) {
+                Activity activity = (Activity) item;
+                if (activity.isFinishing()) continue;
+                if (activity.getWindowManager().getDefaultDisplay().getDisplayId() == 0) continue;
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).setNeedTake(false);
+                }
+                activity.finish();
+            }
+            startOnDisplay(context, intent, 0, false);
+            Log.d("CPViewPatch", "startInWindow main surfaceId=" + sid);
+            return;
         }
         int displayId = -1;
         for (Object item : activities) {
@@ -129,7 +293,7 @@ public final class WindowSurface extends SurfaceView {
             }
             int targetDisplay = findWindowDisplayId(context);
             if (targetDisplay > 0) {
-                startOnDisplay(context, intent, targetDisplay);
+                startOnDisplay(context, intent, targetDisplay, true);
                 displayId = targetDisplay;
             } else {
                 Intent window = new Intent("com.adayo.launcher.LAUNCH_APP");
@@ -144,6 +308,10 @@ public final class WindowSurface extends SurfaceView {
         Log.d("CPViewPatch", "startInWindow display=" + displayId + " surfaceId=" + sid);
     }
 
+    /**
+     * Window mode keeps the stock 1920×1080 stream and letterboxes it 16:9.
+     * Bars mode is a 1920×864 stream, so the surface fills the parent 1:1.
+     */
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         int width = MeasureSpec.getSize(widthSpec);
@@ -152,19 +320,23 @@ public final class WindowSurface extends SurfaceView {
             super.onMeasure(widthSpec, heightSpec);
             return;
         }
-        if ((long) width * 1080 > (long) height * 1920) {
-            width = height * 1920 / 1080;
-        } else {
-            height = width * 1080 / 1920;
+        if (!barsMode(getContext())) {
+            if ((long) width * 1080 > (long) height * 1920) {
+                width = height * 1920 / 1080;
+            } else {
+                height = width * 1080 / 1920;
+            }
         }
         setMeasuredDimension(width, height);
-        Log.d("CPViewPatch", "fit16x9=" + width + "x" + height);
+        Log.d("CPViewPatch", (barsMode(getContext()) ? "fill=" : "fit16x9=") + width + "x" + height);
     }
 
     public int[] mapTouch(MotionEvent event) {
         int action = event.getActionMasked();
-        float x = event.getX() - getLeft();
-        float y = event.getY() - getTop();
+        int[] inWindow = new int[2];
+        getLocationInWindow(inWindow);
+        float x = event.getX() - inWindow[0];
+        float y = event.getY() - inWindow[1];
         int width = getWidth();
         int height = getHeight();
         if (width <= 0 || height <= 0) return null;
@@ -172,8 +344,13 @@ public final class WindowSurface extends SurfaceView {
             tracking = x >= 0 && y >= 0 && x < width && y < height;
         }
         if (!tracking) return null;
-        int mappedX = Math.max(0, Math.min(1919, (int) (x * 1920 / width)));
-        int mappedY = Math.max(0, Math.min(1079, (int) (y * 1080 / height)));
+        int videoW = 1920;
+        int videoH = 1080;
+        if (barsMode(getContext())) {
+            videoH = 864;
+        }
+        int mappedX = Math.max(0, Math.min(videoW - 1, (int) (x * videoW / width)));
+        int mappedY = Math.max(0, Math.min(videoH - 1, (int) (y * videoH / height)));
         int pressed;
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             tracking = false;

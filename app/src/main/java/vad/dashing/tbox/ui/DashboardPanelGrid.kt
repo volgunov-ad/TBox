@@ -41,12 +41,14 @@ import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.isBoardVoltageWidgetDataKey
+import vad.dashing.tbox.needsHeadUnitEngineTemperature
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
-import vad.dashing.tbox.isMbCanVhalGearBoxCurrentGearEnabled
-import vad.dashing.tbox.isMbCanVhalGearBoxPreparedGearEnabled
+import vad.dashing.tbox.needsHeadUnitGearNumbers
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
@@ -123,8 +125,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
     }
-    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsHeadUnitEngineTemperature(noTboxConnect) }
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
@@ -133,9 +135,7 @@ internal fun DashboardPanelGridAndFrames(
         widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
     }
     val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs) {
-        widgetConfigs.any {
-            it.isMbCanVhalGearBoxCurrentGearEnabled() || it.isMbCanVhalGearBoxPreparedGearEnabled()
-        }
+        widgetConfigs.any { it.needsHeadUnitGearNumbers() }
     }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
@@ -166,6 +166,9 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalSteering = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
+    }
+    val panelNeedsBoardVoltage = remember(widgetConfigs) {
+        widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
@@ -388,6 +391,15 @@ internal fun DashboardPanelGridAndFrames(
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-pm25")
             }
+        }
+    }
+    LaunchedEffect(mbCanInterestSourceId, panelNeedsBoardVoltage, heavySubscriptionsEnabled) {
+        val hold = heavySubscriptionsEnabled && panelNeedsBoardVoltage
+        HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", hold)
+    }
+    DisposableEffect(mbCanInterestSourceId) {
+        onDispose {
+            HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", false)
         }
     }
     if (panelNeedsMbCanVhalSteering) {

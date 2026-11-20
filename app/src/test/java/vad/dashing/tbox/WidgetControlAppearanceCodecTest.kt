@@ -156,6 +156,14 @@ class WidgetControlAppearanceCodecTest {
             ControlAppearanceKind.Alert,
             controlAppearanceKindForDataKey(EPB_PARK_LAMP_WIDGET_DATA_KEY),
         )
+        assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(CAMD_KEEP_AVM_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(CAMD_RECORDER_WIDGET_DATA_KEY),
+        )
     }
 
     @Test

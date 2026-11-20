@@ -380,13 +380,15 @@ fun MainScreen(
 
         if (!windowMode) {
             pendingFloatingTileEdit?.let { (panelId, widgetIndex) ->
-                MainScreenFloatingOverlayEdit(
-                    panelId = panelId,
-                    widgetIndex = widgetIndex,
-                    settingsViewModel = settingsViewModel,
-                    currentTheme = currentTheme,
-                    onDismiss = { FloatingDashboardTileEditRequestBus.clear() },
-                )
+                key(panelId, widgetIndex) {
+                    MainScreenFloatingOverlayEdit(
+                        panelId = panelId,
+                        widgetIndex = widgetIndex,
+                        settingsViewModel = settingsViewModel,
+                        currentTheme = currentTheme,
+                        onDismiss = { FloatingDashboardTileEditRequestBus.clear() },
+                    )
+                }
             }
         }
     }

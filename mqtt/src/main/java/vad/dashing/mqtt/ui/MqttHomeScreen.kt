@@ -1,12 +1,17 @@
 package vad.dashing.mqtt.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,13 +50,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.mqtt.ha.EntityGroup
+import vad.dashing.mqtt.ha.entityTopicPaths
+import vad.dashing.mqtt.ha.formatEntityTopicCaption
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.wireguard.parseWgConf
 import vad.dashing.mqtt.ui.theme.tboxBody
@@ -57,6 +68,8 @@ import vad.dashing.mqtt.ui.theme.tboxButton
 import vad.dashing.mqtt.ui.theme.tboxHeadline
 import vad.dashing.mqtt.ui.theme.tboxTabLabel
 import vad.dashing.mqtt.ui.theme.tboxTitle
+import vad.dashing.mqtt.wqtt.WqttDeviceAction
+import vad.dashing.mqtt.wqtt.WqttPacks
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -513,6 +526,8 @@ private fun EntitiesTab(
         return
     }
     val settings = state.settings
+    WqttWizardSection(state, viewModel, onSettingsSaved)
+    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
     TextField("Имя в Home Assistant", settings.deviceName) {
         viewModel.update { current -> current.copy(deviceName = it) }
         onSettingsSaved()
@@ -520,7 +535,7 @@ private fun EntitiesTab(
     SettingSwitch(
         checked = settings.discoveryEnabled,
         title = "Показывать в Home Assistant",
-        description = "Отправлять конфигурацию MQTT Discovery",
+        description = "Отправлять конфигурацию MQTT Discovery. Для Алисы через WQTT.ru это не нужно",
         onChecked = {
             viewModel.update { current -> current.copy(discoveryEnabled = it) }
             onSettingsSaved()
@@ -529,7 +544,7 @@ private fun EntitiesTab(
     SettingSwitch(
         checked = settings.acceptCommands,
         title = "Принимать команды",
-        description = "Выключено — команды в Home Assistant недоступны, датчики продолжают обновляться",
+        description = "Выключено — команды в Home Assistant и WQTT недоступны, датчики продолжают обновляться",
         onChecked = {
             viewModel.update { current -> current.copy(acceptCommands = it) }
             onSettingsSaved()
@@ -550,8 +565,23 @@ private fun EntitiesTab(
     EntityGroup.entries.forEach { group ->
         val inGroup = state.entities.filter { it.group == group }
         val rows = inGroup.filter { entity ->
+            val topics = entityTopicPaths(
+                settings.topicPrefix,
+                settings.deviceId,
+                entity.objectId,
+                entity.writable,
+                entity.component,
+            )
             (!onlySelected || entity.objectId in settings.selectedObjectIds) &&
-                entityMatchesFilter(entity.label, entity.description, entity.objectId, group.title, filterText)
+                entityMatchesFilter(
+                    entity.label,
+                    entity.description,
+                    entity.objectId,
+                    group.title,
+                    filterText,
+                    topics.stateTopic,
+                    topics.commandTopic.orEmpty(),
+                )
         }
         if (rows.isEmpty()) return@forEach
         any = true
@@ -575,10 +605,18 @@ private fun EntitiesTab(
             }
         }
         rows.forEach { entity ->
+            val topics = entityTopicPaths(
+                settings.topicPrefix,
+                settings.deviceId,
+                entity.objectId,
+                entity.writable,
+                entity.component,
+            )
             SettingSwitch(
                 checked = entity.objectId in settings.selectedObjectIds,
                 title = entity.label,
                 description = entity.description,
+                topicsCaption = formatEntityTopicCaption(topics),
                 onChecked = { enabled ->
                     viewModel.toggleEntity(entity.objectId, enabled)
                     onSettingsSaved()
@@ -596,20 +634,222 @@ private fun EntitiesTab(
     }
 }
 
-/** Same match as the widget picker: title, description and the stored key. */
+@Composable
+private fun WqttWizardSection(
+    state: MqttHomeState,
+    viewModel: MqttHomeViewModel,
+    onSettingsSaved: () -> Unit,
+) {
+    SectionTitle("Яндекс Алиса (WQTT.ru)")
+    Text(
+        "WQTT не читает Home Assistant Discovery. «Создать в WQTT» отправляет все отмеченные ниже сущности (1:1), плюс термостат «Климат», если отмечены питание и уставка.",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+    OutlinedButton(onClick = viewModel::toggleWqtt) {
+        Text(
+            if (state.wqttOpen) "Скрыть мастер WQTT" else "Мастер WQTT → Алиса",
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    if (!state.wqttOpen) return
+    Text(
+        "Токен API: кабинет dash.wqtt.ru → настройки аккаунта / API. Заголовок Authorization: Token …",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    TextField("Токен API WQTT", state.wqttTokenDraft, password = true) {
+        viewModel.setWqttTokenDraft(it)
+    }
+    TextField("Комната в Алисе", state.wqttRoomDraft) {
+        viewModel.setWqttRoomDraft(it)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = {
+                viewModel.saveWqttCredentials()
+                onSettingsSaved()
+            },
+            modifier = Modifier.weight(1f),
+            enabled = !state.wqttBusy,
+        ) {
+            Text("Сохранить токен", style = MaterialTheme.typography.tboxButton)
+        }
+        OutlinedButton(
+            onClick = viewModel::testWqttConnection,
+            modifier = Modifier.weight(1f),
+            enabled = !state.wqttBusy,
+        ) {
+            Text("Проверить", style = MaterialTheme.typography.tboxButton)
+        }
+    }
+    OutlinedButton(
+        onClick = viewModel::applyWqttBrokerToDraft,
+        enabled = !state.wqttBusy,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text("Подставить брокер из WQTT", style = MaterialTheme.typography.tboxButton)
+    }
+    if (state.wqttBrokerHint.isNotBlank()) {
+        Text(
+            state.wqttBrokerHint,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    SectionTitle("Быстрый выбор")
+    Text(
+        "Наборы только отмечают сущности в списке ниже. В кабинет уходит всё отмеченное.",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    WqttPacks.ALL.forEach { pack ->
+        SettingSwitch(
+            checked = viewModel.isWqttPackSelected(pack.id),
+            title = pack.title,
+            description = if (pack.warns) {
+                "${pack.description}. Внимание: голосовые команды кузова"
+            } else {
+                pack.description
+            },
+            onChecked = { enabled ->
+                viewModel.toggleWqttPack(pack.id, enabled)
+                onSettingsSaved()
+            },
+        )
+    }
+    val selectedCount = state.settings.selectedObjectIds.size
+    val hasWqttToken = state.wqttTokenDraft.isNotBlank()
+    Button(
+        onClick = { viewModel.createWqttDevices(onSettingsSaved) },
+        enabled = !state.wqttBusy && selectedCount > 0,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text(
+            if (state.wqttBusy) {
+                "Подождите…"
+            } else {
+                "Создать в WQTT ($selectedCount)"
+            },
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    OutlinedButton(
+        onClick = viewModel::prepareWqttDelete,
+        enabled = !state.wqttBusy && hasWqttToken,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text("Удалить устройства TBox", style = MaterialTheme.typography.tboxButton)
+    }
+    val deletePending = state.wqttDeletePending
+    if (deletePending != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelWqttDelete,
+            title = { Text("Удалить устройства TBox?") },
+            text = {
+                Text(
+                    "Будет удалено ${deletePending.size} устройств в кабинете WQTT " +
+                        "с топиками текущего префикса MQTT. Действие необратимо.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmWqttDelete(onSettingsSaved) }) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelWqttDelete) {
+                    Text("Отмена")
+                }
+            },
+        )
+    }
+    if (state.wqttMessage.isNotBlank()) {
+        Text(
+            state.wqttMessage,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+    // SELECT expands to many WQTT cards; keep the result list readable.
+    val resultPreviewLimit = 40
+    val visibleResults = state.wqttResults.take(resultPreviewLimit)
+    visibleResults.forEach { row ->
+        val color = when (row.action) {
+            WqttDeviceAction.FAILED -> MaterialTheme.colorScheme.error
+            WqttDeviceAction.SKIPPED -> MaterialTheme.colorScheme.onSurfaceVariant
+            WqttDeviceAction.CREATED, WqttDeviceAction.UPDATED -> MaterialTheme.colorScheme.primary
+        }
+        Text(
+            "${row.name}: ${row.message.ifBlank { row.action.name.lowercase() }}",
+            style = MaterialTheme.typography.tboxBody,
+            color = color,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    val hiddenResults = state.wqttResults.size - visibleResults.size
+    if (hiddenResults > 0) {
+        Text(
+            "… и ещё $hiddenResults устройств (см. кабинет WQTT)",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    val skipPreviewLimit = 20
+    val visibleSkipped = state.wqttSkipped.take(skipPreviewLimit)
+    visibleSkipped.forEach { row ->
+        Text(
+            "${row.name}: пропуск — ${row.reason}",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    val hiddenSkipped = state.wqttSkipped.size - visibleSkipped.size
+    if (hiddenSkipped > 0) {
+        Text(
+            "… и ещё $hiddenSkipped пропусков",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+/** Same match as the widget picker: title, description, key, and MQTT topics. */
 internal fun entityMatchesFilter(
     label: String,
     description: String,
     objectId: String,
     groupTitle: String,
     query: String,
+    stateTopic: String = "",
+    commandTopic: String = "",
 ): Boolean {
     val needle = query.trim().lowercase()
     if (needle.isEmpty()) return true
     return label.lowercase().contains(needle) ||
         description.lowercase().contains(needle) ||
         objectId.lowercase().contains(needle) ||
-        groupTitle.lowercase().contains(needle)
+        groupTitle.lowercase().contains(needle) ||
+        stateTopic.lowercase().contains(needle) ||
+        commandTopic.lowercase().contains(needle)
 }
 
 @Composable
@@ -682,13 +922,16 @@ internal fun linkText(up: Boolean, sinceMs: Long, zone: ZoneId = ZoneId.systemDe
     return "$state с ${clockText(sinceMs, zone)}"
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SettingSwitch(
     checked: Boolean,
     title: String,
     description: String,
     onChecked: (Boolean) -> Unit,
+    topicsCaption: String = "",
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -711,6 +954,29 @@ private fun SettingSwitch(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (topicsCaption.isNotBlank()) {
+                Text(
+                    topicsCaption,
+                    style = MaterialTheme.typography.tboxBody.copy(
+                        fontSize = 18.sp,
+                        lineHeight = 24.sp,
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("mqtt topics", topicsCaption))
+                                Toast.makeText(context, "Топики скопированы", Toast.LENGTH_SHORT).show()
+                            },
+                        ),
                 )
             }
         }

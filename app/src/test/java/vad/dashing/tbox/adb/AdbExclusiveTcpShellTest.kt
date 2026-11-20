@@ -107,6 +107,11 @@ class AdbExclusiveTcpShellTest {
                 IOException("Broken pipe"),
             ),
         )
+        assertTrue(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IllegalStateException("ADB connection is not established"),
+            ),
+        )
     }
 
     @Test

@@ -308,6 +308,7 @@ class WayDraft:
     ref: str | None = None
     way_id: int | None = None
     tunnel: bool = False
+    settlement: bool = False
 
 
 def junction_keys(drafts: Sequence[WayDraft]) -> set[Hashable]:
@@ -359,6 +360,7 @@ def _append_line(
     ref: str | None = None,
     way_id: int | None = None,
     tunnel: bool = False,
+    settlement: bool = False,
 ) -> int:
     edge: dict[str, Any] = {
         "id": edge_id,
@@ -382,6 +384,8 @@ def _append_line(
         edge["wayId"] = int(way_id)
     if tunnel:
         edge["tunnel"] = True
+    if settlement:
+        edge["settlement"] = True
     edges.append(edge)
     return edge_id + 1
 
@@ -406,6 +410,7 @@ def drafts_to_edges(drafts: Sequence[WayDraft], start_id: int = 1) -> List[dict[
                 ref=draft.ref,
                 way_id=draft.way_id,
                 tunnel=draft.tunnel,
+                settlement=draft.settlement,
             )
     assign_shared_nodes(edges)
     return edges
@@ -435,6 +440,8 @@ def _draft_from_line(
         ref=ref_from_tags(tags),
         way_id=way_id,
         tunnel=tunnel_from_tags(tags),
+        # Way-level RU:urban zone counts as in-settlement (same rings used for PIP).
+        settlement=urban_zone_from_tags(tags),
     )
 
 
@@ -552,6 +559,31 @@ def apply_urban_maxspeed_fallback(
         if not point_in_any_polygon(mid[0], mid[1], urban_rings):
             continue
         edge["maxspeed"] = URBAN_DEFAULT_KMH
+        applied += 1
+    return applied
+
+
+def apply_settlement_flag(
+    edges: List[dict[str, Any]],
+    urban_rings: Sequence[Sequence[Sequence[float]]],
+) -> int:
+    """Set settlement=true when the edge midpoint lies in a settlement / RU:urban polygon.
+
+    Unlike urban maxspeed fallback, includes motorway* / trunk* (still inside НП).
+    Does not clear an existing way-level settlement flag. Rings are not stored in the pack.
+    """
+    if not urban_rings or not edges:
+        return 0
+    applied = 0
+    for edge in edges:
+        if edge.get("settlement") is True:
+            continue
+        mid = edge_midpoint(edge.get("coords") or [])
+        if mid is None:
+            continue
+        if not point_in_any_polygon(mid[0], mid[1], urban_rings):
+            continue
+        edge["settlement"] = True
         applied += 1
     return applied
 
@@ -680,7 +712,9 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
             if draft is not None:
                 drafts.append(draft)
     edges = drafts_to_edges(drafts)
-    apply_urban_maxspeed_fallback(edges, urban_rings_from_geojson(path))
+    rings = urban_rings_from_geojson(path)
+    apply_urban_maxspeed_fallback(edges, rings)
+    apply_settlement_flag(edges, rings)
     return edges
 
 
@@ -731,7 +765,9 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
         if draft is not None:
             drafts.append(draft)
     edges = drafts_to_edges(drafts)
-    apply_urban_maxspeed_fallback(edges, urban_rings_from_overpass_json(path))
+    rings = urban_rings_from_overpass_json(path)
+    apply_urban_maxspeed_fallback(edges, rings)
+    apply_settlement_flag(edges, rings)
     return edges
 
 

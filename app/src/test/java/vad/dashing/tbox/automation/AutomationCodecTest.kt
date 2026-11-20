@@ -27,6 +27,7 @@ class AutomationCodecTest {
             AutomationTrigger.SystemEvent(
                 id = "menu-open",
                 event = AutomationSystemEvent.MENU_OPENED,
+                holdMillis = 1_500L,
             ),
             AutomationTrigger.Interval(
                 id = "periodic",
@@ -77,6 +78,7 @@ class AutomationCodecTest {
             triggers = triggers,
             conditions = listOf(
                 AutomationCondition.TriggeredBy(setOf("rpm", "service-ready")),
+                AutomationCondition.AdbTcp(listening = true),
                 AutomationCondition.Time(
                     after = AutomationTimeOfDay(22, 0),
                     before = AutomationTimeOfDay(6, 0),
@@ -168,6 +170,37 @@ class AutomationCodecTest {
                   "type":"state_equals",
                   "id":"t",
                   "signal":"${AutomationSignalId.ROAD_TUNNEL.storageKey}",
+                  "source":"${AutomationSignalSource.APP.storageKey}",
+                  "expectedState":"on",
+                  "holdMillis":0,
+                  "startupBehavior":"${AutomationStartupBehavior.FIRE_IF_MATCHING.storageKey}"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":1000}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+        """.trimIndent()
+        val trigger = AutomationCodec.decode(json).getOrThrow()
+            .automations.single().triggers.single() as AutomationTrigger.StateEquals
+        assertEquals(AutomationStartupBehavior.INITIALIZE_ONLY, trigger.startupBehavior)
+    }
+
+    @Test
+    fun roadSettlementTrigger_importedFireIfMatchingBecomesInitializeOnly() {
+        val json = """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"settlement",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"state_equals",
+                  "id":"t",
+                  "signal":"${AutomationSignalId.ROAD_SETTLEMENT.storageKey}",
                   "source":"${AutomationSignalSource.APP.storageKey}",
                   "expectedState":"on",
                   "holdMillis":0,
@@ -768,5 +801,46 @@ class AutomationCodecTest {
         assertTrue(result.isSuccess)
         val delay = result.getOrThrow().single() as AutomationAction.Delay
         assertEquals(250L, delay.durationMillis)
+    }
+
+    @Test
+    fun systemEvent_withoutHoldMillis_defaultsToZero() {
+        val json = """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"legacy",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":1000}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+        """.trimIndent()
+        val trigger = AutomationCodec.decode(json).getOrThrow()
+            .automations.single().triggers.single() as AutomationTrigger.SystemEvent
+        assertEquals(0L, trigger.holdMillis)
+    }
+
+    @Test
+    fun roundTrip_preservesAdbTcpCondition() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "adb-tcp-cond",
+            name = "ADB TCP fact",
+            conditions = listOf(
+                AutomationCondition.AdbTcp(listening = true),
+                AutomationCondition.AdbTcp(listening = false),
+            ),
+            actions = listOf(AutomationAction.Delay(1_000L)),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
     }
 }

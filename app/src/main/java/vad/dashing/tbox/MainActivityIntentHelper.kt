@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.dcl.DclAppLaunchHelper
+import vad.dashing.tbox.dcl.DclLauncherApiRepository
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -51,14 +54,23 @@ object ThemeOpenRequestBus {
  * [context] is not an [Activity], because starting an activity from a non-Activity context
  * requires it (e.g. [android.app.Service], [Application], app widget [Context]).
  *
- * On Android 10 Adayo, when [LaunchMainInStockAppWindowSetting] is enabled, programmatic opens
- * go through [AdayoStockAppWindow] (stock launcher ActivityView) instead of fullscreen
- * [MainActivity].
+ * When DCL environment is ON, programmatic opens use the Main-only DCL mode picker
+ * ([MainDclLaunchMode]). When OFF, the legacy Adayo/DCL app_area boolean applies.
+ * Prefer DCL `launchApp` with the selected mode while keeping the activity alive (no
+ * finish-after-reuse husks).
  */
 object MainActivityIntentHelper {
 
     const val EXTRA_FLOATING_DASHBOARD_PANEL_ID = "extra_floating_dashboard_panel_id"
     const val EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX = "extra_floating_dashboard_widget_index"
+
+    /**
+     * When true, [MainActivity] skips cold external redirect into DCL/Adayo app window.
+     * Reserved for launches that already came from DCL (or tests); sticky process flag
+     * covers A9 display-0 loops when the vendor does not forward this extra.
+     */
+    const val EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT =
+        "vad.dashing.tbox.extra.SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT"
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -113,7 +125,7 @@ object MainActivityIntentHelper {
             putExtra(EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX, widgetIndex)
         }
 
-    /** Programmatic bring-to-front; honors A10 stock app-window setting. */
+    /** Programmatic bring-to-front; honors Main DCL mode / A10 stock app-window setting. */
     fun bringToFront(context: Context): Boolean =
         launchMain(context, createBringToFrontIntent(context))
 
@@ -141,30 +153,86 @@ object MainActivityIntentHelper {
         )
     }
 
-    fun shouldLaunchInStockAppWindow(context: Context): Boolean =
-        LaunchMainInStockAppWindowDecision.shouldAttempt(
-            settingEnabled = LaunchMainInStockAppWindowSetting.enabled,
+    fun resolveMainAppWindowBackend(context: Context): MainAppWindowBackend =
+        LaunchMainInStockAppWindowDecision.resolveBackend(
+            dclEnvironmentEnabled = DclLauncherEnvironmentSetting.enabled,
+            mainDclMode = MainDclLaunchModeSetting.mode,
+            legacyStockWindowEnabled = LaunchMainInStockAppWindowSetting.enabled,
+            dclApiAvailable = DclLauncherApiRepository.available.value,
+            dclCapabilities = DclLauncherApiRepository.capabilities.value,
             headUnitIsAndroid10 =
                 UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal,
             adayoLauncherAvailable = AdayoStockAppWindow.isAvailable(context),
         )
 
+    fun shouldLaunchInStockAppWindow(context: Context): Boolean =
+        resolveMainAppWindowBackend(context) != MainAppWindowBackend.NONE
+
+    fun shouldShowMainAppWindowSwitch(
+        headUnitIsAndroid10: Boolean,
+        dclApiAvailable: Boolean = DclLauncherApiRepository.available.value,
+        dclEnvironmentEnabled: Boolean = DclLauncherEnvironmentSetting.enabled,
+    ): Boolean =
+        LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
+            headUnitIsAndroid10 = headUnitIsAndroid10,
+            dclApiAvailable = dclApiAvailable,
+            dclEnvironmentEnabled = dclEnvironmentEnabled,
+        )
+
+    fun shouldShowMainDclLaunchModePicker(
+        dclEnvironmentEnabled: Boolean = DclLauncherEnvironmentSetting.enabled,
+    ): Boolean =
+        LaunchMainInStockAppWindowDecision.shouldShowMainDclLaunchModePicker(
+            dclEnvironmentEnabled = dclEnvironmentEnabled,
+        )
+
     private fun launchMain(context: Context, fallbackIntent: Intent): Boolean {
-        if (shouldLaunchInStockAppWindow(context)) {
-            val ok = AdayoStockAppWindow.launchInAppWindow(
-                context = context,
-                packageName = context.packageName,
-                activityClass = MainActivity::class.java.name,
-            )
-            if (ok) return true
+        when (val backend = resolveMainAppWindowBackend(context)) {
+            MainAppWindowBackend.DCL_APP_AREA,
+            MainAppWindowBackend.DCL_FULL_WIDTH,
+            MainAppWindowBackend.DCL_FULLSCREEN,
+            -> {
+                val mode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend)
+                    ?: return startFallback(context, fallbackIntent)
+                DclAppLaunchHelper.launch(
+                    context = context,
+                    packageName = context.packageName,
+                    mode = mode,
+                    activityClass = MainActivity::class.java.name,
+                    onRawFallback = {
+                        val stockOk = backend != MainAppWindowBackend.DCL_FULLSCREEN &&
+                            AdayoStockAppWindow.launchInAppWindow(
+                                context = context,
+                                packageName = context.packageName,
+                                activityClass = MainActivity::class.java.name,
+                            )
+                        if (!stockOk) {
+                            runCatching { context.startActivity(fallbackIntent) }
+                        }
+                    },
+                )
+                return true
+            }
+            MainAppWindowBackend.ADAYO_STOCK -> {
+                val ok = AdayoStockAppWindow.launchInAppWindow(
+                    context = context,
+                    packageName = context.packageName,
+                    activityClass = MainActivity::class.java.name,
+                )
+                if (ok) return true
+            }
+            MainAppWindowBackend.NONE -> Unit
         }
-        return try {
+        return startFallback(context, fallbackIntent)
+    }
+
+    private fun startFallback(context: Context, fallbackIntent: Intent): Boolean =
+        try {
             context.startActivity(fallbackIntent)
             true
         } catch (_: Exception) {
             false
         }
-    }
 
     /**
      * Third-party app [Intent] from [android.content.pm.PackageManager.getLaunchIntentForPackage]:

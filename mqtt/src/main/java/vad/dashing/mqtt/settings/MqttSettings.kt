@@ -28,6 +28,11 @@ data class MqttSettings(
     val wireguardEnabled: Boolean = false,
     val wireguardConf: String = "",
     val wireguardFileName: String = "",
+    /** Pasteable WQTT cabinet API token (`Authorization: Token …`). */
+    val wqttApiToken: String = "",
+    val wqttRoom: String = DEFAULT_WQTT_ROOM,
+    /** Numeric WQTT device ids remembered after a successful «Создать в WQTT». */
+    val wqttDeviceIds: Set<Int> = emptySet(),
 ) {
     fun normalized(): MqttSettings {
         val conf = wireguardConf.trim().removePrefix("\uFEFF").replace("\r\n", "\n")
@@ -46,6 +51,9 @@ data class MqttSettings(
             wireguardConf = conf,
             wireguardFileName = wireguardFileName.trim(),
             wireguardEnabled = wireguardEnabled && conf.isNotBlank(),
+            wqttApiToken = wqttApiToken.trim(),
+            wqttRoom = wqttRoom.trim().ifEmpty { DEFAULT_WQTT_ROOM }.take(64),
+            wqttDeviceIds = wqttDeviceIds.filter { it > 0 }.toSet(),
         )
     }
 
@@ -111,6 +119,8 @@ fun connectionChanged(saved: MqttSettings, draft: MqttSettings): Boolean =
     saved.applyingConnection(draft).normalized() != saved.normalized()
 
 internal const val FAST_PUBLISH_DEFAULT_SECONDS = 10
+
+internal const val DEFAULT_WQTT_ROOM = "Автомобиль"
 
 /** Previous shipped default. A stored 5 is lifted to [FAST_PUBLISH_DEFAULT_SECONDS] once. */
 internal const val FAST_PUBLISH_PREVIOUS_DEFAULT_SECONDS = 5

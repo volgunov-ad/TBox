@@ -108,7 +108,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.automation.AutomationActionResult
 import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.Android10HardKeySource
 import vad.dashing.tbox.automation.AutomationEngine
+import vad.dashing.tbox.automation.AutomationHardKeyTracking
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
@@ -320,6 +322,8 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
+    /** Multi-VD sticky hide reason (watched package kept while another app is last-resumed). */
+    private var usageStatsStickyHideState: UsageStatsStickyHide.State = UsageStatsStickyHide.State.EMPTY
     /**
      * ElapsedRealtime after which usage-stats force-show may open overlays.
      * Set when [servicePhase] becomes [ServiceLifecyclePhase.Running] (+ settle).
@@ -575,9 +579,14 @@ class BackgroundService : Service() {
         const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
         const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
         const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
+        const val ACTION_ESP_BLE_RELAY_SET = "vad.dashing.tbox.ESP_BLE_RELAY_SET"
+        const val ACTION_ESP_BLE_RELAY_TOGGLE = "vad.dashing.tbox.ESP_BLE_RELAY_TOGGLE"
+        const val ACTION_ESP_BLE_RELAY_PULSE = "vad.dashing.tbox.ESP_BLE_RELAY_PULSE"
         const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
         const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
         const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
+        const val EXTRA_ESP_BLE_RELAY_INDEX = "esp_ble_relay_index"
+        const val EXTRA_ESP_BLE_RELAY_ID = "esp_ble_relay_id"
         const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
@@ -1061,6 +1070,8 @@ class BackgroundService : Service() {
         timingReset()
         timingMark("onCreate_start")
 
+        Android10HardKeySource.install(this)
+        AutomationHardKeyTracking.ensureStarted()
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
@@ -1693,6 +1704,7 @@ class BackgroundService : Service() {
                             HeadUnitCanMode.Android9MbCan -> MbCanRepository.setDeepDiagnostics(false)
                             HeadUnitCanMode.Android10Vhal -> Android10VhalRepository.stopDeepDiagnosticsAsync()
                         }
+                        TboxRepository.addFileOnlyLog("INFO", "CANDIAG_TBOX", "rawTboxFrames=off")
                     }
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
@@ -1713,6 +1725,11 @@ class BackgroundService : Service() {
                             }
                         }
                     }
+                    TboxRepository.addFileOnlyLog(
+                        "INFO",
+                        "CANDIAG_TBOX",
+                        "rawTboxFrames=" + if (enabled) "on" else "off",
+                    )
                     DeepCanDiagnostics.report(
                         if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan)
                             DeepCanDiagnostics.MBCAN_TAG else DeepCanDiagnostics.VHAL_TAG,
@@ -1758,6 +1775,26 @@ class BackgroundService : Service() {
                         EspRelayWidgetMode.BUTTON_PULSE_MS,
                     )
                     espCompanionManager?.pulseRelay(channel, durationMs)
+                }
+            }
+            ACTION_ESP_BLE_RELAY_SET -> {
+                val on = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0) != 0
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.setBleRelayState(target, on)
+                }
+            }
+            ACTION_ESP_BLE_RELAY_TOGGLE -> {
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.toggleBleRelay(target)
+                }
+            }
+            ACTION_ESP_BLE_RELAY_PULSE -> {
+                val durationMs = intent.getLongExtra(
+                    EXTRA_ESP_RELAY_DURATION_MS,
+                    EspRelayWidgetMode.BUTTON_PULSE_MS,
+                )
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.pulseBleRelay(target, durationMs)
                 }
             }
             ACTION_ESP_UM980_CMD -> {
@@ -2092,6 +2129,19 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
+    /** BLE relay target: board id string or 0-based index into the paired list. */
+    private fun withBleRelayTarget(intent: Intent, block: (Any) -> Unit) {
+        val id = intent.getStringExtra(EXTRA_ESP_BLE_RELAY_ID)?.trim().orEmpty()
+        if (id.isNotEmpty()) {
+            block(id)
+            return
+        }
+        val index = intent.getIntExtra(EXTRA_ESP_BLE_RELAY_INDEX, -1)
+        if (index >= 0) {
+            block(index)
+        }
+    }
+
     private fun automationServiceActions(): AutomationServiceActions =
         object : AutomationServiceActions {
             override suspend fun finishAndStartTrip(): AutomationActionResult {
@@ -2236,6 +2286,44 @@ class BackgroundService : Service() {
                         )
                     },
                 )
+            }
+
+            override suspend fun setEspBleRelayState(
+                index: Int,
+                on: Boolean,
+            ): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.setBleRelayState(id, on)
+                return AutomationActionResult.ok(
+                    if (on) "BLE-реле замкнуто" else "BLE-реле разомкнуто",
+                )
+            }
+
+            override suspend fun toggleEspBleRelay(index: Int): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.toggleBleRelay(id)
+                return AutomationActionResult.ok("BLE-реле переключено")
+            }
+
+            override suspend fun pulseEspBleRelay(
+                index: Int,
+                durationMillis: Long?,
+            ): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.pulseBleRelay(
+                    id,
+                    durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
+                )
+                return AutomationActionResult.ok("Импульс BLE-реле запущен")
             }
 
             override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {
@@ -2469,6 +2557,9 @@ class BackgroundService : Service() {
                 }
                 startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
+                vad.dashing.tbox.phone.PhoneCallStateRepository.start(this@BackgroundService)
+                vad.dashing.tbox.dcl.DclLauncherApiRepository.start(this@BackgroundService)
+                vad.dashing.tbox.CamdStatusRepository.start(this@BackgroundService, scope)
                 yield()
                 applyModemDataSource()
                 yield()
@@ -6136,7 +6227,8 @@ class BackgroundService : Service() {
         TboxRepository.addLog(
             "DEBUG",
             "UsageStats",
-            "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
+            "floating sync fg=${newState.foregroundPackage} stickyHide=${newState.stickyHidePackage} " +
+                "prevFg=$prevFg " +
                 "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
                 "suppressHide=${newState.suppressFloatingPanelUsageStatsHide} " +
                 "suppressShow=${newState.suppressFloatingPanelUsageStatsForceShow}",
@@ -6166,6 +6258,7 @@ class BackgroundService : Service() {
         usageStatsStableForegroundPackage = null
         usageStatsPendingForegroundPackage = null
         usageStatsPendingForegroundStablePolls = 0
+        usageStatsStickyHideState = UsageStatsStickyHide.State.EMPTY
         ForegroundAppMonitor.clear()
     }
 
@@ -6230,11 +6323,39 @@ class BackgroundService : Service() {
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }
+        val stickyHidePackage = if (!hasHideRules || !hasUsageAccess) {
+            usageStatsStickyHideState = UsageStatsStickyHide.State.EMPTY
+            null
+        } else {
+            val prevSticky = usageStatsStickyHideState.stickyHidePackage
+            // Skip the leave probe when focused already enters/transfers sticky.
+            val focusedEntersHide = effectiveForeground != null &&
+                usageStatsWatchContains(watchHide, effectiveForeground)
+            val activitySignal = when {
+                prevSticky.isNullOrBlank() || focusedEntersHide ->
+                    UsageStatsStickyHide.PackageActivitySignal.ABSENT
+                else -> UsageStatsHideFloatingHelper.packageActivitySignalWithin(
+                    this@BackgroundService,
+                    packageName = prevSticky,
+                    windowMs = ForegroundAppMonitor.SAMPLE_WINDOW_MS,
+                )
+            }
+            usageStatsStickyHideState = UsageStatsStickyHide.next(
+                previous = usageStatsStickyHideState,
+                focusedPackage = effectiveForeground,
+                hideWatch = watchHide,
+                stickyPackageActivity = activitySignal,
+                nowElapsedMs = SystemClock.elapsedRealtime(),
+                oemOverlayPackage = overlayPackage,
+            )
+            usageStatsStickyHideState.stickyHidePackage
+        }
         val suppressForceShow = servicePhase != ServiceLifecyclePhase.Running ||
             SystemClock.elapsedRealtime() < usageStatsForceShowAllowedAfterElapsedMs ||
             MainScreenBootOpenStore.isPending(this@BackgroundService)
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
+            stickyHidePackage = stickyHidePackage,
             // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
             isMainActivityVisible = isMainActivityInForeground,
             suppressFloatingPanelUsageStatsHide =
@@ -7271,7 +7392,12 @@ class BackgroundService : Service() {
         EspCompanionRepository.setRouterError(null)
         espPanelPort = settingsManager.externalApiPortFlow.first()
             .coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
-        val error = HuSoftApRouter.prepare(this)
+        val error = vad.dashing.tbox.adb.LocalhostAdbBootReady.runAttempts(
+            shouldRetry = { code ->
+                vad.dashing.tbox.adb.LocalhostAdbBootReady.isRetryableAdbErrorCode(code)
+            },
+            attempt = { HuSoftApRouter.prepare(this) },
+        )
         if (ticket != espSoftApRouterGeneration.get()) return
         val push = HuSoftApRouter.current()
         if (push != null && (error == null || error == "band")) {
@@ -7408,6 +7534,7 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        vad.dashing.tbox.dcl.DclLauncherApiRepository.stop()
         vad.dashing.tbox.adb.AdbShutdownGate.markAppShuttingDown()
         vad.dashing.tbox.adb.AdbRepository.disconnect()
 

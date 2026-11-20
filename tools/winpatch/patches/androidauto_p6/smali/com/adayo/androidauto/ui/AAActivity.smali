@@ -267,6 +267,8 @@
 
     :cond_aa_win_ok
 
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->keepBars(Landroid/app/Activity;)V
+
     .line 43
     new-instance p1, Ljava/lang/StringBuilder;
 
@@ -701,6 +703,8 @@
 
     .line 100
     invoke-virtual {p0}, Lcom/adayo/androidauto/ui/AAActivity;->hideBottomUIMenu()V
+
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->keepBars(Landroid/app/Activity;)V
 
     .line 102
     :cond_0

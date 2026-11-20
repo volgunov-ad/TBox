@@ -4,6 +4,7 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import vad.dashing.tbox.showSafely
@@ -27,10 +28,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.MainDclLaunchMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -814,6 +820,8 @@ fun SettingsTabContent(
     val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
+    val launchMainDclMode by
+        settingsViewModel.launchMainDclMode.collectAsStateWithLifecycle()
     val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
     val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
     val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
@@ -993,14 +1001,282 @@ fun SettingsTabContent(
                 modifier = Modifier.weight(1f)
             )
         }
-        if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
-            SettingSwitch(
-                launchMainInStockAppWindow,
-                { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
-                stringResource(R.string.settings_launch_main_in_stock_app_window_title),
-                stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
-                true,
+        val dclEnvEnabled by
+            settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+        val dclApiAvailable by
+            vad.dashing.tbox.dcl.DclLauncherApiRepository.available.collectAsStateWithLifecycle()
+        val dclCapabilities by
+            vad.dashing.tbox.dcl.DclLauncherApiRepository.capabilities.collectAsStateWithLifecycle()
+        val resources = LocalResources.current
+        SettingSwitch(
+            dclEnvEnabled,
+            { enabled -> settingsViewModel.saveDclLauncherEnvironmentEnabled(enabled) },
+            stringResource(R.string.settings_dcl_launcher_environment_title),
+            stringResource(R.string.settings_dcl_launcher_environment_desc),
+            true,
+        )
+        Text(
+            text = if (dclApiAvailable) {
+                stringResource(
+                    R.string.settings_dcl_launcher_api_status_available,
+                    dclCapabilities?.apiVersion ?: 1,
+                )
+            } else {
+                stringResource(R.string.settings_dcl_launcher_api_status_unavailable)
+            },
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        val dclSmartAcc by
+            vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState.collectAsStateWithLifecycle()
+        var smartAccBusy by remember { mutableStateOf(false) }
+        val smartAccControlsEnabled = dclApiAvailable && !smartAccBusy
+        val naLabel = stringResource(R.string.settings_dcl_smart_acc_value_na)
+        fun kmhOrNa(value: Int?): String =
+            if (value == null) {
+                naLabel
+            } else {
+                resources.getString(R.string.settings_dcl_smart_acc_kmh, value)
+            }
+        SettingsTitle(stringResource(R.string.settings_dcl_smart_acc_title))
+        Text(
+            text = stringResource(R.string.settings_dcl_smart_acc_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        if (!dclApiAvailable) {
+            Text(
+                text = stringResource(R.string.settings_dcl_smart_acc_unavailable),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
             )
+        } else {
+            SettingSwitch(
+                dclSmartAcc?.smartAccActive == true,
+                { enabled ->
+                    if (smartAccBusy) return@SettingSwitch
+                    smartAccBusy = true
+                    coroutineScope.launch {
+                        val result = vad.dashing.tbox.dcl.DclLauncherApiRepository.setSmartAcc(
+                            enabled = enabled,
+                            context = context,
+                        )
+                        smartAccBusy = false
+                        if (result !is vad.dashing.tbox.dcl.DclCallResult.Ok) {
+                            Toast.makeText(
+                                context,
+                                resources.getString(R.string.settings_dcl_smart_acc_error),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                },
+                stringResource(R.string.settings_dcl_smart_acc_active),
+                "",
+                smartAccControlsEnabled,
+            )
+            SettingSwitch(
+                dclSmartAcc?.smartAccConfigEnabled == true,
+                { enabled ->
+                    if (smartAccBusy) return@SettingSwitch
+                    smartAccBusy = true
+                    coroutineScope.launch {
+                        val currentActive = dclSmartAcc?.smartAccActive == true
+                        val result = vad.dashing.tbox.dcl.DclLauncherApiRepository.setSmartAcc(
+                            enabled = currentActive,
+                            configEnabled = enabled,
+                            context = context,
+                        )
+                        smartAccBusy = false
+                        if (result !is vad.dashing.tbox.dcl.DclCallResult.Ok) {
+                            Toast.makeText(
+                                context,
+                                resources.getString(R.string.settings_dcl_smart_acc_error),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                },
+                stringResource(R.string.settings_dcl_smart_acc_config),
+                stringResource(R.string.settings_dcl_smart_acc_config_desc),
+                smartAccControlsEnabled,
+            )
+            Text(
+                text = stringResource(
+                    R.string.settings_dcl_smart_acc_cruise_state,
+                    dclSmartAcc?.cruiseState?.takeIf { it.isNotBlank() } ?: naLabel,
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Text(
+                text = stringResource(
+                    R.string.settings_dcl_smart_acc_limit,
+                    kmhOrNa(dclSmartAcc?.effectiveSpeedLimit),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Text(
+                text = stringResource(
+                    R.string.settings_dcl_smart_acc_offset,
+                    kmhOrNa(dclSmartAcc?.adasAccSpeedOffset),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Text(
+                text = stringResource(
+                    R.string.settings_dcl_smart_acc_target,
+                    kmhOrNa(dclSmartAcc?.targetSpeed),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        var showBulkConvertConfirm by remember { mutableStateOf(false) }
+        var bulkConvertBusy by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { showBulkConvertConfirm = true },
+            enabled = !bulkConvertBusy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_dcl_bulk_convert_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        if (showBulkConvertConfirm) {
+            var previewText by remember {
+                mutableStateOf(
+                    resources.getString(R.string.settings_dcl_bulk_convert_confirm_loading),
+                )
+            }
+            LaunchedEffect(Unit) {
+                val preview = runCatching {
+                    settingsViewModel.previewDclBulkConvertCounts()
+                }.getOrNull()
+                previewText = if (preview == null) {
+                    resources.getString(R.string.settings_dcl_bulk_convert_confirm_error)
+                } else {
+                    resources.getString(
+                        R.string.settings_dcl_bulk_convert_confirm_body,
+                        preview.shortcutCount,
+                        preview.automationActionCount,
+                    )
+                }
+            }
+            AlertDialog(
+                onDismissRequest = { if (!bulkConvertBusy) showBulkConvertConfirm = false },
+                title = {
+                    Text(stringResource(R.string.settings_dcl_bulk_convert_confirm_title))
+                },
+                text = {
+                    Text(
+                        text = previewText,
+                        style = MaterialTheme.typography.tboxBody,
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !bulkConvertBusy,
+                        onClick = {
+                            bulkConvertBusy = true
+                            settingsViewModel.bulkConvertLaunchModesToDclOrdinary { shortcuts, autos ->
+                                bulkConvertBusy = false
+                                showBulkConvertConfirm = false
+                                Toast.makeText(
+                                    context,
+                                    resources.getString(
+                                        R.string.settings_dcl_bulk_convert_done,
+                                        shortcuts,
+                                        autos,
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.settings_dcl_bulk_convert_confirm_ok))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !bulkConvertBusy,
+                        onClick = { showBulkConvertConfirm = false },
+                    ) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+        if (MainActivityIntentHelper.shouldShowMainDclLaunchModePicker(dclEnvEnabled)) {
+            SettingsTitle(stringResource(R.string.settings_launch_main_dcl_mode_title))
+            Text(
+                text = stringResource(R.string.settings_launch_main_dcl_mode_desc),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_fullscreen),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.FULLSCREEN,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.FULLSCREEN)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_full_width),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.FULL_WIDTH,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.FULL_WIDTH)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_app_area),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.APP_AREA,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.APP_AREA)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else {
+            val showMainAppWindowSwitch =
+                MainActivityIntentHelper.shouldShowMainAppWindowSwitch(
+                    headUnitIsAndroid10 = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                    dclApiAvailable = dclApiAvailable,
+                    dclEnvironmentEnabled = dclEnvEnabled,
+                )
+            if (showMainAppWindowSwitch) {
+                SettingSwitch(
+                    launchMainInStockAppWindow,
+                    { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
+                    stringResource(R.string.settings_launch_main_in_stock_app_window_title),
+                    stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
+                    true,
+                )
+            }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_cruise_type_title))
@@ -1377,6 +1653,7 @@ fun SettingsTabContent(
             onAutoCompileChange = settingsViewModel::saveAppDexoptAuto,
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        CamdKeepAvmSystemSwitch()
         SettingsTitle(stringResource(R.string.settings_expert_section_title))
         Button(
             onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
@@ -2011,70 +2288,72 @@ fun FloatingPanelsSettingsTabContent(
                 ?: floatingDashboardsList.firstOrNull()
         }
         if (selectedFloatingPanel != null) {
-            var panelBgThemeSegment by remember(selectedFloatingPanel.id) { mutableIntStateOf(0) }
-            PanelBackgroundAppearanceSettingsSection(
-                panelStorageId = selectedFloatingPanel.id,
-                enabled = hasFloatingPanels,
-                colorThemeSegment = panelBgThemeSegment,
-                onColorThemeSegmentChange = { panelBgThemeSegment = it },
-                backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                onBackgroundColorLightChange = { color ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = color,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                onBackgroundColorDarkChange = { color ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = color,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                onBackgroundImageRelPathLightChange = { path ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = path,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                onBackgroundImageRelPathDarkChange = { path ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = path,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                panelShape = selectedFloatingPanel.panelShape,
-                onPanelShapeChange = { shape ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = shape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                settingsViewModel = settingsViewModel,
-                presetSlots = widgetColorPresetSlots,
-            )
+            key(selectedFloatingPanel.id) {
+                var panelBgThemeSegment by remember { mutableIntStateOf(0) }
+                PanelBackgroundAppearanceSettingsSection(
+                    panelStorageId = selectedFloatingPanel.id,
+                    enabled = hasFloatingPanels,
+                    colorThemeSegment = panelBgThemeSegment,
+                    onColorThemeSegmentChange = { panelBgThemeSegment = it },
+                    backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                    backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                    onBackgroundColorLightChange = { color ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = color,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    onBackgroundColorDarkChange = { color ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = color,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                    backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                    onBackgroundImageRelPathLightChange = { path ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = path,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    onBackgroundImageRelPathDarkChange = { path ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = path,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    panelShape = selectedFloatingPanel.panelShape,
+                    onPanelShapeChange = { shape ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = shape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    settingsViewModel = settingsViewModel,
+                    presetSlots = widgetColorPresetSlots,
+                )
+            }
         }
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
@@ -3956,6 +4235,7 @@ fun InfoTabContent(
             item { HuSystemNetworksSection() }
             item { HuUsbDevicesSection() }
             item { MqttStatusInfoSection() }
+            item { CamdStatusInfoSection() }
             if (!noTboxConnect) {
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

@@ -6,14 +6,21 @@ import androidx.annotation.StringRes
 const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
 
 /**
- * How an [APP_LAUNCHER_WIDGET_DATA_KEY] tile starts the target app.
+ * How an app-shortcut or music-control tile starts the target app.
  *
+ * [FULLSCREEN] is the picker label «Обычный»: raw `startActivity`, or DCL `app_area`
+ * when DCL environment mode is on.
+ * [DCL_FULL_WIDTH] is opt-in «На всю ширину (DCL)» → DCL `launchApp(mode=full_width)`
+ * (bars visible, ADAS hidden, not immersive).
+ * [DCL_FULLSCREEN] is opt-in «На весь экран (DCL)» → DCL `launchApp(mode=fullscreen)`.
  * [STOCK_WINDOW] uses Adayo A10 launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`).
  * [VIRTUAL_DISPLAY] starts the app on a chosen HU display via localhost ADB
  * (`am start --display`).
  */
 enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes: Int) {
     FULLSCREEN("fullscreen", R.string.widget_app_launcher_mode_fullscreen),
+    DCL_FULL_WIDTH("dcl_full_width", R.string.widget_app_launcher_mode_dcl_full_width),
+    DCL_FULLSCREEN("dcl_fullscreen", R.string.widget_app_launcher_mode_dcl_fullscreen),
     FREEFORM("freeform", R.string.widget_app_launcher_mode_freeform),
     STOCK_WINDOW("stock_window", R.string.widget_app_launcher_mode_stock_window),
     VIRTUAL_DISPLAY("virtual_display", R.string.widget_app_launcher_mode_virtual_display);
@@ -43,6 +50,17 @@ enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes
 
 /** Dashboard widget: shows a custom icon and sends a configured HTTP request on tap. */
 const val HTTP_REQUEST_WIDGET_DATA_KEY = "httpRequestWidget"
+
+/**
+ * True when the tile persists app-shortcut launch fields ([FloatingDashboardWidgetConfig.launcherAppPackage]
+ * and launch-mode / freeform / virtual-display settings).
+ */
+fun widgetStoresAppLauncherLaunchSettings(
+    dataKey: String,
+    httpLaunchAppBeforeRequest: Boolean = false,
+): Boolean =
+    usesAppLauncherLaunchModeFields(dataKey) ||
+        (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY && httpLaunchAppBeforeRequest)
 
 const val ACTIVE_TRIP_WIDGET_DATA_KEY = "activeTripWidget"
 const val ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY = "activeTripWidgetSimple"

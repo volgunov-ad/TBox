@@ -28,6 +28,8 @@ data class AutomationCanCatalogEntry(
     val label: String,
     val policy: MbCanCommandPolicy,
     val supportedModes: Set<HeadUnitCanMode>,
+    /** Picker group header for the merged «Действия» list. */
+    val group: AutomationActionGroup,
 ) {
     val allowedOperations: Set<AutomationCanOperation>
         get() = when {
@@ -207,6 +209,7 @@ object AutomationCanCatalog {
                     label = vehicleLabel(spec.propertyId),
                     policy = spec.policy,
                     supportedModes = supportedModes,
+                    group = canActionGroup(AutomationCanBus.VEHICLE, spec.propertyId),
                 ),
             )
         }
@@ -219,6 +222,7 @@ object AutomationCanCatalog {
                     label = audioLabel(spec.propertyId),
                     policy = spec.policy,
                     supportedModes = setOf(HeadUnitCanMode.Android9MbCan),
+                    group = canActionGroup(AutomationCanBus.AUDIO, spec.propertyId),
                 ),
             )
         }

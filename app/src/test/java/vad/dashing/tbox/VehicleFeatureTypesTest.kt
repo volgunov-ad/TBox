@@ -149,13 +149,14 @@ class VehicleFeatureTypesTest {
         assertEquals(document, decoded)
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
 
-        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.CCS)
         val engage = AutomationCruiseActions.parseEngageParams(
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
                 intValue = 100,
                 stringValue = "acc:200:100",
             ),
+            // Injected global: avoids races with TboxApplication DataStore collector.
+            global = GlobalCruiseControlType.CCS,
         )
         // Runtime always follows global setting, not the legacy stringValue prefix.
         assertEquals(CruiseControlType.CCS, engage.cruiseControlType)
@@ -163,9 +164,8 @@ class VehicleFeatureTypesTest {
         assertEquals(100, engage.decreaseIntervalMs)
         assertEquals(
             CruiseControlType.CCS,
-            AutomationCruiseActions.resolveRuntimeMode(),
+            AutomationCruiseActions.resolveRuntimeMode(GlobalCruiseControlType.CCS),
         )
-        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.DEFAULT)
     }
 
     @Test

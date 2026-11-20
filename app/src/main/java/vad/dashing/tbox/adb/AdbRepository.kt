@@ -332,6 +332,7 @@ object AdbRepository {
     }
 
     suspend fun dropConnectionAfterAdbdRestart(reason: String) {
+        if (!isAffectedByLocalAdbdRestart(_state.value)) return
         cancelScriptRun(ScriptOutcome.CANCELLED)
         requestLogcatStop()
         awaitLogcatJob()
@@ -346,6 +347,10 @@ object AdbRepository {
             TboxRepository.addLog("DEBUG", JOURNAL_TAG, "Disconnected from $endpoint ($reason)")
         }
     }
+
+    /** A USB session talks to an attached device (the TBox), not to this head unit's adbd. */
+    internal fun isAffectedByLocalAdbdRestart(state: State): Boolean =
+        state.transport != TransportType.USB
 
     fun execute(command: String) {
         val normalized = command.trim()
@@ -486,6 +491,7 @@ object AdbRepository {
         sessionTimeoutMs: Int,
         keysDir: File,
         clientName: String,
+        maxIdleMs: Long = AdbConnection.DEFAULT_MAX_IDLE_MS,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): T {
         if (!initialized) {
@@ -496,6 +502,7 @@ object AdbRepository {
                 sessionTimeoutMs = sessionTimeoutMs,
                 keysDir = keysDir,
                 clientName = clientName,
+                maxIdleMs = maxIdleMs,
                 block = block,
             )
         }
@@ -508,6 +515,7 @@ object AdbRepository {
                 sessionTimeoutMs = sessionTimeoutMs,
                 keysDir = keysDir,
                 clientName = clientName,
+                maxIdleMs = maxIdleMs,
                 block = block,
             )
         }
@@ -520,6 +528,7 @@ object AdbRepository {
                     sessionTimeoutMs = sessionTimeoutMs,
                     keysDir = keysDir,
                     clientName = clientName,
+                    maxIdleMs = maxIdleMs,
                     block = block,
                 )
             }
@@ -568,6 +577,7 @@ object AdbRepository {
                             sessionTimeoutMs = sessionTimeoutMs,
                             keysDir = keysDir,
                             clientName = clientName,
+                            maxIdleMs = maxIdleMs,
                             block = block,
                         )
                     }
@@ -580,6 +590,7 @@ object AdbRepository {
                         sessionTimeoutMs = sessionTimeoutMs,
                         keysDir = keysDir,
                         clientName = clientName,
+                        maxIdleMs = maxIdleMs,
                         block = block,
                     )
                 }

@@ -44,6 +44,12 @@ goformId=LOGIN&password=<Base64(plaintext)>
 Полный poll делает **два** `multi_data` запроса: `HOME` (полоски, PPP, `realtime_*_thrpt`) и
 `RADIO`+`DEVICE` (RSSI/RSRP, IMEI). Поля thrpt и радиометрики на F95 живут на разных страницах UI.
 
+**Olax F90** (шлюз часто `192.168.100.1`) на профиле F95: LOGIN / CONNECT / DISCONNECT / REBOOT
+и RADIO `proc_get` совпадают с F95; HOME (и частично DEVICE) на части прошивок может
+возвращать пустые поля или сбоить. Пустой `ppp_status` **не** считается «данные выкл» —
+маппер удерживает предыдущий PPP/IMEI/оператор; сбой HOME не роняет весь poll (RADIO
+всё равно читается). Явный `ppp_disconnected` по-прежнему гасит `apnStatus`.
+
 | `cmd` | Назначение | Маппинг |
 |-------|------------|---------|
 | `signalbar` | 0–5 полосок | → `NetState.signalLevel` 0–4 |

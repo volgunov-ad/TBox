@@ -2,7 +2,14 @@ package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AppLauncherLaunchMode
-import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.camdPresetNameIssue
+import vad.dashing.tbox.camdWindowCropIssue
+import vad.dashing.tbox.camdWindowGeometryIssue
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -154,7 +161,8 @@ object AutomationValidator {
         issues: MutableList<AutomationValidationIssue>,
     ) {
         when (trigger) {
-            is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.SystemEvent ->
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
             is AutomationTrigger.WidgetPressed -> {
                 val widgetTriggerId = trigger.triggerId.trim()
                 if (widgetTriggerId.isEmpty()) {
@@ -172,13 +180,6 @@ object AutomationValidator {
                         "$path.keyCode",
                         "Код кнопки должен быть от $AUTOMATION_HARD_KEY_MIN_CODE " +
                             "до $AUTOMATION_HARD_KEY_MAX_CODE",
-                    )
-                }
-                if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal) {
-                    issues += AutomationValidationIssue(
-                        path,
-                        "Триггер «Кнопка на руле/двери» работает только на ГУ Android 9 (mbCAN). " +
-                            "На Android 10 замените на плитку «Триггер автоматизации»",
                     )
                 }
             }
@@ -562,6 +563,7 @@ object AutomationValidator {
                 }
             }
 
+            is AutomationCondition.AdbTcp -> Unit
             is AutomationCondition.AutomationEnabled -> {
                 if (condition.automationId.trim().isEmpty()) {
                     issues += AutomationValidationIssue(
@@ -710,6 +712,16 @@ object AutomationValidator {
             AutomationBuiltinActionType.ESP_RELAY_PULSE,
             -> if (action.intValue !in 0..7) {
                 issues += AutomationValidationIssue("$path.intValue", "Недопустимый канал реле")
+            }
+
+            AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE,
+            AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE,
+            AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
+            -> if (action.intValue !in 0..1) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Недопустимый индекс BLE-реле (0 или 1)",
+                )
             }
 
             AutomationBuiltinActionType.ESP_RELAY_SET ->
@@ -896,6 +908,56 @@ object AutomationValidator {
                 }
             }
 
+            AutomationBuiltinActionType.CAMD_WINDOW -> {
+                val args = parseCamdAutomationWindowArgs(action.stringValue)
+                if (args == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Окно камеры: open, close или close_all",
+                    )
+                } else if (args.mode != CAMD_ACTION_CLOSE_ALL &&
+                    action.intValue !in CAMD_WINDOW_CAMERA_IDS
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Камера: 4, 5, 8, 9, 0, 1 или 3",
+                    )
+                } else if (args.mode == CAMD_ACTION_OPEN) {
+                    val geometry = camdWindowGeometryIssue(args.x, args.y, args.w, args.h)
+                    if (geometry != null) {
+                        issues += AutomationValidationIssue("$path.stringValue", geometry)
+                    }
+                    val preset = args.presetName
+                    if (preset != null) {
+                        val presetIssue = camdPresetNameIssue(preset)
+                        if (presetIssue != null) {
+                            issues += AutomationValidationIssue("$path.stringValue", presetIssue)
+                        }
+                    }
+                    val crop = args.crop
+                    if (crop != null) {
+                        val cropIssue = camdWindowCropIssue(crop.x, crop.y, crop.w, crop.h)
+                        if (cropIssue != null) {
+                            issues += AutomationValidationIssue("$path.stringValue", cropIssue)
+                        }
+                    }
+                } else if (args.mode != CAMD_ACTION_CLOSE && args.mode != CAMD_ACTION_CLOSE_ALL) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Окно камеры: open, close или close_all",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.PLACE_CALL -> {
+                if (vad.dashing.tbox.normalizeDialPhoneNumber(action.stringValue).isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Укажите номер телефона",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
             AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
             -> {
@@ -937,7 +999,9 @@ object AutomationValidator {
                 )
             }
         }
-        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {
+        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE ||
+            action.type == AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE
+        ) {
             val duration = action.stringValue.trim()
             val parsedDuration = duration.toLongOrNull()
             if (

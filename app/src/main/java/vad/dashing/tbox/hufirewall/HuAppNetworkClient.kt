@@ -44,7 +44,9 @@ internal object HuAppNetworkClient {
             execute(HuAppNetworkCodec.SHELL_COMMAND)
         }
         val result = when (session) {
-            is LocalhostAdbSession.Result.Failed -> HuAppNetworkResult.AdbFailed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuAppNetworkResult.AdbFailed(
+                vad.dashing.tbox.adb.LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok -> HuAppNetworkResult.Done(
                 HuAppNetworkCodec.parseOutput("${session.value.stdout}\n${session.value.stderr}"),
             )

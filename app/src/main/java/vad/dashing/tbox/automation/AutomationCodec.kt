@@ -138,6 +138,7 @@ object AutomationCodec {
                 .put(KEY_TYPE, "system_event")
                 .put("id", trigger.id)
                 .put("event", trigger.event.storageKey)
+                .put("holdMillis", trigger.holdMillis)
 
             is AutomationTrigger.WidgetPressed -> JSONObject()
                 .put(KEY_TYPE, "widget_pressed")
@@ -232,6 +233,8 @@ object AutomationCodec {
                 id = json.requireNonBlankString("id"),
                 event = AutomationSystemEvent.fromStorageKey(json.requireNonBlankString("event"))
                     ?: throw IllegalArgumentException("Unknown system event"),
+                // Legacy rules without holdMillis keep immediate-fire semantics.
+                holdMillis = json.optLongOrDefault("holdMillis", AUTOMATION_DEFAULT_HOLD_MS),
             )
 
             "widget_pressed" -> {
@@ -332,9 +335,12 @@ object AutomationCodec {
                         "startupBehavior",
                         AutomationStartupBehavior.entries,
                     ) { it.storageKey }.let { stored ->
-                        // Tunnel enter/exit is an edge; the evaluator never fires it on start,
-                        // so imported JSON must not keep a mode that silently does nothing.
-                        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                        // Tunnel/settlement enter/exit is an edge; the evaluator never fires
+                        // it on start, so imported JSON must not keep a mode that silently
+                        // does nothing.
+                        if (signal == AutomationSignalId.ROAD_TUNNEL ||
+                            signal == AutomationSignalId.ROAD_SETTLEMENT
+                        ) {
                             AutomationStartupBehavior.INITIALIZE_ONLY
                         } else {
                             stored
@@ -460,6 +466,10 @@ object AutomationCodec {
                 .put(KEY_TYPE, "automation_enabled")
                 .put("automationId", condition.automationId)
                 .put("enabled", condition.enabled)
+
+            is AutomationCondition.AdbTcp -> JSONObject()
+                .put(KEY_TYPE, "adb_tcp")
+                .put("listening", condition.listening)
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -525,6 +535,10 @@ object AutomationCodec {
             "automation_enabled" -> AutomationCondition.AutomationEnabled(
                 automationId = json.requireString("automationId"),
                 enabled = json.optBoolean("enabled", true),
+            )
+
+            "adb_tcp" -> AutomationCondition.AdbTcp(
+                listening = json.optBoolean("listening", true),
             )
 
             "triggered_by" -> AutomationCondition.TriggeredBy(

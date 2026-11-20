@@ -422,6 +422,7 @@ Recovery без UART не управляется (сети там нет, скр
 - Разметка eMMC на экране (19.10.2026): полоски «Сейчас» и «После переноса» (или «После отката», место берётся из `OLD_FIRST`/`OLD_SECT` в `params`), по ширине пропорционально размеру (`gpt/DiskMap`). Разделы меньше 1,5 % диска, идущие подряд, склеены в серую группу «первый … последний» (полный список — в легенде), `userdata` зелёный, освобождаемое место оранжевое, свободное серое; пустоты меньше 64 МиБ (выравнивание, резервная GPT) присоединяются к соседу. Проверено на стенде (перенесённый `userdata`): 14 сегментов, после отката хвост 30,8 ГиБ «освобождается».
 - После переноса GPT переписали без участия программы (20.10.2026, стенд, через 6 дней после переноса). Между 14.10 и 20.10 на стенд поставили обновление прошивки: она стала `Jenkins03261716` вместо `Jenkins09051534`, активный слот сменился с `_b` на `_a`. Установщик обновления правит записи разделов, которые пишет. Атрибуты `preloader` меняются с `0x0003…` на `0x0001…`, байты 60–62 расширения (вторые 128 байт записи, записи по 256 байт) у `hsm_a`, `trustzone_a`, `viss_a`, `kernel_a`, `dtb_a`, `dtbo_a`, `vdec_a`, `logo_a` тоже меняются. Обе копии согласованы, CRC верные, разметка та же, но MD5 больше не совпадает с `new_*`. Поэтому `status` показывал `GPT=other`, а «Откатить» падал с ошибкой «откат невозможен: GPT сейчас other». Записывать сохранённые `old_*` нельзя: вернулись бы устаревшие поля загрузчика. Теперь откат строится как обратный перенос, `GptPlanner.relocate` по текущей таблице: меняются только LBA `userdata` и CRC. Текущие таблицы записываются как `new_*`, таблицы отката как `old_*`, MD5 в `params` переписываются, а скрипт, `fixsgpt` и распознавание обрыва остаются прежними. `stage2` таблицу не пишет и принимает `GPT=other`. Дампы стенда лежат в unit-тестах: `a10_rebooted_*gpt.bin`.
 - Перед `reboot` `/data` размораживается намеренно: `init` при выключении пишет `persist.*` в `/data` и на замороженной ФС может зависнуть. Записи нативных демонов после разморозки уходят в старое место и теряются (фреймворк уже остановлен).
+- **Паспорт разделов** (кнопка в том же APK, v0.2+): read-only сводный отчёт по GPT/`df`/`du` (userdata, media, intsd, cache, map, miscbk) с авто-вердиктами (сжатие media ×2, intsd, `/cache/fota`, доступность хвоста для текущего переноса). WP eMMC **не** снимается, GPT не пишется. Файл `tbox_part_report_<incremental>_<yyyyMMdd-HHmm>.md` пишется на USB (`/udisk*`, `/mnt/media_rw/*`, `/storage/*`, кроме intsd/emulated); если флешки нет — `/sdcard`, иначе intsd. На экране — блок вердиктов, путь к файлу и «Копировать сводку». Нужен для диагностики разметки вроде 1.0.5 ~29 ГиБ без хвоста под userdata.
 
 ## 7. Корневые сертификаты (A10)
 
@@ -444,9 +445,10 @@ if command -v su >/dev/null 2>&1; then setsid su 0 sh -c 'sleep 1; svc power reb
 
 ## 9. Прочие особенности A10
 
-- **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`InWindowAlertDialog`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
+- **`pm hide` / `pm unhide` из shell.** У uid 2000 нет `MANAGE_USERS` — `SecurityException`. Список программ → «Расширенный» → «Скрыть в системе» (`PackageAdbActions`) эскалирует как перезагрузка: `su 0 sh -c 'pm hide …'` при наличии `su`, иначе голый `pm hide` (A9). Форма `su -c` на A10 сломана (`invalid uid/gid '-c'`). `pm disable-user` на A10 как shell работает, но это не замена hide для persistent OEM-пакетов.
+- **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`WidgetEditorScreen` с `inWindow = true`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 - **USB-разрешения.** Доработанный `UsbPermissionActivity` Adayo сам выдаёт разрешение (`CBen_grantUsbPermissions`) и закрывается, но в ответе приходит `granted=false`. Приложение перепроверяет `UsbManager.hasPermission()`.
-- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`).
+- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`). Свойства `persist.adb.tcp.port=5555` не гарантируют, что порт открыт: кабель телефона в USB-порту останавливает `adbd` (`init.svc.adbd=stopped`, [LAUNCHER_WINDOW_AA_CARPLAY_RU.md](LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.5, §7.7), а сразу после загрузки он может ещё не слушать. Если порт закрыт дольше 3 с при включённых свойствах, сеанс один раз делает `setprop ctl.restart adbd` (свойства не меняются) и ждёт порт до 12 с; владельцем TCP такой сеанс не становится и потом его не выключает. Переключение TCP из автоматизации ждёт конца текущего сеанса.
 
 ## 10. Root на A9: примитив `mb_daemon` и защита записи (проверено 31.10.2026)
 
@@ -466,7 +468,7 @@ adb shell rm /sdcard/autorun.sh /sdcard/autorun.flag
 adb shell setprop vendor.autorun.sdcard.logfile ''
 ```
 
-Скрипты должны быть с **LF** (см. §2). Повторный запуск в тот же файл: сначала `rm` старого `autorun.sh`/флага. Возможная интеграция в TBox Monitor: `BOOT_COMPLETED` → `setprop` тем же способом — даёт root-скрипт на каждом старте без записи в `/system`.
+Скрипты должны быть с **LF** (см. §2). Повторный запуск в тот же файл: сначала `rm` старого `autorun.sh`/флага. Возможная интеграция в TBox Monitor: `BOOT_COMPLETED` → `setprop` тем же способом — даёт root-скрипт на каждом старте без записи в `/system`. Тот же примитив 6 ноября 2026 запускал клиент камер `qcarcam_test`: сокет AIS пускает только root — [CAMERAS_A9_RU.md](CAMERAS_A9_RU.md).
 
 ### 10.2. Verified Boot на A9 (UFS, слоты A/B, активный `_b`)
 
@@ -513,9 +515,24 @@ blockdev --setro /dev/block/sde35
 
 Данные получены read-only-инспектом + тремя прогонами root-диагностики через примитив §10.1 (adb 192.168.1.128:5555); после тестов ГУ возвращён в исходное состояние (`sde35` ro=1, `/vendor` ro, флаги сняты), артефакты на `/sdcard` удалены.
 
+### 10.4. Разблокировка USB-томов при старте: встроенный unlock DCL-лаунчера (проверено 20.11.2026)
+
+Разблокировку из [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md) с 20.11.2026 делает сам DCL-лаунчер `ras.dashing.tbox.launcher` (RootOrchestrator, build 0.8.2+): дожидается чужого `autorun.flag` (координация «Waiting for previous autorun.flag … 3 s → proceeding»), кладёт свой скрипт с dex-обёрткой из `/data/data/ras.dashing.tbox.launcher/files/unlockusb.dex` и выполняет те же `setLockScreenShown(false)` + `vold.onSecureKeyguardStateChanged(false)` через примитив §10.1. Результат доступен в `/data/local/tmp/unlockusb_boot.txt` (`-rw-rw-rw-`, строки `… ok`); после запуска `mb_daemon` сам удаляет `autorun.sh` и сбрасывает `vendor.autorun.sdcard.logfile`. Ретраи ограничены (Stage-2 watcher — раз в секунду, до 10 попыток; бесконечный реарм билда лаунчера 15:27:06 — 40+ запусков за бут — устранён в 0.8.2).
+
+Маунт NTFS-флешки (том `public:8,97`, вставлена заранее) по бутам стенда `192.168.1.128`:
+
+| Конфигурация | unlock / маунт |
+|---|---|
+| сток с SystemUI (эталон 18.11) | +92,9 с |
+| `UsbMount.apk` (04.11, старый лаунчер) | +49,8…+52,7 с |
+| лаунчер 15:27:06 (свой unlock) | +53,2 / +54,2 с |
+| лаунчер 0.8.2 (boot5) | success +23,4 с, маунт +24,3 с |
+
+В boot5 всего 5 пар `detect → execute → delete`, после +47,6 с тишина до конца дампа (~+1200 с). Кто взводил: +18,2 с — Stage 1 лаунчера; +23,5 с — его рабочий вызов (success +23,4 с); +25,1 с — Stage-2 watcher; +27,7 с — старый `vad.dashing.usbmount` («UsbMountFix: autorun armed»), дубль; +46,4 с — бут-фиксап `dcl_install` (`/sdcard/dcl_boot_log.txt`, там же «OK unstop vad.dashing.usbmount» — он снимает старому пакету stopped-бит при каждой загрузке). Итог: на ГУ с DCL-лаунчером `UsbMount.apk` не нужен — сносить сам APK (`adb uninstall vad.dashing.usbmount`) и убрать шаг unstop из `dcl_install`, иначе дубль возвращается. Прочее из boot5: SNTP-скачок часов (+4911 с) приходит посреди лога на ~+25 с uptime (`SntpClient … clock offset` → `AlarmManagerService Setting time`), штампы logcat до скачка врут (stale RTC) — якоря `mb-daemon boot_completed, uptime=` и dmesg `audit(179…)`; `CAR.PACKAGE … not installed from permitted sources NULL` — стоковый whitelist Adayo, шум для всех сторонних пакетов; dclwm стартует с попытки 1/10 storage-watcher'а лаунчера. Крашей и ANR нет.
+
 ## 11. SystemUI на A9: плавающая кнопка и шторка (проверено 31.10.2026)
 
-Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
+Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Скрытый SystemUI также не снимает флаг keyguard у `vold`, и флешки NTFS/exFAT не монтируются; это закрывает [`tools/usb_mount/`](../tools/usb_mount/) (проверено 04.11.2026). Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
 
 ## 12. Открытые вопросы
 

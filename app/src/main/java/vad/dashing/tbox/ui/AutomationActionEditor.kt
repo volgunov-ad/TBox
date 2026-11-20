@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,20 +19,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.R
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CamdAutomationWindowArgs
+import vad.dashing.tbox.CamdWindowCrop
+import vad.dashing.tbox.CAMD_FRAME_MODE_AS_IS
+import vad.dashing.tbox.CAMD_FRAME_MODE_CUSTOM
+import vad.dashing.tbox.CAMD_FRAME_MODE_PRESET
+import vad.dashing.tbox.isValidCamdPresetName
+import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_W
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_X
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_Y
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.phone.PhoneDialCallActivity
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
 import vad.dashing.tbox.automation.AUTOMATION_MAX_DELAY_MS
 import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.AutomationActionGroup
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
@@ -47,6 +70,12 @@ import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
 import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
+import vad.dashing.tbox.automation.builtinActionGroup
+import vad.dashing.tbox.automation.builtinActionKeywords
+import vad.dashing.tbox.automation.canActionGroup
+import vad.dashing.tbox.automation.canActionKeywords
+import vad.dashing.tbox.formatCamdAutomationWindowArgs
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
 import vad.dashing.tbox.automation.floatingPanelEnabledOpLabel
 import vad.dashing.tbox.automation.floatingPanelEnabledOpToInt
@@ -296,10 +325,22 @@ private fun CanCommandFields(
         )
         return
     }
-    AutomationDropdown(
-        label = "CAN-действие",
+    val canOptions = remember(catalogEntries) {
+        catalogEntries.map { catalogueEntry ->
+            AutomationPickerOption(
+                value = catalogueEntry,
+                label = catalogueEntry.label,
+                group = catalogueEntry.group.label,
+                keywords = canActionKeywords(catalogueEntry.bus, catalogueEntry.propertyId),
+                key = "can:${catalogueEntry.bus}:${catalogueEntry.propertyId}",
+            )
+        }
+    }
+        .sortedGroupedConsecutive()
+    AutomationSearchablePickerField(
+        label = "Действие",
         value = selectedEntry,
-        options = catalogEntries,
+        options = canOptions,
         optionLabel = { it.label },
         onValueChange = { selected ->
             val operation = if (
@@ -390,13 +431,27 @@ private fun LaunchApplicationFields(
         apps = apps,
         onValueChange = { onChange(action.copy(packageName = it)) },
     )
+    val dclEnvEnabled by
+        settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+    val stockWindowAvailable = remember(context) {
+        vad.dashing.tbox.AdayoStockAppWindow.isAvailable(context)
+    }
+    val launchModeOptions = remember(dclEnvEnabled, action.launchMode, stockWindowAvailable) {
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.selectableLaunchModes(
+            envEnabled = dclEnvEnabled,
+            currentMode = action.launchMode,
+            showStockWindowMode = stockWindowAvailable,
+        )
+    }
     AutomationDropdown(
         label = "Режим запуска",
         value = action.launchMode,
-        options = AppLauncherLaunchMode.entries,
+        options = launchModeOptions,
         optionLabel = {
             when (it) {
-                AppLauncherLaunchMode.FULLSCREEN -> "Обычный полноэкранный"
+                AppLauncherLaunchMode.FULLSCREEN -> "Обычный"
+                AppLauncherLaunchMode.DCL_FULL_WIDTH -> "На всю ширину (DCL)"
+                AppLauncherLaunchMode.DCL_FULLSCREEN -> "На весь экран (DCL)"
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
                 AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"
                 AppLauncherLaunchMode.VIRTUAL_DISPLAY -> "В виртуальном дисплее (ADB)"
@@ -404,6 +459,16 @@ private fun LaunchApplicationFields(
         },
         onValueChange = { onChange(action.copy(launchMode = it)) },
     )
+    if (dclEnvEnabled &&
+        action.launchMode in
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BULK_REMAP_SOURCE_MODES
+    ) {
+        Text(
+            text = stringResource(R.string.widget_app_launcher_dcl_env_legacy_mode_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     if (action.launchMode == AppLauncherLaunchMode.FREEFORM) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AutomationDropdown(
@@ -547,7 +612,13 @@ private fun LaunchApplicationFields(
                             "Найдено дисплеев: $count"
                         }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
-                            "Не удалось обновить список (${outcome.reason.name})"
+                            "Не удалось обновить список (${
+                                vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                    context,
+                                    outcome.reason,
+                                    outcome.detail,
+                                )
+                            })"
                     }
                     android.widget.Toast.makeText(
                         context,
@@ -625,6 +696,62 @@ private fun HttpRequestFields(
     )
 }
 
+internal fun defaultBuiltinAction(
+    type: AutomationBuiltinActionType,
+    apps: List<LaunchableAppEntry>,
+    savedWifiSsid: String,
+    peerAutomations: List<AutomationDefinition>,
+): AutomationAction.Builtin = AutomationAction.Builtin(
+    type = type,
+    intValue = when (type) {
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
+            vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+        AutomationBuiltinActionType.CRUISE_NUDGE -> 1
+        AutomationBuiltinActionType.CAMD_WINDOW -> CAMD_WINDOW_DEFAULT_CAMERA
+        else -> 0
+    },
+    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
+        type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
+        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
+        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
+        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
+        type == AutomationBuiltinActionType.ADB_SET_TCP ||
+        type == AutomationBuiltinActionType.CAMD_RECORDER ||
+        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC ||
+        type == AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
+    stringValue = when {
+        type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
+            apps.firstOrNull()?.packageName.orEmpty()
+        type == AutomationBuiltinActionType.WIFI_CONNECT -> savedWifiSsid
+        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
+        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
+        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
+            peerAutomations.firstOrNull()?.id.orEmpty()
+        // Cruise mode comes from the global Settings → Car type; no UI kind.
+        type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
+            type == AutomationBuiltinActionType.CRUISE_PAUSE ||
+            type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
+            type == AutomationBuiltinActionType.CRUISE_RESUME ||
+            type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
+            type == AutomationBuiltinActionType.CRUISE_NUDGE ->
+            ""
+        type == AutomationBuiltinActionType.CAMD_WINDOW ->
+            formatCamdAutomationWindowArgs(
+                CAMD_ACTION_OPEN,
+                CAMD_WINDOW_DEFAULT_X,
+                CAMD_WINDOW_DEFAULT_Y,
+                CAMD_WINDOW_DEFAULT_W,
+                CAMD_WINDOW_DEFAULT_H,
+            )
+        else -> ""
+    },
+)
+
 @Composable
 private fun BuiltinActionFields(
     action: AutomationAction.Builtin,
@@ -634,55 +761,27 @@ private fun BuiltinActionFields(
     onChange: (AutomationAction) -> Unit,
 ) {
     val context = LocalContext.current
-    AutomationDropdown(
-        label = "Действие приложения",
-        value = action.type,
-        options = AutomationBuiltinActionType.entries.filter {
+    val builtinOptions = remember {
+        AutomationBuiltinActionType.entries.filter {
             it != AutomationBuiltinActionType.ESP_RELAY_SET
-        }.sortedByAutomationLabel(::builtinActionLabel),
+        }.map { type ->
+            AutomationPickerOption(
+                value = type,
+                label = builtinActionLabel(type),
+                group = builtinActionGroup(type).label,
+                keywords = builtinActionKeywords(type),
+                key = "builtin:${type.storageKey}",
+            )
+        }
+        .sortedGroupedConsecutive()
+    }
+    AutomationSearchablePickerField(
+        label = "Действие",
+        value = action.type,
+        options = builtinOptions,
         optionLabel = ::builtinActionLabel,
         onValueChange = { type ->
-            onChange(
-                AutomationAction.Builtin(
-                    type = type,
-                    intValue = when (type) {
-                        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
-                        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
-                        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
-                        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
-                        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
-                        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
-                            vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
-                        AutomationBuiltinActionType.CRUISE_NUDGE -> 1
-                        else -> 0
-                    },
-                    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
-                        type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
-                        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
-                        type == AutomationBuiltinActionType.ADB_SET_TCP,
-                    stringValue = when {
-                        type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
-                            apps.firstOrNull()?.packageName.orEmpty()
-                        type == AutomationBuiltinActionType.WIFI_CONNECT ->
-                            WifiStaController.savedSsids(context).firstOrNull().orEmpty()
-                        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
-                        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
-                            peerAutomations.firstOrNull()?.id.orEmpty()
-                        // Cruise mode comes from the global Settings → Car type; no UI kind.
-                        type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
-                            type == AutomationBuiltinActionType.CRUISE_PAUSE ||
-                            type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
-                            type == AutomationBuiltinActionType.CRUISE_RESUME ||
-                            type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
-                            type == AutomationBuiltinActionType.CRUISE_NUDGE ->
-                            ""
-                        else -> ""
-                    },
-                ),
-            )
+            onChange(defaultBuiltinAction(type, apps, WifiStaController.savedSsids(context).firstOrNull().orEmpty(), peerAutomations))
         },
     )
     when (action.type) {
@@ -711,6 +810,38 @@ private fun BuiltinActionFields(
         ) {
             AutomationIntField(
                 label = "Канал реле",
+                value = action.intValue,
+                onValueChange = { onChange(action.copy(intValue = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Длительность, мс (пусто = стандарт)",
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> AutomationDropdown(
+            label = "Канал BLE-реле",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Замкнуть" else "Разомкнуть" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> AutomationIntField(
+            label = "Реле (0 или 1)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationIntField(
+                label = "Реле (0 или 1)",
                 value = action.intValue,
                 onValueChange = { onChange(action.copy(intValue = it)) },
                 modifier = Modifier.weight(1f),
@@ -1093,7 +1224,395 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.PLACE_CALL -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Номер телефона",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Исходящий звонок через Telecom ACTION_CALL → HFP. Нужны разрешение " +
+                    "CALL_PHONE и активный Bluetooth HFP. Без HFP — ошибка, клавиатура не открывается.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            PhoneCallPermissionGrantButton()
+        }
+
+        AutomationBuiltinActionType.CAMD_WINDOW -> CamdWindowActionFields(action, onChange)
+
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Умный ACC",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            AutomationDropdown(
+                label = "АСС по ограничению (настройка)",
+                value = action.stringValue.trim().lowercase().let { raw ->
+                    when (raw) {
+                        "true", "1", "yes", "on" -> true
+                        "false", "0", "no", "off" -> false
+                        else -> null
+                    }
+                },
+                options = listOf(null, true, false),
+                optionLabel = {
+                    when (it) {
+                        true -> "Включить"
+                        false -> "Выключить"
+                        null -> "Не менять"
+                    }
+                },
+                onValueChange = { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = when (next) {
+                                true -> "true"
+                                false -> "false"
+                                null -> ""
+                            },
+                        ),
+                    )
+                },
+            )
+            AutomationIntField(
+                label = "Целевая скорость, км/ч (0 = не задавать)",
+                value = action.intValue,
+                onValueChange = { onChange(action.copy(intValue = it.coerceAtLeast(0))) },
+            )
+            Text(
+                text = "Управляет Smart ACC в DCL Launcher (setSmartAcc). Не меняет CAN-круиз.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> Text(
+            text = "Переключает Умный ACC в DCL (toggleSmartAcc).",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.CAMD_KEEP_AVM -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Держать штатный AVM отключенным",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = "Включено — штатный AVM остановлен и не запускается после перезагрузки. " +
+                    "Выключено — сырые окна закрываются и AVM сразу запускается. " +
+                    "Если служба не слушает порт, команда попробует её запустить.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.CAMD_RECORDER -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Регистратор Камеры ГУ",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = "Мастер-переключатель регистратора (REC ON/OFF). Папка и камеры задаются " +
+                    "в приложении «Камеры ГУ». Это не то же самое, что «запись идёт» " +
+                    "(сигнал camd_recording_active). Если служба не слушает порт, команда " +
+                    "попробует её запустить.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.ANSWER_CALL,
+        AutomationBuiltinActionType.HANGUP_CALL,
+        -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Best-effort через BluetoothHeadsetClient / Telecom. Успех — стек принял " +
+                    "команду, не подтверждение разговора; отказ стека или нет прав — ошибка.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            PhoneCallPermissionGrantButton()
+        }
+
         else -> Unit
+    }
+}
+
+@Composable
+private fun CamdWindowActionFields(
+    action: AutomationAction.Builtin,
+    onChange: (AutomationAction) -> Unit,
+) {
+    val args = parseCamdAutomationWindowArgs(action.stringValue) ?: CamdAutomationWindowArgs(
+        mode = CAMD_ACTION_OPEN,
+        x = CAMD_WINDOW_DEFAULT_X,
+        y = CAMD_WINDOW_DEFAULT_Y,
+        w = CAMD_WINDOW_DEFAULT_W,
+        h = CAMD_WINDOW_DEFAULT_H,
+    )
+    val camera = if (action.intValue in CAMD_WINDOW_CAMERA_IDS) {
+        action.intValue
+    } else {
+        CAMD_WINDOW_DEFAULT_CAMERA
+    }
+    fun openLine(
+        mode: String = args.mode,
+        x: Int = args.x,
+        y: Int = args.y,
+        w: Int = args.w,
+        h: Int = args.h,
+        rotation: Int = args.rotation,
+        flipH: Boolean = args.flipH,
+        flipV: Boolean = args.flipV,
+        crop: CamdWindowCrop? = args.crop,
+        presetName: String? = args.presetName,
+        circle: Boolean = args.circle,
+    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV, crop, presetName, circle)
+    // Frame mode lives inside the command line (tokens decide), the dropdown just edits it.
+    var frameMode by remember {
+        mutableStateOf(
+            when {
+                args.presetName != null -> CAMD_FRAME_MODE_PRESET
+                args.rotation != 0 || args.flipH || args.flipV || args.crop != null -> CAMD_FRAME_MODE_CUSTOM
+                else -> CAMD_FRAME_MODE_AS_IS
+            }
+        )
+    }
+    // Free draft: invalid names must be typable; the line updates only once the name is valid.
+    var presetDraft by remember { mutableStateOf(args.presetName ?: "") }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AutomationDropdown(
+            label = "Окно",
+            value = args.mode,
+            options = listOf(CAMD_ACTION_OPEN, CAMD_ACTION_CLOSE, CAMD_ACTION_CLOSE_ALL),
+            optionLabel = { mode ->
+                when (mode) {
+                    CAMD_ACTION_CLOSE -> "Закрыть эту камеру"
+                    CAMD_ACTION_CLOSE_ALL -> "Закрыть все"
+                    else -> "Открыть"
+                }
+            },
+            onValueChange = { mode ->
+                onChange(
+                    action.copy(
+                        intValue = camera,
+                        stringValue = openLine(mode = mode),
+                    ),
+                )
+            },
+        )
+        if (args.mode != CAMD_ACTION_CLOSE_ALL) {
+            val cameraLabels = CAMD_WINDOW_CAMERA_IDS.associateWith { id ->
+                stringResource(camdWindowCameraTitle(id))
+            }
+            AutomationDropdown(
+                label = "Камера",
+                value = camera,
+                options = CAMD_WINDOW_CAMERA_IDS,
+                optionLabel = { id -> cameraLabels[id] ?: id.toString() },
+                onValueChange = { onChange(action.copy(intValue = it)) },
+            )
+        }
+        if (args.mode == CAMD_ACTION_OPEN) {
+            AutomationDropdown(
+                label = "Кадр",
+                value = frameMode,
+                options = listOf(CAMD_FRAME_MODE_AS_IS, CAMD_FRAME_MODE_CUSTOM, CAMD_FRAME_MODE_PRESET),
+                optionLabel = { mode ->
+                    when (mode) {
+                        CAMD_FRAME_MODE_CUSTOM -> "Свои настройки"
+                        CAMD_FRAME_MODE_PRESET -> "Пресет"
+                        else -> "Как есть"
+                    }
+                },
+                onValueChange = { mode ->
+                    frameMode = mode
+                    if (mode == CAMD_FRAME_MODE_PRESET) {
+                        presetDraft = args.presetName ?: presetDraft
+                    }
+                    onChange(
+                        action.copy(
+                            stringValue = when (mode) {
+                                CAMD_FRAME_MODE_CUSTOM -> openLine(rotation = args.rotation, flipH = args.flipH, flipV = args.flipV, crop = args.crop, presetName = null)
+                                CAMD_FRAME_MODE_PRESET -> openLine(rotation = 0, flipH = false, flipV = false, crop = null, presetName = args.presetName)
+                                else -> openLine(rotation = 0, flipH = false, flipV = false, crop = null, presetName = null)
+                            },
+                        ),
+                    )
+                },
+            )
+            if (frameMode == CAMD_FRAME_MODE_PRESET) {
+                AutomationTextField(
+                    value = presetDraft,
+                    onValueChange = { name ->
+                        presetDraft = name
+                        if (isValidCamdPresetName(name)) {
+                            onChange(action.copy(stringValue = openLine(presetName = name)))
+                        }
+                    },
+                    label = "Пресет (a-z 0-9 _)",
+                )
+            }
+            if (frameMode == CAMD_FRAME_MODE_CUSTOM) {
+                AutomationDropdown(
+                    label = "Поворот",
+                    value = args.rotation,
+                    options = listOf(0, 90, 180, 270),
+                    optionLabel = { "$it°" },
+                    onValueChange = { degrees ->
+                        onChange(action.copy(stringValue = openLine(rotation = degrees)))
+                    },
+                )
+                AutomationDropdown(
+                    label = "Зеркало H",
+                    value = args.flipH,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { onChange(action.copy(stringValue = openLine(flipH = it))) },
+                )
+                AutomationDropdown(
+                    label = "Зеркало V",
+                    value = args.flipV,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
+                )
+                AutomationDropdown(
+                    label = "Вырезка",
+                    value = args.crop != null,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { enabled ->
+                        onChange(
+                            action.copy(
+                                stringValue = openLine(
+                                    crop = if (enabled) CamdWindowCrop(10, 10, 80, 80) else null,
+                                ),
+                            ),
+                        )
+                    },
+                )
+                if (args.crop != null) {
+                    val crop = args.crop
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CamdPercentField("Вырезка: слева, %", crop.x, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(x = next))))
+                        }
+                        CamdPercentField("Вырезка: сверху, %", crop.y, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(y = next))))
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CamdPercentField("Вырезка: ширина, %", crop.w, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(w = next))))
+                        }
+                        CamdPercentField("Вырезка: высота, %", crop.h, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(h = next))))
+                        }
+                    }
+                }
+            }
+            AutomationDropdown(
+                label = "Круг",
+                value = args.circle,
+                options = listOf(false, true),
+                optionLabel = { if (it) "Да" else "Нет" },
+                onValueChange = { onChange(action.copy(stringValue = openLine(circle = it))) },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
+                    onChange(action.copy(stringValue = openLine(x = next)))
+                }
+                CamdPercentField("Сверху, %", args.y, Modifier.weight(1f)) { next ->
+                    onChange(action.copy(stringValue = openLine(y = next)))
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CamdPercentField("Ширина, %", args.w, Modifier.weight(1f)) { next ->
+                    onChange(action.copy(stringValue = openLine(w = next)))
+                }
+                CamdPercentField("Высота, %", args.h, Modifier.weight(1f)) { next ->
+                    onChange(action.copy(stringValue = openLine(h = next)))
+                }
+            }
+        }
+        Text(
+            text = "Нужно приложение «Камеры ГУ». Если служба не слушает порт, команда попробует её запустить. " +
+                "Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM. " +
+                "Настройки пресета задаёт «Камеры ГУ», здесь их поменять нельзя.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun CamdPercentField(
+    label: String,
+    value: Int,
+    modifier: Modifier,
+    onValue: (Int) -> Unit,
+) {
+    AutomationIntField(
+        label = label,
+        value = value,
+        onValueChange = { raw ->
+            if (raw == Int.MIN_VALUE) return@AutomationIntField
+            onValue(raw)
+        },
+        modifier = modifier,
+    )
+}
+
+/** Settings / first-failure path for API-only users who never tap the dial tile (S9). */
+@Composable
+private fun PhoneCallPermissionGrantButton() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var refreshTick by remember { mutableStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val granted = remember(refreshTick) { AppPermissions.hasPhoneCallAccess(context) }
+    if (granted) return
+    OutlinedButton(
+        onClick = rememberWrappedOnClick {
+            PhoneDialCallActivity.startPermissionRequest(context)
+        },
+    ) {
+        AutomationButtonLabel(stringResource(R.string.permissions_call_phone_grant_button))
     }
 }
 
@@ -1104,7 +1623,92 @@ private fun AddAutomationActionRow(
     peerAutomations: List<AutomationDefinition>,
     onAdd: (AutomationAction) -> Unit,
 ) {
-    var kind by remember { mutableStateOf(ActionUiKind.CAN) }
+    var kind by remember { mutableStateOf(ActionUiKind.ACTIONS) }
+    var showActionsPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val canMode by UniversalCanRepository.mode.collectAsState()
+    val mergedActionOptions: List<AutomationPickerOption<Any>> =
+        remember(canMode) {
+            buildList {
+                AutomationBuiltinActionType.entries
+                    .filter { it != AutomationBuiltinActionType.ESP_RELAY_SET }
+                    .forEach { type ->
+                        add(
+                            AutomationPickerOption<Any>(
+                                value = type,
+                                label = builtinActionLabel(type),
+                                group = builtinActionGroup(type).label,
+                                keywords = builtinActionKeywords(type),
+                                key = "builtin:${type.storageKey}",
+                            ),
+                        )
+                    }
+                AutomationCanCatalog.pickerEntries()
+                    .filter { it.supports(canMode) }
+                    .sortedByAutomationLabel { it.label }
+                    .forEach { catalogueEntry ->
+                        add(
+                            AutomationPickerOption<Any>(
+                                value = catalogueEntry,
+                                label = catalogueEntry.label,
+                                group = catalogueEntry.group.label,
+                                keywords = canActionKeywords(
+                                    catalogueEntry.bus,
+                                    catalogueEntry.propertyId,
+                                ),
+                                key = "can:${catalogueEntry.bus}:${catalogueEntry.propertyId}",
+                            ),
+                        )
+                    }
+            }
+        }
+        .sortedGroupedConsecutive()
+    if (showActionsPicker) {
+        val keyboardController = LocalSoftwareKeyboardController.current
+        AutomationSearchablePickerDialog(
+            title = "Действие",
+            options = mergedActionOptions,
+            onSelect = { selected ->
+                keyboardController?.hide()
+                showActionsPicker = false
+                onAdd(
+                    when (selected) {
+                        is AutomationBuiltinActionType ->
+                            defaultBuiltinAction(selected, apps, WifiStaController.savedSsids(context).firstOrNull().orEmpty(), peerAutomations)
+
+                        is AutomationCanCatalogEntry -> {
+                            val entry = selected
+                            AutomationAction.CanCommand(
+                                bus = entry.bus,
+                                propertyId = entry.propertyId,
+                                operation = if (
+                                    AutomationCanOperation.SET in entry.allowedOperations
+                                ) {
+                                    AutomationCanOperation.SET
+                                } else {
+                                    entry.allowedOperations.first()
+                                },
+                                value = entry.defaultValueFor(canMode),
+                            ).let(AutomationCanValueCodec::withPortableKey)
+                        }
+
+                        else -> AutomationAction.Builtin(
+                            AutomationBuiltinActionType.OPEN_MENU,
+                        )
+                    },
+                )
+            },
+            optionLabel = { value ->
+                when (value) {
+                    is AutomationBuiltinActionType -> builtinActionLabel(value)
+                    is AutomationCanCatalogEntry -> value.label
+                    else -> ""
+                }
+            },
+            onDismiss = { showActionsPicker = false },
+            widthDp = 360.dp,
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1120,7 +1724,11 @@ private fun AddAutomationActionRow(
         )
         OutlinedButton(
             onClick = rememberWrappedOnClick {
-                onAdd(defaultAction(kind, apps))
+                if (kind == ActionUiKind.ACTIONS) {
+                    showActionsPicker = true
+                } else {
+                    onAdd(defaultAction(kind, apps))
+                }
             },
         ) {
             AutomationButtonLabel("Добавить")
@@ -1129,8 +1737,7 @@ private fun AddAutomationActionRow(
 }
 
 private enum class ActionUiKind {
-    CAN,
-    BUILTIN,
+    ACTIONS,
     LAUNCH_APP,
     OPEN_MAIN_SCREEN,
     HTTP,
@@ -1140,8 +1747,7 @@ private enum class ActionUiKind {
         IF_THEN_ELSE;
 
     fun label(): String = when (this) {
-        CAN -> "CAN"
-        BUILTIN -> "Действие TBox Monitor"
+        ACTIONS -> "Действия"
         LAUNCH_APP -> "Запустить приложение"
         OPEN_MAIN_SCREEN -> "Открыть страницу главного экрана"
         HTTP -> "HTTP"
@@ -1156,23 +1762,7 @@ private fun defaultAction(
     kind: ActionUiKind,
     apps: List<LaunchableAppEntry>,
 ): AutomationAction = when (kind) {
-    ActionUiKind.CAN -> {
-        val canMode = UniversalCanRepository.mode.value
-        val entry = AutomationCanCatalog.pickerEntries().firstOrNull { it.supports(canMode) }
-            ?: AutomationCanCatalog.pickerEntries().first()
-        AutomationAction.CanCommand(
-            bus = entry.bus,
-            propertyId = entry.propertyId,
-            operation = if (AutomationCanOperation.SET in entry.allowedOperations) {
-                AutomationCanOperation.SET
-            } else {
-                entry.allowedOperations.first()
-            },
-            value = entry.defaultValueFor(canMode),
-        ).let(AutomationCanValueCodec::withPortableKey)
-    }
-
-    ActionUiKind.BUILTIN ->
+    ActionUiKind.ACTIONS ->
         AutomationAction.Builtin(AutomationBuiltinActionType.OPEN_MENU)
 
     ActionUiKind.LAUNCH_APP -> AutomationAction.LaunchApplication(
@@ -1216,6 +1806,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.ESP_RELAY_SET -> "Установить маску ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> "Переключить ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_PULSE -> "Импульс ESP-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> "Замкнуть/разомкнуть BLE-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> "Переключить BLE-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> "Импульс BLE-реле"
     AutomationBuiltinActionType.MEDIA_PREVIOUS -> "Предыдущий трек"
     AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> "Воспроизведение/пауза"
     AutomationBuiltinActionType.MEDIA_PLAY -> "Воспроизведение"
@@ -1254,6 +1847,14 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
         "Круиз: активировать на текущей скорости (SET−)"
     AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
     AutomationBuiltinActionType.START_VAD_VOICE -> "VAD Voice: слушать"
+    AutomationBuiltinActionType.PLACE_CALL -> "Позвонить (HFP)"
+    AutomationBuiltinActionType.ANSWER_CALL -> "Ответить на звонок (HFP)"
+    AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
+    AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
+    AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
+    AutomationBuiltinActionType.CAMD_RECORDER -> "Регистратор Камеры ГУ"
+    AutomationBuiltinActionType.DCL_SET_SMART_ACC -> "DCL: Умный ACC вкл/выкл"
+    AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> "DCL: переключить Умный ACC"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

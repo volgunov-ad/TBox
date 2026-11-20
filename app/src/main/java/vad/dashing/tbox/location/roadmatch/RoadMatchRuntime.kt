@@ -50,6 +50,8 @@ class RoadMatchRuntime(
         val highwayClass: String? = null,
         /** OSM tunnel flag of the sticky/applied edge; false when unmatched packs omit it. */
         val tunnel: Boolean? = null,
+        /** Settlement / RU:urban membership of the sticky/applied edge; false when packs omit it. */
+        val settlement: Boolean? = null,
         val oneway: Int? = null,
         val againstOneway: Boolean? = null,
         /** Best-ranked candidate when different from [edgeId] (reject / pending paths). */
@@ -241,6 +243,7 @@ class RoadMatchRuntime(
     private var currentRegionId: String? = null
     private var currentHighwayClass: String? = null
     private var currentTunnel: Boolean? = null
+    private var currentSettlement: Boolean? = null
     private var pendingEdgeId: Long? = null
     private var pendingRegionId: String? = null
     private var pendingWins: Int = 0
@@ -309,6 +312,7 @@ class RoadMatchRuntime(
     private var lastNonLinkRegionId: String? = null
     private var lastNonLinkHighwayClass: String? = null
     private var lastNonLinkTunnel: Boolean? = null
+    private var lastNonLinkSettlement: Boolean? = null
     private var parentPreferUntilElapsedMs: Long = 0L
     /** Sticky is / just was a `*_link`; allow bounce back to [lastNonLinkEdgeId]. */
     private var preferParentAfterLink: Boolean = false
@@ -338,6 +342,7 @@ class RoadMatchRuntime(
         currentRegionId = null
         currentHighwayClass = null
         currentTunnel = null
+        currentSettlement = null
         pendingEdgeId = null
         pendingRegionId = null
         pendingWins = 0
@@ -375,6 +380,7 @@ class RoadMatchRuntime(
         lastNonLinkRegionId = null
         lastNonLinkHighwayClass = null
         lastNonLinkTunnel = null
+        lastNonLinkSettlement = null
         parentPreferUntilElapsedMs = 0L
         preferParentAfterLink = false
         matchTravelBearingDeg = 0f
@@ -605,6 +611,7 @@ class RoadMatchRuntime(
                 confidence = if (currentEdgeId != null) "HOLD" else null,
                 highwayClass = currentHighwayClass,
                 tunnel = currentTunnel,
+                settlement = currentSettlement,
                 skippedReason = "throttled",
                 rankedCandidates = lastRankedCandidates,
             )
@@ -787,6 +794,7 @@ class RoadMatchRuntime(
                 confidence = "HOLD",
                 highwayClass = currentHighwayClass,
                 tunnel = currentTunnel,
+                settlement = currentSettlement,
                 skippedReason = "throttled",
                 matchMode = RoadMatchMode.RAILS.name,
                 freeActive = freePose != null,
@@ -1011,6 +1019,7 @@ class RoadMatchRuntime(
         currentRegionId = regionId
         currentHighwayClass = edge.highwayClass
         currentTunnel = edge.tunnel
+        currentSettlement = edge.settlement
         topologyAnchor = RoadMapMatcher.TopologyAnchor(
             regionId = regionId,
             edgeId = edge.id,
@@ -1038,6 +1047,7 @@ class RoadMatchRuntime(
             connected = true,
             highwayClass = currentHighwayClass,
             tunnel = currentTunnel,
+            settlement = currentSettlement,
             oneway = edge.oneway,
             againstOneway = against,
             inputBearingDeg = pose.bearingDeg,
@@ -1685,6 +1695,7 @@ class RoadMatchRuntime(
                 candidateCount = 0,
                 highwayClass = currentHighwayClass,
                 tunnel = currentTunnel,
+                settlement = currentSettlement,
                 inputBearingDeg = pose.bearingDeg,
                 turnActive = dueTurn,
                 skippedReason = "no_candidate",
@@ -1853,6 +1864,7 @@ class RoadMatchRuntime(
                 regionId = currentRegionId,
                 highwayClass = currentHighwayClass,
                 tunnel = currentTunnel,
+                settlement = currentSettlement,
             )
             markAttempt(pose, nowElapsedMs)
             pathSinceMatchM = 0.0
@@ -2062,6 +2074,7 @@ class RoadMatchRuntime(
         currentRegionId = null
         currentHighwayClass = null
         currentTunnel = null
+        currentSettlement = null
         pendingEdgeId = null
         pendingRegionId = null
         pendingWins = 0
@@ -2212,6 +2225,7 @@ class RoadMatchRuntime(
         currentRegionId = predicted.anchor.regionId
         currentHighwayClass = predicted.edge.highwayClass
         currentTunnel = predicted.edge.tunnel
+        currentSettlement = predicted.edge.settlement
         exhaustedEdgeId = null
         exhaustedRegionId = null
         lastPastEndEdgeId = null
@@ -2243,6 +2257,7 @@ class RoadMatchRuntime(
             connected = true,
             highwayClass = predicted.edge.highwayClass,
             tunnel = predicted.edge.tunnel,
+            settlement = predicted.edge.settlement,
             oneway = predicted.edge.oneway,
             againstOneway = RoadMapMatcher.isAgainstOneway(
                 predicted.edge.oneway,
@@ -2280,6 +2295,7 @@ class RoadMatchRuntime(
         regionId = currentRegionId,
         highwayClass = currentHighwayClass,
         tunnel = currentTunnel,
+        settlement = currentSettlement,
         confidence = confidence,
         candidateCount = candidateCount,
         runnerUpScore = runnerUpScore,
@@ -2582,6 +2598,7 @@ class RoadMatchRuntime(
                     runnerUpScore = runnerUpScore,
                     highwayClass = snap.edge.highwayClass,
                     tunnel = snap.edge.tunnel,
+                    settlement = snap.edge.settlement,
                     candidateEdgeId = snap.edge.id,
                     candidateHighwayClass = snap.edge.highwayClass,
                     candidateCrossTrackM = snap.crossTrackM,
@@ -2628,11 +2645,13 @@ class RoadMatchRuntime(
         currentRegionId = snap.regionId
         currentHighwayClass = snap.edge.highwayClass
         currentTunnel = snap.edge.tunnel
+        currentSettlement = snap.edge.settlement
         if (!RoadHighwayClass.isLink(snap.edge.highwayClass)) {
             lastNonLinkEdgeId = snap.edge.id
             lastNonLinkRegionId = snap.regionId
             lastNonLinkHighwayClass = snap.edge.highwayClass
             lastNonLinkTunnel = snap.edge.tunnel
+            lastNonLinkSettlement = snap.edge.settlement
             preferParentAfterLink = false
         } else {
             preferParentAfterLink = true
@@ -2684,6 +2703,7 @@ class RoadMatchRuntime(
             connected = snap.connectedFromPrevious,
             highwayClass = snap.edge.highwayClass,
             tunnel = snap.edge.tunnel,
+            settlement = snap.edge.settlement,
             oneway = snap.edge.oneway,
             againstOneway = snap.againstOneway,
             candidateEdgeId = snap.edge.id,
@@ -2984,6 +3004,7 @@ class RoadMatchRuntime(
             regionId = currentProj.regionId,
             highwayClass = currentProj.edge.highwayClass,
             tunnel = currentProj.edge.tunnel,
+            settlement = currentProj.edge.settlement,
             crossTrackM = currentProj.crossTrackM,
             alongTrackM = currentProj.alongTrackM,
             connected = true,
@@ -3205,10 +3226,12 @@ class RoadMatchRuntime(
         val linkRegion = currentRegionId
         val linkClass = currentHighwayClass
         val linkTunnel = currentTunnel
+        val linkSettlement = currentSettlement
         currentEdgeId = parentId
         currentRegionId = parentRegion
         currentHighwayClass = lastNonLinkHighwayClass
         currentTunnel = lastNonLinkTunnel
+        currentSettlement = lastNonLinkSettlement
         val held = holdPreviousEdge(
             pose = pose,
             graphs = graphs,
@@ -3224,6 +3247,7 @@ class RoadMatchRuntime(
             currentRegionId = linkRegion
             currentHighwayClass = linkClass
             currentTunnel = linkTunnel
+            currentSettlement = linkSettlement
             return null
         }
         abandonedEdgeId = null

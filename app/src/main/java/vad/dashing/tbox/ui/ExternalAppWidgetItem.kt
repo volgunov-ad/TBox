@@ -210,6 +210,7 @@ fun ExternalAppWidgetItem(
     }
     var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
+    // Press Indication inside Card so Surface clips ripple to [shape] (same as tile chrome).
     val clickModifier = if (!isEditMode && handleClick) {
         Modifier.clickableWithSound(onClick = onClick)
     } else {
@@ -217,21 +218,21 @@ fun ExternalAppWidgetItem(
     }
 
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val tileShape = panelTileCornerShape(shape)
 
     Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(clickModifier),
+        modifier = Modifier.fillMaxSize(),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(shape)
+        shape = tileShape
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(color = Color.Transparent)
+                .then(clickModifier)
+                .background(color = Color.Transparent, shape = tileShape)
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface

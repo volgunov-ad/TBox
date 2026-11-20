@@ -203,10 +203,14 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("mediaControlsHeightPercent", controlsHeight)
             }
         }
-        if (config.launcherAppPackage.isNotBlank()) {
+        val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
+            config.dataKey,
+            config.httpLaunchAppBeforeRequest && !config.httpOpenBrowser,
+        )
+        if (storesLauncherLaunch && config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
-        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (storesLauncherLaunch) {
             val launchMode = AppLauncherLaunchMode.fromStored(
                 config.launcherLaunchMode.storageKey,
                 config.launcherFreeformEnabled,
@@ -247,12 +251,69 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
+            // Do not persist launch-before together with browser mode.
+            if (config.httpLaunchAppBeforeRequest && !config.httpOpenBrowser) {
+                obj.put("httpLaunchAppBeforeRequest", true)
+                val delaySec = normalizeHttpLaunchAppDelaySec(config.httpLaunchAppDelaySec)
+                if (delaySec != DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC) {
+                    obj.put("httpLaunchAppDelaySec", delaySec)
+                }
+            }
+        }
+        if (config.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            val number = config.dialPhoneNumber.trim()
+            if (number.isNotEmpty()) {
+                obj.put("dialPhoneNumber", number)
+            }
+            if (!config.dialShowNumber) {
+                obj.put("dialShowNumber", false)
+            }
+            if (config.dialConfirmBeforeCall) {
+                obj.put("dialConfirmBeforeCall", true)
+            }
         }
         if (config.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
             val automationTriggerId = normalizeAutomationTriggerId(config.automationTriggerId)
             if (automationTriggerId.isNotBlank()) {
                 obj.put("automationTriggerId", automationTriggerId)
             }
+        }
+        if (config.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            val geometry = normalizeCamdWindowGeometry(
+                config.camdWindowX,
+                config.camdWindowY,
+                config.camdWindowW,
+                config.camdWindowH,
+            )
+            obj.put("camdWindowCameraId", normalizeCamdWindowCamera(config.camdWindowCameraId))
+            obj.put("camdWindowX", geometry.x)
+            obj.put("camdWindowY", geometry.y)
+            obj.put("camdWindowW", geometry.w)
+            obj.put("camdWindowH", geometry.h)
+            val rotation = normalizeCamdRotation(config.camdWindowRotation)
+            if (rotation != 0) obj.put("camdWindowRotation", rotation)
+            if (config.camdWindowFlipH) obj.put("camdWindowFlipH", true)
+            if (config.camdWindowFlipV) obj.put("camdWindowFlipV", true)
+            if (config.camdWindowCropEnabled) {
+                val crop = normalizeCamdWindowCrop(
+                    config.camdWindowCropX,
+                    config.camdWindowCropY,
+                    config.camdWindowCropW,
+                    config.camdWindowCropH,
+                )
+                obj.put("camdWindowCropEnabled", true)
+                obj.put("camdWindowCropX", crop.x)
+                obj.put("camdWindowCropY", crop.y)
+                obj.put("camdWindowCropW", crop.w)
+                obj.put("camdWindowCropH", crop.h)
+            }
+            val frameMode = normalizeCamdWindowFrameMode(config.camdWindowFrameMode)
+            if (frameMode != CAMD_FRAME_MODE_AS_IS) obj.put("camdWindowFrameMode", frameMode)
+            val presetName = config.camdWindowPresetName.trim()
+            if (frameMode == CAMD_FRAME_MODE_PRESET && isValidCamdPresetName(presetName)) {
+                obj.put("camdWindowPresetName", presetName)
+            }
+            if (config.camdWindowCircle) obj.put("camdWindowCircle", true)
         }
         if (supportsWidgetButtonBinding(config.dataKey)) {
             normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
@@ -551,6 +612,69 @@ private fun parseWidgetConfigsFromJsonArray(
                 val tileDark = item.optString("tileBackgroundImageRelPathDark", "").trim()
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
                 val widgetScales = parseWidgetScaleTriplet(item)
+                val camdGeometry = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    normalizeCamdWindowGeometry(
+                        item.optInt("camdWindowX", CAMD_WINDOW_DEFAULT_X),
+                        item.optInt("camdWindowY", CAMD_WINDOW_DEFAULT_Y),
+                        item.optInt("camdWindowW", CAMD_WINDOW_DEFAULT_W),
+                        item.optInt("camdWindowH", CAMD_WINDOW_DEFAULT_H),
+                    )
+                } else {
+                    normalizeCamdWindowGeometry(
+                        CAMD_WINDOW_DEFAULT_X,
+                        CAMD_WINDOW_DEFAULT_Y,
+                        CAMD_WINDOW_DEFAULT_W,
+                        CAMD_WINDOW_DEFAULT_H,
+                    )
+                }
+                val camdCropEnabled = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                    item.optBoolean("camdWindowCropEnabled", false)
+                val camdCrop = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    normalizeCamdWindowCrop(
+                        item.optInt("camdWindowCropX", 0),
+                        item.optInt("camdWindowCropY", 0),
+                        item.optInt("camdWindowCropW", 100),
+                        item.optInt("camdWindowCropH", 100),
+                    )
+                } else {
+                    normalizeCamdWindowCrop(0, 0, 100, 100)
+                }
+                // Migration: tiles saved before frame modes used the rot/flip/crop fields
+                // directly; such a tile keeps working in the custom mode.
+                val camdFrameMode = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    val stored = normalizeCamdWindowFrameMode(item.optInt("camdWindowFrameMode", CAMD_FRAME_MODE_AS_IS))
+                    if (item.has("camdWindowFrameMode")) {
+                        stored
+                    } else if (
+                        normalizeCamdRotation(item.optInt("camdWindowRotation", 0)) != 0 ||
+                        item.optBoolean("camdWindowFlipH", false) ||
+                        item.optBoolean("camdWindowFlipV", false) ||
+                        camdCropEnabled
+                    ) {
+                        CAMD_FRAME_MODE_CUSTOM
+                    } else {
+                        CAMD_FRAME_MODE_AS_IS
+                    }
+                } else {
+                    CAMD_FRAME_MODE_AS_IS
+                }
+                val camdPresetName = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                    camdFrameMode == CAMD_FRAME_MODE_PRESET
+                ) {
+                    item.optString("camdWindowPresetName", "").trim().takeIf { isValidCamdPresetName(it) } ?: ""
+                } else {
+                    ""
+                }
+                val httpOpenBrowser = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                    item.optBoolean("httpOpenBrowser", false)
+                // Browser mode and launch-before are mutually exclusive (UI + tap path).
+                val httpLaunchAppBeforeRequest = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                    !httpOpenBrowser &&
+                    item.optBoolean("httpLaunchAppBeforeRequest", false)
+                val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
+                    dataKey,
+                    httpLaunchAppBeforeRequest,
+                )
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
@@ -632,12 +756,12 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
-                        launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherAppPackage = if (storesLauncherLaunch) {
                             launcherAppPackage
                         } else {
                             ""
                         },
-                        launcherLaunchMode = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherLaunchMode = if (storesLauncherLaunch) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -645,7 +769,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             AppLauncherLaunchMode.DEFAULT
                         },
-                        launcherFreeformEnabled = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformEnabled = if (storesLauncherLaunch) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -653,14 +777,14 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             false
                         },
-                        launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformSide = if (storesLauncherLaunch) {
                             FreeformLaunchSide.fromStorageKey(
                                 item.optString("launcherFreeformSide", ""),
                             )
                         } else {
                             FreeformLaunchSide.DEFAULT
                         },
-                        launcherFreeformPercent = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformPercent = if (storesLauncherLaunch) {
                             FreeformLaunchBounds.normalizePercent(
                                 item.optInt(
                                     "launcherFreeformPercent",
@@ -671,39 +795,31 @@ private fun parseWidgetConfigsFromJsonArray(
                             FreeformLaunchBounds.DEFAULT_PERCENT
                         },
                         launcherFreeformOverlayPage =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                                item.has("launcherFreeformOverlayPage")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherFreeformOverlayPage")) {
                                 item.optInt("launcherFreeformOverlayPage")
                                     .takeIf { it > 0 }
                             } else {
                                 null
                             },
                         launcherFreeformOverlayCrop =
-                            dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            storesLauncherLaunch &&
                                 item.optBoolean("launcherFreeformOverlayCrop", false),
                         launcherVirtualDisplayId =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                                item.has("launcherVirtualDisplayId")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayId")) {
                                 item.optInt("launcherVirtualDisplayId")
                                     .takeIf { it >= 0 }
                             } else {
                                 null
                             },
                         launcherVirtualDisplayWidthPx =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                                item.has("launcherVirtualDisplayWidthPx")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayWidthPx")) {
                                 item.optInt("launcherVirtualDisplayWidthPx")
                                     .takeIf { it > 0 }
                             } else {
                                 null
                             },
                         launcherVirtualDisplayHeightPx =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                                item.has("launcherVirtualDisplayHeightPx")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayHeightPx")) {
                                 item.optInt("launcherVirtualDisplayHeightPx")
                                     .takeIf { it > 0 }
                             } else {
@@ -715,8 +831,30 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             DEFAULT_HTTP_REQUEST_WIDGET_YAML
                         },
-                        httpOpenBrowser = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                            item.optBoolean("httpOpenBrowser", false)
+                        httpOpenBrowser = httpOpenBrowser,
+                        httpLaunchAppBeforeRequest = httpLaunchAppBeforeRequest,
+                        httpLaunchAppDelaySec = if (httpLaunchAppBeforeRequest) {
+                            normalizeHttpLaunchAppDelaySec(
+                                item.optInt(
+                                    "httpLaunchAppDelaySec",
+                                    DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC,
+                                ),
+                            )
+                        } else {
+                            DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
+                        },
+                        dialPhoneNumber = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optString("dialPhoneNumber", "").trim()
+                        } else {
+                            ""
+                        },
+                        dialShowNumber = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optBoolean("dialShowNumber", true)
+                        } else {
+                            true
+                        },
+                        dialConfirmBeforeCall = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optBoolean("dialConfirmBeforeCall", false)
                         } else {
                             false
                         },
@@ -725,6 +863,33 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
+                        camdWindowCameraId = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                            normalizeCamdWindowCamera(item.optInt("camdWindowCameraId", CAMD_WINDOW_DEFAULT_CAMERA))
+                        } else {
+                            CAMD_WINDOW_DEFAULT_CAMERA
+                        },
+                        camdWindowX = camdGeometry.x,
+                        camdWindowY = camdGeometry.y,
+                        camdWindowW = camdGeometry.w,
+                        camdWindowH = camdGeometry.h,
+                        camdWindowRotation = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                            normalizeCamdRotation(item.optInt("camdWindowRotation", 0))
+                        } else {
+                            0
+                        },
+                        camdWindowFlipH = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                            item.optBoolean("camdWindowFlipH", false),
+                        camdWindowFlipV = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                            item.optBoolean("camdWindowFlipV", false),
+                        camdWindowCropEnabled = camdCropEnabled,
+                        camdWindowCropX = camdCrop.x,
+                        camdWindowCropY = camdCrop.y,
+                        camdWindowCropW = camdCrop.w,
+                        camdWindowCropH = camdCrop.h,
+                        camdWindowFrameMode = camdFrameMode,
+                        camdWindowPresetName = camdPresetName,
+                        camdWindowCircle = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                            item.optBoolean("camdWindowCircle", false),
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {

@@ -304,6 +304,17 @@ object TboxRepository {
         }
     }
 
+    fun addFileOnlyLog(level: String, tag: String, message: String) {
+        if (!shouldPersistLogEntry(level)) {
+            return
+        }
+        if (!AppLogFileRecorder.isRecording()) {
+            return
+        }
+        val timestamp = timeFormat.get()?.format(Date())
+        AppLogFileRecorder.append("[$timestamp] $level: $tag. $message")
+    }
+
     fun clearLogs() {
         _logs.value = emptyList()
     }

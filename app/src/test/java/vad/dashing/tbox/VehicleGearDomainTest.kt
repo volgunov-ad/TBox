@@ -27,13 +27,23 @@ class VehicleGearDomainTest {
 
     @Test
     fun decodeReverseGearSwitch_dashingInvertedPolarity() {
-        // Dashing: 0 and 2 = reverse engaged, 1 = not reverse.
+        // A9 mbCAN Dashing: 0 and 2 = reverse engaged, 1 = not reverse.
         // 2 is the live value in R (journals 2026-10-10); 0 stays from the earlier CEM map.
         assertTrue(VehicleGearDomain.decodeReverseGearSwitch(0)!!)
         assertFalse(VehicleGearDomain.decodeReverseGearSwitch(1)!!)
         assertTrue(VehicleGearDomain.decodeReverseGearSwitch(2)!!)
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(3))
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(-1))
+    }
+
+    @Test
+    fun decodeVhalReverseGearSwitch_a10CemOneBit() {
+        // A10 VHAL: 1 = engaged, 0 = not reverse (log 2026-11-02); 2 kept engaged as rare-enum safety.
+        assertTrue(VehicleGearDomain.decodeVhalReverseGearSwitch(1)!!)
+        assertFalse(VehicleGearDomain.decodeVhalReverseGearSwitch(0)!!)
+        assertTrue(VehicleGearDomain.decodeVhalReverseGearSwitch(2)!!)
+        assertNull(VehicleGearDomain.decodeVhalReverseGearSwitch(3))
+        assertNull(VehicleGearDomain.decodeVhalReverseGearSwitch(-1))
     }
 
     @Test

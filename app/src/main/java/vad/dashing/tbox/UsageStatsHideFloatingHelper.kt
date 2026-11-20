@@ -41,6 +41,24 @@ internal object UsageStatsHideFloatingHelper {
         return normalizePackage(foregroundFromUsageEvents(usm, begin, end))
     }
 
+    /**
+     * Latest resume/background activity for [packageName] inside [windowMs].
+     * Used by sticky-hide leave detection (dual-VD keep vs explicit background / absent).
+     */
+    fun packageActivitySignalWithin(
+        context: Context,
+        packageName: String,
+        windowMs: Long,
+    ): UsageStatsStickyHide.PackageActivitySignal {
+        val target = normalizePackage(packageName) ?: return UsageStatsStickyHide.PackageActivitySignal.ABSENT
+        if (!hasUsageAccessPermission(context)) return UsageStatsStickyHide.PackageActivitySignal.ABSENT
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return UsageStatsStickyHide.PackageActivitySignal.ABSENT
+        val end = System.currentTimeMillis()
+        val begin = (end - windowMs.coerceAtLeast(0L)).coerceAtLeast(0L)
+        return activitySignalFromUsageEvents(usm, begin, end, target)
+    }
+
     private fun normalizePackage(pkg: String?): String? {
         val p = pkg?.trim().orEmpty()
         return p.takeIf { it.isNotEmpty() }
@@ -50,6 +68,15 @@ internal object UsageStatsHideFloatingHelper {
         if (type == UsageEvents.Event.MOVE_TO_FOREGROUND) return true
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             type == UsageEvents.Event.ACTIVITY_RESUMED
+        } else {
+            false
+        }
+    }
+
+    private fun isBackgroundEventType(type: Int): Boolean {
+        if (type == UsageEvents.Event.MOVE_TO_BACKGROUND) return true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            type == UsageEvents.Event.ACTIVITY_PAUSED
         } else {
             false
         }
@@ -73,6 +100,41 @@ internal object UsageStatsHideFloatingHelper {
             bestPkg
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun activitySignalFromUsageEvents(
+        usm: UsageStatsManager,
+        begin: Long,
+        end: Long,
+        targetPackage: String,
+    ): UsageStatsStickyHide.PackageActivitySignal {
+        return try {
+            val events = usm.queryEvents(begin, end)
+            val event = UsageEvents.Event()
+            var bestStamp = -1L
+            var bestIsResume = false
+            var sawAny = false
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName ?: continue
+                if (!pkg.trim().equals(targetPackage, ignoreCase = true)) continue
+                val fg = isForegroundEventType(event.eventType)
+                val bg = isBackgroundEventType(event.eventType)
+                if (!fg && !bg) continue
+                if (event.timeStamp >= bestStamp) {
+                    bestStamp = event.timeStamp
+                    bestIsResume = fg
+                    sawAny = true
+                }
+            }
+            when {
+                !sawAny -> UsageStatsStickyHide.PackageActivitySignal.ABSENT
+                bestIsResume -> UsageStatsStickyHide.PackageActivitySignal.RESUMED
+                else -> UsageStatsStickyHide.PackageActivitySignal.BACKGROUNDED
+            }
+        } catch (_: Exception) {
+            UsageStatsStickyHide.PackageActivitySignal.ABSENT
         }
     }
 }

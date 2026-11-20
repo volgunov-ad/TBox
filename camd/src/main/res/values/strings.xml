@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Камеры ГУ</string>
+    <string name="accessibility_service_description">Автостарт камер ГУ: Android подключает эту службу сразу после включения головного устройства, раньше броадкаста BOOT_COMPLETED. События экрана служба не читает.</string>
+</resources>

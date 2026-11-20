@@ -1,10 +1,12 @@
 package vad.dashing.tbox.utils
 
 import android.os.SystemClock
+import vad.dashing.tbox.AppLogFileRecorder
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
 object CanFramesProcess {
 
     private val GEAR_BOX_7_DRIVE_MODES = setOf(0x1B, 0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B)
@@ -44,6 +46,8 @@ object CanFramesProcess {
     private const val CAN_ID_SEAT_MODES = 0x000005C4
     private const val CAN_ID_WINDOWS_BLOCKED = 0x000005FF
 
+    internal const val TBOX_JOURNAL_TAG = "CANDIAG_TBOX"
+
     fun process(data: ByteArray, maxFrames: Int, pressureNullDebounce: Long = 2000L) {
         TboxRepository.updateCanFrameTime()
         val rawValue = data.copyOfRange(4, data.size)
@@ -65,6 +69,14 @@ object CanFramesProcess {
                     singleData,
                     maxFrames
                 )
+
+                if (AppLogFileRecorder.isRecording() && MbCanDiagnostics.deepEnabled.value) {
+                    TboxRepository.addFileOnlyLog(
+                        "DEBUG",
+                        TBOX_JOURNAL_TAG,
+                        tboxFrameLogLine(canId, singleData, System.currentTimeMillis()),
+                    )
+                }
 
                 val b0 = rawValue[payloadStart]
                 val b1 = rawValue[payloadStart + 1]
@@ -417,6 +429,14 @@ object CanFramesProcess {
             val b4 = canId and 0xFF
             "%02X %02X %02X %02X".format(b1, b2, b3, b4)
         }
+    }
+
+    internal fun tboxFrameLogLine(canId: Int, payload: ByteArray, wallMs: Long): String {
+        return "id=0x%03X ms=%03d data=%s".format(
+            canId,
+            (wallMs % 1000L).toInt(),
+            payload.joinToString(" ") { hexByte(it) },
+        )
     }
 
     private fun unsignedByte(value: Byte): Int = value.toInt() and 0xFF

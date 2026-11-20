@@ -170,6 +170,10 @@ object WidgetTypeSections {
             TRUNK_DOOR_WIDGET_DATA_KEY,
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
         )
 
         putAll(
@@ -201,7 +205,11 @@ object WidgetTypeSections {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             APP_LIST_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
+            CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             "restartTbox",
             WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY,
@@ -218,6 +226,8 @@ object WidgetTypeSections {
             "espGpioIn3",
             "espRelay0",
             "espRelay1",
+            "espBleRelay0",
+            "espBleRelay1",
         )
     }
 

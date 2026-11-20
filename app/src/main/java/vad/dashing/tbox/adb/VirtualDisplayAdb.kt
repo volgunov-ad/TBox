@@ -9,7 +9,7 @@ import vad.dashing.tbox.TboxRepository
  * Lists HU displays and launches apps onto a chosen display via localhost ADB.
  *
  * - [refreshDisplayList]: restore ADB TCP to the previous state after the dump (like permission grants).
- * - [launchOnDisplay]: leave ADB TCP enabled after `am start --display`.
+ * - [launchOnDisplay]: same restore — `am start --display` finishes before TCP is turned back off.
  *
  * Before start, [launchOnDisplay] remaps the stored display id by size when the catalog
  * changed (launcher restart), then always `am force-stop` the package and
@@ -87,7 +87,10 @@ object VirtualDisplayAdb {
         }
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                RefreshOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                RefreshOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> {
                 val shell = session.value
                 val dump = listOf(shell.stdout, shell.stderr)
@@ -183,7 +186,7 @@ object VirtualDisplayAdb {
             readyTimeoutMs = readyTimeoutMs,
             nowMs = nowMs,
             delayMs = delayMs,
-            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+            afterSession = LocalhostAdbSession.AfterSession.RestorePreviousTcp,
         ) { execute ->
             // Always re-discover before start so remapped ids survive launcher restarts.
             val dumpShell = execute(DUMPSYS_DISPLAY_COMMAND)
@@ -231,7 +234,10 @@ object VirtualDisplayAdb {
 
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                LaunchOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                LaunchOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> when (val step = session.value) {
                 is LaunchStep.ResolveFailed -> {
                     val detail = step.failed.detail.ifBlank { step.failed.reason.name }
@@ -308,4 +314,9 @@ object VirtualDisplayAdb {
         LocalhostAdbSession.Reason.TcpNotReady -> Reason.TcpNotReady
         LocalhostAdbSession.Reason.AdbConnectFailed -> Reason.AdbConnectFailed
     }
+
+    private fun userFacingSessionDetail(
+        reason: LocalhostAdbSession.Reason,
+        detail: String,
+    ): String = LocalhostAdbReasons.message(context = null, reason = reason, detail = detail)
 }

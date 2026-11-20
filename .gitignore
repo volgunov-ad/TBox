@@ -35,6 +35,10 @@ firmware/esp32-companion/managed_components/
 firmware/esp32-companion/sdkconfig
 firmware/esp32-companion/sdkconfig.old
 firmware/esp32-companion/_cdc_*.txt
+firmware/esp32-relay/build/
+firmware/esp32-relay/managed_components/
+firmware/esp32-relay/sdkconfig
+firmware/esp32-relay/sdkconfig.old
 
 # Large vendor PDFs kept locally (not in git)
 docs/*.pdf
@@ -46,6 +50,9 @@ tools/out/
 # Voice TTS / STT models (downloaded by Gradle fetch*Model tasks, not committed)
 voice/src/main/assets/vits-piper-*/
 voice/src/main/assets/vosk-model-*/
+
+# camd root grabber, copied into assets by CMake
+camd/src/main/assets/camd_grab
 
 hu_perf_results/
 

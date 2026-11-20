@@ -4,23 +4,26 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
 
 class AutomationRoadMatchSignalsTest {
 
     @Test
-    fun interestIds_coverClassLimitAndTunnel() {
+    fun interestIds_coverClassLimitTunnelAndSettlement() {
         assertEquals(
             setOf(
                 AutomationSignalId.ROAD_HIGHWAY_CLASS,
                 AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
                 AutomationSignalId.ROAD_TUNNEL,
+                AutomationSignalId.ROAD_SETTLEMENT,
             ),
             AutomationRoadMatchSignals.INTEREST_IDS,
         )
         assertTrue(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.ROAD_HIGHWAY_CLASS))
         assertTrue(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.ROAD_SPEED_LIMIT_KMH))
         assertTrue(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.ROAD_TUNNEL))
+        assertTrue(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.ROAD_SETTLEMENT))
         assertFalse(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.CAR_SPEED))
         assertFalse(AutomationRoadMatchSignals.isRoadMatchSignal(AutomationSignalId.GEO_POSITION))
     }
@@ -117,6 +120,43 @@ class AutomationRoadMatchSignalsTest {
     }
 
     @Test
+    fun settlement_unavailableWithoutEdge() {
+        assertEquals(
+            AutomationSignalValue.Unavailable,
+            AutomationRoadMatchSignals.settlementValue(RoadMatchAnchorState.EMPTY),
+        )
+        assertEquals(
+            AutomationSignalValue.Unavailable,
+            AutomationRoadMatchSignals.settlementValue(
+                RoadMatchAnchorState(settlement = true),
+            ),
+        )
+    }
+
+    @Test
+    fun settlement_onOffWhenMatched() {
+        assertEquals(
+            AutomationSignalValue.State("on"),
+            AutomationRoadMatchSignals.settlementValue(
+                RoadMatchAnchorState(edgeId = 4L, settlement = true),
+            ),
+        )
+        assertEquals(
+            AutomationSignalValue.State("off"),
+            AutomationRoadMatchSignals.settlementValue(
+                RoadMatchAnchorState(edgeId = 4L, settlement = false),
+            ),
+        )
+        // Missing flag on a matched edge → outside settlement (legacy packs).
+        assertEquals(
+            AutomationSignalValue.State("off"),
+            AutomationRoadMatchSignals.settlementValue(
+                RoadMatchAnchorState(edgeId = 4L, settlement = null),
+            ),
+        )
+    }
+
+    @Test
     fun catalog_registersAppOnlyRoadSignals() {
         val highway = AutomationSignalCatalog.get(AutomationSignalId.ROAD_HIGHWAY_CLASS)
         assertEquals(setOf(AutomationSignalSource.APP), highway.sources)
@@ -144,6 +184,16 @@ class AutomationRoadMatchSignalsTest {
             AutomationSignalSource.APP,
             AutomationSignalCatalog.preferredSource(AutomationSignalId.ROAD_TUNNEL),
         )
+
+        val settlement = AutomationSignalCatalog.get(AutomationSignalId.ROAD_SETTLEMENT)
+        assertEquals(setOf(AutomationSignalSource.APP), settlement.sources)
+        assertEquals(AutomationSignalValueType.STATE, settlement.id.valueType)
+        assertEquals(listOf("off", "on"), settlement.stateOptions)
+        assertEquals("Дорога: населённый пункт", settlement.label)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.ROAD_SETTLEMENT),
+        )
     }
 
     @Test
@@ -155,19 +205,19 @@ class AutomationRoadMatchSignalsTest {
     @Test
     fun tunnelOptionLabels_useInsideOutsideForCondition_andEnterExitForTrigger() {
         assertEquals(
-            "В тоннеле / Inside",
+            ruEnLabel("В тоннеле", "Inside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
         )
         assertEquals(
-            "Вне тоннеля / Outside",
+            ruEnLabel("Вне тоннеля", "Outside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
         )
         assertEquals(
-            "Въезд в тоннель / Enter tunnel",
+            ruEnLabel("Въезд в тоннель", "Enter tunnel"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
         )
         assertEquals(
-            "Выезд из тоннеля / Exit tunnel",
+            ruEnLabel("Выезд из тоннеля", "Exit tunnel"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
         )
         assertEquals(
@@ -181,21 +231,51 @@ class AutomationRoadMatchSignalsTest {
     }
 
     @Test
-    fun anchorFrom_mapsTunnelFromDebugWhenMatched() {
+    fun settlementOptionLabels_useInsideOutsideForCondition_andEnterExitForTrigger() {
+        assertEquals(
+            ruEnLabel("В НП", "Inside"),
+            AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "on"),
+        )
+        assertEquals(
+            ruEnLabel("Вне НП", "Outside"),
+            AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "off"),
+        )
+        assertEquals(
+            ruEnLabel("Въезд в НП", "Enter settlement"),
+            AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "on"),
+        )
+        assertEquals(
+            ruEnLabel("Выезд из НП", "Exit settlement"),
+            AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "off"),
+        )
+        assertEquals(
+            "on",
+            AutomationSignalCatalog.defaultTriggerStateOption(AutomationSignalId.ROAD_SETTLEMENT),
+        )
+        assertEquals(
+            "Дорога: населённый пункт",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_SETTLEMENT),
+        )
+    }
+
+    @Test
+    fun anchorFrom_mapsTunnelAndSettlementFromDebugWhenMatched() {
         val demand = vad.dashing.tbox.location.roadmatch.RoadMatchDemand(
             matchNeeded = true,
             correctPose = false,
         )
-        val withTunnel = RoadMatchAnchorState.from(
+        val withFlags = RoadMatchAnchorState.from(
             demand = demand,
             debug = vad.dashing.tbox.location.roadmatch.RoadMatchRuntime.DebugSnapshot(
                 edgeId = 9L,
                 highwayClass = "primary",
                 tunnel = true,
+                settlement = true,
             ),
             travelAgainstCoords = false,
         )
-        assertEquals(true, withTunnel.tunnel)
+        assertEquals(true, withFlags.tunnel)
+        assertEquals(true, withFlags.settlement)
 
         val missingFlag = RoadMatchAnchorState.from(
             demand = demand,
@@ -203,18 +283,25 @@ class AutomationRoadMatchSignalsTest {
                 edgeId = 9L,
                 highwayClass = "primary",
                 tunnel = null,
+                settlement = null,
             ),
             travelAgainstCoords = false,
         )
         assertEquals(false, missingFlag.tunnel)
+        assertEquals(false, missingFlag.settlement)
 
         val unmatched = RoadMatchAnchorState.from(
             demand = demand,
             debug = vad.dashing.tbox.location.roadmatch.RoadMatchRuntime.DebugSnapshot(
                 tunnel = true,
+                settlement = true,
             ),
             travelAgainstCoords = false,
         )
         assertEquals(null, unmatched.tunnel)
+        assertEquals(null, unmatched.settlement)
     }
 }
+
+private fun ruEnLabel(ru: String, en: String): String =
+    if (BuildConfig.FLAVOR.trim().lowercase() == "en") en else ru

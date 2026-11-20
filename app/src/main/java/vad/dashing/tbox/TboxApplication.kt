@@ -23,6 +23,7 @@ class TboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContextHolder.init(this)
+        DataStoreBackupManager.startPeriodicBackup(applicationScope)
         // Keep launchable-app pickers in sync when packages are installed/removed while
         // TBox Monitor stays alive (otherwise the in-process icon list stays stale until restart).
         LaunchableAppsCatalog.ensurePackageChangeWatcher(this)
@@ -47,6 +48,16 @@ class TboxApplication : Application() {
         applicationScope.launch {
             settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
                 LaunchMainInStockAppWindowSetting.update(enabled)
+            }
+        }
+        applicationScope.launch {
+            settingsManager.launchMainDclModeFlow.collectLatest { mode ->
+                MainDclLaunchModeSetting.update(mode)
+            }
+        }
+        applicationScope.launch {
+            settingsManager.dclLauncherEnvironmentEnabledFlow.collectLatest { enabled ->
+                vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
             }
         }
         applicationScope.launch {
@@ -96,6 +107,10 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            try {
+                DataStoreBackupManager.backupAll(this@TboxApplication)
+            } catch (_: Exception) {
+            }
             try {
                 settingsManager.reconcileSelectedTabWithMenuLayoutIfNeeded()
             } catch (_: Exception) {

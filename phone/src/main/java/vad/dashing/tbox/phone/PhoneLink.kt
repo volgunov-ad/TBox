@@ -1,8 +1,11 @@
 package vad.dashing.tbox.phone
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import vad.dashing.tbox.phoneble.PhoneBleCodec
+import java.util.concurrent.Executors
 
 /** Which way the phone reaches the car; chosen on the Connect page. */
 enum class PhonePath { AUTO, DIRECT, COMPANION }
@@ -54,6 +57,8 @@ class PhoneLinkRouter(
     private val assembler = PhoneBleCodec.SnapshotAssembler()
     private val radio = PhoneRadio(context, assembler, onSnap)
     private val direct = PhoneDirectLink(context, store, assembler, onSnap, onTelemetryAck)
+    private val main = Handler(Looper.getMainLooper())
+    private val sealExecutor = Executors.newSingleThreadExecutor()
     private var running = false
     private var radioOn = false
     private var directOn = false
@@ -113,20 +118,19 @@ class PhoneLinkRouter(
             direct.storeKey = value
         }
 
-    override var acceptFromCounter: Long = -1L
+    @Volatile override var acceptFromCounter: Long = -1L
         set(value) {
             field = value
             radio.acceptFromCounter = value
             direct.acceptFromCounter = value
         }
 
-    override var waitingCounter: Long = -1L
+    @Volatile override var waitingCounter: Long = -1L
         set(value) {
             field = value
             radio.waitingCounter = value
             direct.waitingCounter = value
         }
-
     override fun start() {
         running = true
         keepDirectForTelemetry = store.anyTelemetryEnabled
@@ -188,7 +192,10 @@ class PhoneLinkRouter(
     /**
      * Writes a sealed packet (`CMD` or `REFRESH`). When routed exclusively over the direct
      * RFCOMM link, counter allocation and sealing happen inside `PhoneDirectLink`'s single
-     * writer thread so telemetry packets cannot reorder counters.
+     * writer thread so telemetry packets cannot reorder counters. Otherwise allocation and
+     * sealing run on a dedicated single-thread executor — off the main thread, so the
+     * counter block reservation in [PhoneStore.nextCounter] never blocks the UI — and the
+     * resulting packet hops back to the main thread for the GATT write.
      */
     fun writeSealedUiPacket(
         type: Int,
@@ -205,11 +212,13 @@ class PhoneLinkRouter(
             )
             return
         }
-        val counter = store.nextCounter()
-        if (resetAcceptRange) acceptFromCounter = counter
-        if (updateWaitingCounter) waitingCounter = counter
-        val payload = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
-        write(payload)
+        sealExecutor.execute {
+            val counter = store.nextCounter()
+            if (resetAcceptRange) acceptFromCounter = counter
+            if (updateWaitingCounter) waitingCounter = counter
+            val payload = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
+            main.post { write(payload) }
+        }
     }
 
     /** Sends telemetry (`YAW` or `MAG`) exclusively over the direct RFCOMM link. */

@@ -11,6 +11,9 @@ import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.dcl.DclAppLaunchHelper
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -74,8 +77,21 @@ private val hvacSyncToggleLock = Any()
 private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
+    val pkg = packageName.trim()
+    if (pkg.isBlank()) return
     FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-        launchAppFullscreen(context, packageName.trim())
+        if (DclLauncherEnvironmentRouting.shouldRouteDefaultLaunchViaDcl(
+                DclLauncherEnvironmentSetting.enabled,
+            )
+        ) {
+            DclAppLaunchHelper.launchAppArea(
+                context = context,
+                packageName = pkg,
+                onRawFallback = { launchAppFullscreen(context, pkg) },
+            )
+        } else {
+            launchAppFullscreen(context, pkg)
+        }
     }
 }
 
@@ -100,98 +116,12 @@ internal fun launchAppFromWidget(
     config: FloatingDashboardWidgetConfig,
     settingsViewModel: SettingsViewModel,
 ) {
-    val packageName = config.launcherAppPackage.trim()
-    if (packageName.isBlank()) return
-
-    val launchMode = AppLauncherLaunchMode.fromStored(
-        config.launcherLaunchMode.storageKey,
-        config.launcherFreeformEnabled,
+    vad.dashing.tbox.launchPackageWithLaunchMode(
+        context = context,
+        packageName = config.launcherAppPackage,
+        config = config,
+        settingsViewModel = settingsViewModel,
     )
-
-    when (launchMode) {
-        AppLauncherLaunchMode.STOCK_WINDOW -> {
-            launchAppInStockWindow(context, packageName)
-            return
-        }
-        AppLauncherLaunchMode.FREEFORM -> {
-            val launch = { pinnedOverlayPage: Int? ->
-                val launched = FreeformLaunchHelper.launchCompanion(
-                    context = context,
-                    packageName = packageName,
-                    side = config.launcherFreeformSide,
-                    percent = config.launcherFreeformPercent,
-                    overlayCrop = config.launcherFreeformOverlayCrop,
-                    pinnedOverlayPage = pinnedOverlayPage,
-                )
-                if (!launched) {
-                    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                        launchAppFullscreen(context, packageName)
-                    }
-                }
-            }
-            val overlayPage = config.launcherFreeformOverlayPage
-            if (overlayPage == null) {
-                launch(null)
-            } else {
-                settingsViewModel.applyLauncherFreeformOverlayPage(overlayPage, launch)
-            }
-            return
-        }
-        AppLauncherLaunchMode.FULLSCREEN -> {
-            // Exit freeform + main-screen overlay first so it does not cover the launched app.
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                launchAppFullscreen(context, packageName)
-            }
-        }
-        AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
-            val displayId = config.launcherVirtualDisplayId
-            if (displayId == null || displayId <= 0) return
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                settingsViewModel.launchAppOnVirtualDisplay(
-                    context = context,
-                    packageName = packageName,
-                    displayId = displayId,
-                    displayWidthPx = config.launcherVirtualDisplayWidthPx,
-                    displayHeightPx = config.launcherVirtualDisplayHeightPx,
-                ) { outcome ->
-                    when (outcome) {
-                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
-                            val detail = outcome.detail.ifBlank { outcome.reason.name }
-                            if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
-                                    detail,
-                                    context,
-                                )
-                            ) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    context.getString(
-                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
-                                        detail,
-                                    ),
-                                    android.widget.Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                        }
-                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success -> {
-                            if (outcome.remapped) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    context.getString(
-                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_remapped,
-                                        displayId,
-                                        outcome.displayId,
-                                        outcome.widthPx,
-                                        outcome.heightPx,
-                                    ),
-                                    android.widget.Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -208,7 +138,9 @@ internal fun forceStopAppFromWidget(
     if (pkg.isBlank()) return
     settingsViewModel.forceStopAppViaAdb(context, pkg) { result ->
         if (result.success) return@forceStopAppViaAdb
-        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+        // Best-effort close: do not toast when ephemeral ADB could not open (cold start /
+        // flaky adbd). Shell failures still surface. Journal keeps LOCAL_ADB ERROR.
+        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure(
                 result.message,
                 context,
             )
@@ -227,14 +159,7 @@ internal fun forceStopAppFromWidget(
 }
 
 private fun launchAppFullscreen(context: Context, packageName: String) {
-    try {
-        val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-        MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-        context.startActivity(launchIntent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
+    vad.dashing.tbox.launchPackageFullscreen(context, packageName)
 }
 
 internal fun openMainActivityFromWidget(context: Context) {

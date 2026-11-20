@@ -16,7 +16,15 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.CarDataRepository
+import vad.dashing.tbox.camdAutomationCommandLine
+import vad.dashing.tbox.camdKeepAvmCommandLine
+import vad.dashing.tbox.camdRecorderCommandLine
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
@@ -29,6 +37,13 @@ import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.dcl.DclCallResult
+import vad.dashing.tbox.dcl.DclLauncherApiRepository
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
+import vad.dashing.tbox.dcl.dclLaunchShouldUseRawFallback
+import vad.dashing.tbox.dcl.dclModeCapabilityMissing
+import vad.dashing.tbox.HttpRequestWidgetResult
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -43,6 +58,11 @@ import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
+import vad.dashing.tbox.placeCallFailureUserMessage
+import vad.dashing.tbox.placeOutgoingCall
+import vad.dashing.tbox.PlaceCallFailureReason
+import vad.dashing.tbox.PlaceCallResult
+import vad.dashing.tbox.phone.PhoneDialCallActivity
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.voice.VadVoiceLaunchContract
 import android.os.SystemClock
@@ -260,9 +280,20 @@ class AutomationActionExecutor(
                 )
             }
 
-            AppLauncherLaunchMode.FULLSCREEN -> {
+            AppLauncherLaunchMode.FULLSCREEN,
+            AppLauncherLaunchMode.DCL_FULL_WIDTH,
+            AppLauncherLaunchMode.DCL_FULLSCREEN,
+            -> {
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
                     return AutomationActionResult.failure("Приложение не установлено")
+                }
+                val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                    envEnabled = DclLauncherEnvironmentSetting.enabled,
+                    launchMode = action.launchMode,
+                )
+                if (dclMode != null) {
+                    awaitAfterWindowModeExit { true }
+                    return launchViaDclOrRaw(packageName, dclMode)
                 }
                 val launched = awaitAfterWindowModeExit {
                     launchFullscreen(packageName)
@@ -311,7 +342,11 @@ class AutomationActionExecutor(
                         )
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
                         AutomationActionResult.failure(
-                            outcome.detail.ifBlank { outcome.reason.name },
+                            vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                appContext,
+                                outcome.reason,
+                                outcome.detail,
+                            ),
                         )
                 }
             }
@@ -325,6 +360,66 @@ class AutomationActionExecutor(
             appContext.startActivity(intent)
             true
         }.getOrDefault(false)
+    }
+
+    private suspend fun launchViaDclOrRaw(
+        packageName: String,
+        dclMode: String,
+    ): AutomationActionResult {
+        if (dclModeCapabilityMissing(dclMode, DclLauncherApiRepository.capabilities.value)) {
+            return rawFallbackAfterDcl("DCL capability missing ($dclMode) — обычный запуск", packageName)
+        }
+        val result = DclLauncherApiRepository.launchApp(
+            packageName = packageName,
+            mode = dclMode,
+            context = appContext,
+        )
+        if (result is DclCallResult.Ok && result.value.success) {
+            return AutomationActionResult.ok("Приложение запущено через DCL ($dclMode)")
+        }
+        if (dclLaunchShouldUseRawFallback(result)) {
+            val detail = when (result) {
+                is DclCallResult.Ok ->
+                    result.value.error?.message
+                        ?: result.value.error?.errorCode
+                        ?: "launch not successful"
+                is DclCallResult.Error ->
+                    result.error.message
+                        ?: result.error.errorCode
+                        ?: "DCL launch error"
+                DclCallResult.Unavailable -> "API unavailable"
+            }
+            return rawFallbackAfterDcl(
+                "DCL недоступен ($detail) — обычный запуск",
+                packageName,
+            )
+        }
+        return AutomationActionResult.failure(
+            when (result) {
+                is DclCallResult.Ok ->
+                    result.value.error?.message
+                        ?: result.value.error?.errorCode
+                        ?: "DCL launch failed"
+                is DclCallResult.Error ->
+                    result.error.message
+                        ?: result.error.errorCode
+                        ?: "DCL launch error"
+                DclCallResult.Unavailable -> "DCL unavailable"
+            },
+        )
+    }
+
+    private suspend fun rawFallbackAfterDcl(
+        message: String,
+        packageName: String,
+    ): AutomationActionResult {
+        val launched = withContext(Dispatchers.Main) {
+            launchFullscreen(packageName)
+        }
+        return AutomationActionResult(
+            launched,
+            if (launched) message else "Запуск приложения не удался",
+        )
     }
 
     private suspend fun openMainScreen(
@@ -369,11 +464,15 @@ class AutomationActionExecutor(
         val config = parseHttpRequestWidgetYaml(action.yaml).getOrElse {
             return AutomationActionResult.failure(it.message ?: "Некорректный HTTP YAML")
         }
-        val result = executeHttpRequestWidget(config)
+        val result = executeHttpRequestWidget(appContext, config)
         return AutomationActionResult(
             success = httpRequestWidgetIsSuccess(result),
             message = if (httpRequestWidgetIsSuccess(result)) {
-                "HTTP выполнен"
+                if (result is HttpRequestWidgetResult.Success && result.code == 0) {
+                    "Запрос передан приложению"
+                } else {
+                    "HTTP выполнен"
+                }
             } else {
                 httpRequestWidgetErrorMessage(result)
             },
@@ -469,6 +568,19 @@ class AutomationActionExecutor(
 
         AutomationBuiltinActionType.ESP_RELAY_PULSE -> serviceActions.pulseEspRelay(
             channel = action.intValue,
+            durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> serviceActions.setEspBleRelayState(
+            index = action.intValue,
+            on = action.boolValue,
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE ->
+            serviceActions.toggleEspBleRelay(action.intValue)
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> serviceActions.pulseEspBleRelay(
+            index = action.intValue,
             durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
         )
 
@@ -733,6 +845,147 @@ class AutomationActionExecutor(
         -> AutomationCruiseActions.execute(action)
 
         AutomationBuiltinActionType.START_VAD_VOICE -> startVadVoiceListen()
+
+        AutomationBuiltinActionType.PLACE_CALL -> placeCall(action.stringValue)
+        AutomationBuiltinActionType.ANSWER_CALL -> answerCall()
+        AutomationBuiltinActionType.HANGUP_CALL -> hangupCall()
+
+        AutomationBuiltinActionType.CAMD_WINDOW -> executeCamdWindow(action)
+        AutomationBuiltinActionType.CAMD_KEEP_AVM -> executeCamd(
+            camdKeepAvmCommandLine(action.boolValue),
+            if (action.boolValue) {
+                "Штатный AVM удерживается выключенным"
+            } else {
+                "Штатный AVM включён"
+            },
+        )
+        AutomationBuiltinActionType.CAMD_RECORDER -> executeCamd(
+            camdRecorderCommandLine(action.boolValue),
+            if (action.boolValue) {
+                "Регистратор Камеры ГУ включён"
+            } else {
+                "Регистратор Камеры ГУ выключен"
+            },
+        )
+
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC -> executeDclSetSmartAcc(action)
+
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> executeDclToggleSmartAcc()
+    }
+
+    private suspend fun executeDclSetSmartAcc(
+        action: AutomationAction.Builtin,
+    ): AutomationActionResult {
+        val targetSpeed = action.intValue.takeIf { it > 0 }
+        val configEnabled = when (action.stringValue.trim().lowercase()) {
+            "true", "1", "yes", "on" -> true
+            "false", "0", "no", "off" -> false
+            "" -> null
+            else -> {
+                return AutomationActionResult.failure(
+                    "configEnabled: true / false или пусто",
+                )
+            }
+        }
+        return when (
+            val result = DclLauncherApiRepository.setSmartAcc(
+                enabled = action.boolValue,
+                targetSpeed = targetSpeed,
+                configEnabled = configEnabled,
+                context = appContext,
+            )
+        ) {
+            is DclCallResult.Ok -> AutomationActionResult.ok(
+                if (action.boolValue) "DCL Умный ACC включён" else "DCL Умный ACC выключен",
+            )
+            is DclCallResult.Error -> AutomationActionResult.failure(
+                result.error.message
+                    ?: result.error.errorCode
+                    ?: "DCL Smart ACC: ошибка",
+            )
+            DclCallResult.Unavailable -> AutomationActionResult.failure(
+                "DCL Launcher API недоступен",
+            )
+        }
+    }
+
+    private suspend fun executeDclToggleSmartAcc(): AutomationActionResult =
+        when (val result = DclLauncherApiRepository.toggleSmartAcc(appContext)) {
+            is DclCallResult.Ok -> AutomationActionResult.ok("DCL Умный ACC переключён")
+            is DclCallResult.Error -> AutomationActionResult.failure(
+                result.error.message
+                    ?: result.error.errorCode
+                    ?: "DCL Smart ACC: ошибка",
+            )
+            DclCallResult.Unavailable -> AutomationActionResult.failure(
+                "DCL Launcher API недоступен",
+            )
+        }
+
+    private suspend fun executeCamdWindow(action: AutomationAction.Builtin): AutomationActionResult {
+        val line = camdAutomationCommandLine(action.intValue, action.stringValue)
+            ?: return AutomationActionResult.failure("Некорректные параметры окна камеры")
+        val mode = parseCamdAutomationWindowArgs(action.stringValue)?.mode
+        val ok = when (mode) {
+            CAMD_ACTION_CLOSE_ALL -> "Окна камер закрыты"
+            CAMD_ACTION_CLOSE -> "Окно камеры закрыто"
+            CAMD_ACTION_OPEN -> "Окно камеры открыто"
+            else -> "Команда камеры выполнена"
+        }
+        return executeCamd(line, ok)
+    }
+
+    private suspend fun executeCamd(line: String, okMessage: String): AutomationActionResult {
+        val result = withContext(Dispatchers.IO) {
+            CamdWindowClient.command(line, context = appContext)
+        }
+        return result.fold(
+            onSuccess = { AutomationActionResult.ok(okMessage) },
+            onFailure = { error ->
+                val detail = error.message.orEmpty()
+                val text = if (detail.startsWith("ERR") || detail.contains("state=")) {
+                    detail
+                } else {
+                    "Камеры ГУ не отвечают"
+                }
+                AutomationActionResult.failure(text)
+            },
+        )
+    }
+
+    private fun placeCall(rawNumber: String): AutomationActionResult {
+        return when (val result = placeOutgoingCall(appContext, rawNumber)) {
+            PlaceCallResult.Success -> AutomationActionResult.ok("Звонок начат")
+            is PlaceCallResult.Failure -> {
+                if (result.reason == PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION) {
+                    // First-failure path for API / automation users without a dial tile (S9).
+                    PhoneDialCallActivity.startPermissionRequest(appContext)
+                }
+                AutomationActionResult.failure(
+                    placeCallFailureUserMessage(result.reason, result.detail),
+                )
+            }
+        }
+    }
+
+    private fun answerCall(): AutomationActionResult {
+        return when (
+            val result = vad.dashing.tbox.phone.PhoneCallStateRepository.answerIncomingCall()
+        ) {
+            vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
+                AutomationActionResult.ok("Ответ на звонок")
+            is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
+                AutomationActionResult.failure(result.message)
+        }
+    }
+
+    private fun hangupCall(): AutomationActionResult {
+        return when (val result = vad.dashing.tbox.phone.PhoneCallStateRepository.hangupCall()) {
+            vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
+                AutomationActionResult.ok("Звонок сброшен")
+            is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
+                AutomationActionResult.failure(result.message)
+        }
     }
 
     private fun startVadVoiceListen(): AutomationActionResult {

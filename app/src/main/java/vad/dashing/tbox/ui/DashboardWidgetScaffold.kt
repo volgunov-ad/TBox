@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -87,29 +86,32 @@ fun DashboardWidgetScaffold(
     }
     val cardInteractionSource = remember { MutableInteractionSource() }
     val cardIndication = LocalIndication.current
+    // Same shape for Card chrome and press Indication. combinedClickable must live
+    // *inside* the Card so Surface clips the ripple to the rounded rect without
+    // cutting elevation shadows. Outer cell insets are from WidgetCellContentPadding.
+    val tileShape = panelTileCornerShape(shape)
     Card(
-        modifier = modifier
-            .fillMaxSize()
-            .combinedClickable(
-                interactionSource = cardInteractionSource,
-                indication = cardIndication,
-                enabled = useCardClickable,
-                onClick = wrappedOnClick,
-                onLongClick = { onLongClickLatest() },
-                onDoubleClick = wrappedOnDouble,
-            ),
+        modifier = modifier.fillMaxSize(),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(shape)
+        shape = tileShape
     ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
+                .combinedClickable(
+                    interactionSource = cardInteractionSource,
+                    indication = cardIndication,
+                    enabled = useCardClickable,
+                    onClick = wrappedOnClick,
+                    onLongClick = { onLongClickLatest() },
+                    onDoubleClick = wrappedOnDouble,
+                )
                 .background(
                     color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
+                    shape = tileShape
                 )
         ) {
             val availableHeight = maxHeight

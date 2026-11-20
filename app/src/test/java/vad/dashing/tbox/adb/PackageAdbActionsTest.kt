@@ -1,6 +1,8 @@
 package vad.dashing.tbox.adb
 
 import java.io.File
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,8 +24,20 @@ class PackageAdbActionsTest {
 
     @Test
     fun buildCommands() {
-        assertEquals("pm hide com.example", PackageAdbActions.buildHideCommand("com.example"))
-        assertEquals("pm unhide com.example", PackageAdbActions.buildUnhideCommand("com.example"))
+        val hideEscalated =
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm hide com.example'; else pm hide com.example; fi"
+        val unhideEscalated =
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm unhide com.example'; else pm unhide com.example; fi"
+        assertEquals(hideEscalated, PackageAdbActions.buildHideCommand("com.example"))
+        assertEquals(unhideEscalated, PackageAdbActions.buildUnhideCommand("com.example"))
+        assertEquals(
+            hideEscalated,
+            PackageAdbActions.commandFor(PackageAdbActions.Action.Hide, "com.example"),
+        )
+        assertEquals(
+            unhideEscalated,
+            PackageAdbActions.commandFor(PackageAdbActions.Action.Unhide, "  com.example  "),
+        )
         assertEquals(
             "pm disable-user --user 0 com.example",
             PackageAdbActions.buildDisableCommand("com.example"),
@@ -33,6 +47,15 @@ class PackageAdbActionsTest {
             "am force-stop com.example",
             PackageAdbActions.buildForceStopCommand("com.example"),
         )
+    }
+
+    @Test
+    fun escalateWithSuIfPresent_wrapsInnerAsSu0ElseShell() {
+        assertEquals(
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm hide a.b'; else pm hide a.b; fi",
+            PackageAdbActions.escalateWithSuIfPresent("pm hide a.b"),
+        )
+        assertFalse("su -c" in PackageAdbActions.escalateWithSuIfPresent("pm unhide a.b"))
     }
 
     @Test
@@ -158,6 +181,70 @@ class PackageAdbActionsTest {
     }
 
     @Test
+    fun enter_failsAfterEnablingTcp_restoresTcpOff() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
+        gateway.shellFailure = java.io.IOException("auth rejected")
+
+        val entered = PackageAdbActions.enterAdvancedSessionWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+        )
+        assertTrue(entered is PackageAdbActions.StatusLoadOutcome.Failed)
+        assertFalse(PackageAdbActions.isAdvancedSessionActive())
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+    }
+
+    @Test
+    fun enter_cancelledAfterEnablingTcp_restoresTcpOff() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
+        val keysDir = tempFolder.newFolder("adb")
+        lateinit var job: Job
+        gateway.onShell = {
+            job.cancel()
+            AdbShellResult("", "", 0, true)
+        }
+        job = launch {
+            PackageAdbActions.enterAdvancedSessionWith(
+                gateway = gateway,
+                keysDir = keysDir,
+                clientName = "test@hu",
+            )
+        }
+        job.join()
+        assertFalse(PackageAdbActions.isAdvancedSessionActive())
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+    }
+
+    @Test
+    fun tcpReEnabledDuringAdvancedMode_isRestoredOnExit() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
+        gateway.onShell = { AdbShellResult("package:com.example\n", "", 0, true) }
+        val entered = PackageAdbActions.enterAdvancedSessionWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+        )
+        assertTrue(entered is PackageAdbActions.StatusLoadOutcome.Success)
+        assertTrue(gateway.setTcpCalls.isEmpty())
+
+        gateway.tcpEnabled = false
+        gateway.portOpen = false
+        val action = PackageAdbActions.runActionWith(
+            gateway = gateway,
+            keysDir = tempFolder.root.resolve("adb"),
+            clientName = "test@hu",
+            action = PackageAdbActions.Action.ForceStop,
+            packageName = "com.example",
+        )
+        assertTrue(action is PackageAdbActions.Outcome.Success)
+        assertEquals(listOf(true), gateway.setTcpCalls)
+
+        PackageAdbActions.exitAdvancedSessionWith(gateway)
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+    }
+
+    @Test
     fun runAction_withoutSession_fails() = runBlocking {
         val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
         val outcome = PackageAdbActions.runActionWith(
@@ -181,6 +268,7 @@ class PackageAdbActionsTest {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
         var onShell: (String) -> AdbShellResult = { AdbShellResult("", "", 0, true) }
+        var shellFailure: Exception? = null
 
         override suspend fun refreshHuAdb() = Unit
 
@@ -202,9 +290,12 @@ class PackageAdbActionsTest {
             keysDir: File,
             clientName: String,
             block: (execute: (String) -> AdbShellResult) -> T,
-        ): T = block { command ->
-            shellCommands += command
-            onShell(command)
+        ): T {
+            shellFailure?.let { throw it }
+            return block { command ->
+                shellCommands += command
+                onShell(command)
+            }
         }
     }
 }

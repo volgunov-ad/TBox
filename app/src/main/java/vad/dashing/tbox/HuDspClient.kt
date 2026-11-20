@@ -8,6 +8,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.adb.AdbShellResults
+import vad.dashing.tbox.adb.LocalhostAdbReasons
 import vad.dashing.tbox.adb.LocalhostAdbSession
 
 internal sealed interface HuDspResult {
@@ -60,7 +61,9 @@ internal object HuDspClient {
             if (status == 0) HuDspResult.Accepted(mode) else HuDspResult.ServiceFailed(status)
         }
         val result = when (session) {
-            is LocalhostAdbSession.Result.Failed -> HuDspResult.AdbFailed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuDspResult.AdbFailed(
+                LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok -> session.value
         }
         TboxRepository.addLog(

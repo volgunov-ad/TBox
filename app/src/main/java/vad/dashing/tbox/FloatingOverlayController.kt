@@ -43,6 +43,10 @@ import java.util.concurrent.atomic.AtomicLong
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
  * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
  *
+ * [foregroundPackage] is the debounced focused / last-resumed package (force-show + automations).
+ * [stickyHidePackage] is the P0 multi-VD hide reason: stays set while a watched app is still
+ * considered active even if focus moved to another package on a second virtual display.
+ *
  * When [isMainActivityVisible] is true:
  * - force-show is always off (do not mount overlays over the main window);
  * - if own package is in the hide-watch list, hide listed panels immediately even when
@@ -50,6 +54,11 @@ import java.util.concurrent.atomic.AtomicLong
  */
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
+    /**
+     * Hide-watched package that keeps panels hidden under multi-VD (may differ from
+     * [foregroundPackage] when another app last resumed). Null when no sticky hide reason.
+     */
+    val stickyHidePackage: String? = null,
     val isMainActivityVisible: Boolean,
     val suppressFloatingPanelUsageStatsHide: Boolean,
     /** When true, force-show rules do not open panels (startup settle / boot open episode). */
@@ -74,13 +83,16 @@ internal data class UsageStatsOverlayRulesState(
         ) {
             return true
         }
-        val fg = foregroundPackage ?: return false
-        if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
-        return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
+        val hideReason = stickyHidePackage?.trim()?.takeIf { it.isNotEmpty() }
+            ?: foregroundPackage
+            ?: return false
+        if (shouldIgnoreOwnPackageForeground(myPackageName, hideReason)) return false
+        return usageStatsWatchContains(watchHidePackages, hideReason) && hidePanelIds.contains(panelId)
     }
 
     /**
      * When a show-watched app is foreground, show listed panels even if disabled in settings.
+     * Uses scalar [foregroundPackage] only (focused / last-resumed) — not [stickyHidePackage].
      * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]),
      * when MainActivity is visible, or when [suppressFloatingPanelUsageStatsForceShow] is set.
      */
@@ -99,6 +111,7 @@ internal data class UsageStatsOverlayRulesState(
     companion object {
         val EMPTY = UsageStatsOverlayRulesState(
             foregroundPackage = null,
+            stickyHidePackage = null,
             isMainActivityVisible = false,
             suppressFloatingPanelUsageStatsHide = false,
             suppressFloatingPanelUsageStatsForceShow = false,

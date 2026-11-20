@@ -1,19 +1,20 @@
 package vad.dashing.tbox.phone
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Base64
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import java.security.SecureRandom
 
 class PhoneStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("phone_companion", Context.MODE_PRIVATE)
-    private val counterLock = Any()
     val id: ByteArray
     val key: ByteArray
 
     init {
         val existingId = prefs.getString(KEY_ID, null)?.let(PhoneBleCodec::parseIdHex)
-        val existingKey = prefs.getString(KEY_SECRET, null)?.let { Base64.decode(it, Base64.NO_WRAP) }
+        val existingKey = prefs.getString(KEY_SECRET, null)
+            ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
         if (existingId != null && existingKey != null && existingKey.size == PhoneBleCodec.KEY_LEN) {
             id = existingId
             key = existingKey
@@ -29,20 +30,16 @@ class PhoneStore(context: Context) {
         }
     }
 
-    /*
-     * The stored value is a reserved upper bound, written with commit() before any
-     * counter below it goes on air. A killed process then skips the unused rest of the
-     * block instead of reusing a counter the ESP or HU already rejected as a replay.
-     * Block size is 512 so 10 Hz YAW + 1 Hz LOC/MAG only commits to flash every ~45 s.
-     */
-    private var reserved: Long = prefs.getLong(KEY_COUNTER, 0L)
-    private var counter: Long = reserved
-
     fun nextCounter(): Long = synchronized(counterLock) {
+        val shared = counterPrefs ?: prefs.also { counterPrefs = it }
+        if (reserved < 0L) {
+            reserved = shared.getLong(KEY_COUNTER, 0L)
+            counter = reserved
+        }
         val next = counter + 1L
         if (next > reserved) {
             reserved = next + COUNTER_BLOCK
-            prefs.edit().putLong(KEY_COUNTER, reserved).commit()
+            shared.edit().putLong(KEY_COUNTER, reserved).commit()
         }
         counter = next
         next
@@ -115,5 +112,16 @@ class PhoneStore(context: Context) {
         const val KEY_SHARE_GYRO = "share_gyro"
         const val KEY_SHARE_COMPASS = "share_compass"
         const val COUNTER_BLOCK = 512L
+
+        /*
+         * The stored value is a reserved upper bound, written with commit() before any
+         * counter below it goes on air. A killed process then skips the unused rest of the
+         * block instead of reusing a counter the ESP or HU already rejected as a replay.
+         * Block size is 512 so 10 Hz YAW + 1 Hz LOC/MAG only commits to flash every ~45 s.
+         */
+        private val counterLock = Any()
+        private var counterPrefs: SharedPreferences? = null
+        private var reserved: Long = -1L
+        private var counter: Long = -1L
     }
 }

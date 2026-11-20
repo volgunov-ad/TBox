@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
+import vad.dashing.tbox.automation.Android10HardKeyDecode
 import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MAX
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MIN
@@ -133,6 +134,18 @@ private fun SystemEventFields(
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
     )
+    AutomationSecondsField(
+        label = "В течение, с",
+        valueMillis = trigger.holdMillis,
+        onValueChange = { onChange(trigger.copy(holdMillis = it)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = stringResource(R.string.automation_system_event_hold_hint),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -180,6 +193,13 @@ internal val HARD_KEY_PICKER_CODES = listOf(
     210, 211, 212,
 )
 
+internal fun hardKeyPickerCodes(mode: HeadUnitCanMode): List<Int> =
+    if (mode == HeadUnitCanMode.Android10Vhal) Android10HardKeyDecode.pickerCodes
+    else HARD_KEY_PICKER_CODES
+
+internal fun defaultHardKeyCode(mode: HeadUnitCanMode): Int =
+    if (mode == HeadUnitCanMode.Android10Vhal) 24 else 115
+
 internal fun hardKeyCodeLabel(resources: Resources, keyCode: Int): String =
     MbCanHardKeyUiLabels.formatLabel(resources, keyCode)
 
@@ -189,12 +209,10 @@ private fun HardKeyTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val resources = LocalContext.current.resources
-    val options = remember(trigger.keyCode) {
-        if (trigger.keyCode in HARD_KEY_PICKER_CODES) {
-            HARD_KEY_PICKER_CODES
-        } else {
-            HARD_KEY_PICKER_CODES + trigger.keyCode
-        }
+    val mode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
+    val pickerCodes = hardKeyPickerCodes(mode)
+    val options = remember(trigger.keyCode, pickerCodes) {
+        if (trigger.keyCode in pickerCodes) pickerCodes else pickerCodes + trigger.keyCode
     }
     AutomationDropdown(
         label = "Кнопка",
@@ -415,10 +433,11 @@ private fun NumericTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = trigger.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             onChange(
@@ -534,10 +553,11 @@ private fun StateTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = trigger.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             onChange(
@@ -548,7 +568,10 @@ private fun StateTriggerFields(
                         signal,
                         trigger.expectedState,
                     ),
-                    startupBehavior = if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                    startupBehavior = if (
+                        signal == AutomationSignalId.ROAD_TUNNEL ||
+                        signal == AutomationSignalId.ROAD_SETTLEMENT
+                    ) {
                         AutomationStartupBehavior.INITIALIZE_ONLY
                     } else {
                         trigger.startupBehavior
@@ -612,7 +635,9 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
-    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL) {
+    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL &&
+        trigger.signal != AutomationSignalId.ROAD_SETTLEMENT
+    ) {
         StartupBehaviorField(trigger.startupBehavior) {
             onChange(trigger.copy(startupBehavior = it))
         }
@@ -828,7 +853,7 @@ private enum class TriggerUiKind {
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
         WIDGET_PRESS -> "Нажатие виджета-триггера"
-        HARD_KEY -> "Кнопка на руле / двери (A9)"
+        HARD_KEY -> "Кнопка на руле / двери"
         ESP_BLE_BTN -> "Кнопка Shelly Blu (компаньон)"
         ESP_GPIO_BTN -> "ESP-вход (компаньон)"
         INTERVAL -> "Периодически"
@@ -867,7 +892,7 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
 
     TriggerUiKind.HARD_KEY -> AutomationTrigger.HardKey(
         id = id,
-        keyCode = 115,
+        keyCode = defaultHardKeyCode(UniversalCanRepository.mode.value),
     )
 
     TriggerUiKind.ESP_BLE_BTN -> AutomationTrigger.EspBleBtn(

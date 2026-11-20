@@ -52,6 +52,10 @@ data class RoadEdge(
      * OSM tunnel (`yes` / `building_passage`). Missing field in old packs → `false`.
      */
     val tunnel: Boolean = false,
+    /**
+     * Inside a settlement / RU:urban zone (baked at pack build). Missing → `false`.
+     */
+    val settlement: Boolean = false,
 ) {
     val pointCount: Int get() = coords.size / 2
 
@@ -349,6 +353,7 @@ data class RoadGraph(
             var ref: String? = null
             var wayId: Long? = null
             var tunnel = false
+            var settlement = false
             var coords: DoubleArray? = null
             json.beginObject()
             while (json.hasNext()) {
@@ -365,6 +370,7 @@ data class RoadGraph(
                     "ref" -> ref = readOptionalString(json)
                     "wayId" -> wayId = readOptionalLong(json)
                     "tunnel" -> tunnel = readOptionalBoolean(json)
+                    "settlement" -> settlement = readOptionalBoolean(json)
                     "coords" -> coords = readCoords(json)
                     else -> json.skipValue()
                 }
@@ -386,6 +392,7 @@ data class RoadGraph(
                 ref = ref,
                 wayId = wayId,
                 tunnel = tunnel,
+                settlement = settlement,
             )
         }
 

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.map
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.LdwSensitivity
@@ -12,6 +13,7 @@ import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.TrunkDoorRepository
+import vad.dashing.tbox.mbcan.TurnSignalSide
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
@@ -25,6 +27,7 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
     AutomationSignalId.CURRENT_FUEL_CONSUMPTION -> UniversalCanRepository.currentFuelConsumptionState.numberFlow()
     AutomationSignalId.DISTANCE_TO_EMPTY_KM -> UniversalCanRepository.distanceToFuelEmptyKmState.uintNumberFlow()
     AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM -> UniversalCanRepository.distanceToNextMaintenanceKmState.uintNumberFlow()
+    AutomationSignalId.VOLTAGE -> HuMcuBoardVoltage.state.numberFlow()
     AutomationSignalId.STEERING_ANGLE -> UniversalCanRepository.steerAngleState.numberFlow()
     AutomationSignalId.STEERING_SPEED -> UniversalCanRepository.steerSpeedState.numberFlow()
     AutomationSignalId.CRUISE_SET_SPEED -> UniversalCanRepository.accCruiseVSetDisKmh.numberFlow()
@@ -86,6 +89,16 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
     AutomationSignalId.HAZARD -> UniversalCanRepository.hazardActiveState.map {
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.TURN_SIGNAL_LEFT -> UniversalCanRepository.turnSignalsLatchedSide.map { side ->
+        AutomationSignalValue.State(if (side == TurnSignalSide.Left) "on" else "off")
+    }
+    AutomationSignalId.TURN_SIGNAL_RIGHT -> UniversalCanRepository.turnSignalsLatchedSide.map { side ->
+        AutomationSignalValue.State(if (side == TurnSignalSide.Right) "on" else "off")
+    }
+    // Legacy either-side: on if L or R latched (hazard does not latch).
+    AutomationSignalId.TURN_STABILIZED -> UniversalCanRepository.turnSignalsLatchedSide.map { side ->
+        AutomationSignalValue.State(if (side != null) "on" else "off")
     }
     AutomationSignalId.DRL -> UniversalCanRepository.drlOnState.map {
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
@@ -348,6 +361,10 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
     AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
     AutomationSignalId.HAZARD -> vad.dashing.tbox.mbcan.MbCanSignal.Hazard
+    AutomationSignalId.TURN_SIGNAL_LEFT,
+    AutomationSignalId.TURN_SIGNAL_RIGHT,
+    AutomationSignalId.TURN_STABILIZED,
+    -> vad.dashing.tbox.mbcan.MbCanSignal.TurnSignals
     AutomationSignalId.DRL -> vad.dashing.tbox.mbcan.MbCanSignal.Drl
     AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp
     AutomationSignalId.ENGINE_OIL_PRESSURE -> vad.dashing.tbox.mbcan.MbCanSignal.EngineOilPressure

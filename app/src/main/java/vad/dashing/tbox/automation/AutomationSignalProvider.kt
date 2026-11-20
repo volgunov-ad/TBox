@@ -33,6 +33,7 @@ import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.BodyComfortRawRead
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
@@ -70,6 +71,14 @@ class AutomationSignalProvider(
         } else {
             UniversalCanRepository.setSourceSignals(SOURCE_ID, huSignals)
         }
+        HuMcuBoardVoltage.setHeld(
+            SOURCE_ID,
+            keys.any { key ->
+                key.signal == AutomationSignalId.VOLTAGE &&
+                    AutomationSignalCatalog.resolveSource(key.signal, key.source) ==
+                    AutomationSignalSource.HEAD_UNIT
+            },
+        )
 
         keys.forEach { key ->
             val flow = flowFor(key) ?: return@forEach
@@ -103,6 +112,7 @@ class AutomationSignalProvider(
         activeKeys = emptySet()
         ForegroundAppMonitor.setAutomationWatching(false)
         UniversalCanRepository.clearSourceNow(SOURCE_ID)
+        HuMcuBoardVoltage.setHeld(SOURCE_ID, false)
     }
 
     private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
@@ -120,6 +130,23 @@ internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalVal
     mask.map { value ->
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
+
+/** Bit 0 of a per-id mask map; index picks the paired board from `bleStatus.relays`. */
+internal fun espRelayMaskMapBitFlow(
+    masks: Flow<Map<String, Int>>,
+    index: Int,
+): Flow<AutomationSignalValue> =
+    combine(
+        masks,
+        EspCompanionRepository.bleRelays,
+        EspCompanionRepository.connected,
+    ) { maskMap, relays, connected ->
+        if (!connected) return@combine AutomationSignalValue.Unavailable
+        val id = relays.getOrNull(index)?.id
+            ?: return@combine AutomationSignalValue.Unavailable
+        val value = maskMap[id] ?: 0
+        AutomationSignalValue.State(if ((value and 1) != 0) "on" else "off")
+    }
 
 /**
  * Input levels stay [AutomationSignalValue.Unavailable] until the companion sends a `gpio`
@@ -176,6 +203,48 @@ internal fun foregroundAppFlow(): Flow<AutomationSignalValue> =
                 AutomationSignalValue.Unavailable
             } else {
                 AutomationSignalValue.State(name)
+            }
+        }
+        .distinctUntilChanged()
+
+internal fun dclUiBooleanFlow(
+    read: (vad.dashing.tbox.dcl.DclUiState) -> Boolean?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.uiState
+        .map { state ->
+            val visible = state?.let(read)
+            if (visible == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(if (visible) "on" else "off")
+            }
+        }
+        .distinctUntilChanged()
+
+internal fun dclSmartAccBooleanFlow(
+    read: (vad.dashing.tbox.dcl.DclSmartAccState) -> Boolean?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+        .map { state ->
+            val value = state?.let(read)
+            if (value == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(if (value) "on" else "off")
+            }
+        }
+        .distinctUntilChanged()
+
+internal fun dclSmartAccNumberFlow(
+    read: (vad.dashing.tbox.dcl.DclSmartAccState) -> Int?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+        .map { state ->
+            val value = state?.let(read)
+            if (value == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.Number(value.toDouble())
             }
         }
         .distinctUntilChanged()

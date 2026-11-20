@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, климат/багажник/зеркала через mbCAN или VHAL, темы оформления, управление служебными процессами блока TBox.
 
-**Текущая версия:** 1.1.0 (`ru` / `en` flavor).
+**Текущая версия:** 1.1.9 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -106,12 +106,16 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/USB_AUDIO_A10_SIMPLE_RU.md](docs/USB_AUDIO_A10_SIMPLE_RU.md) | То же самое простыми словами: Блокнот + копировать/вставить, без диагностики |
 | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2 | «Файрвол ГУ» (`:fwunlock`): постоянный белый список сети для приложений на A10 (файрвол Adayo), рантайм-фикс в TBox Monitor — страховка |
 | [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8 | «AA/CarPlay окна ГУ» (`:winpatch`): постоянная установка/откат универсальных патченных AndroidAuto p6 и CarPlayView p6 (и встроенных стоковых резервов) на всех прошивках A10 |
+| [docs/LAUNCHER_A9_APP_WINDOW_RU.md](docs/LAUNCHER_A9_APP_WINDOW_RU.md) | Штатный лаунчер A9: полный экран и окно приложений (`start_activity`), сетка карточек |
+| [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md) | Камеры A9: чистый кадр `ais_server`, XML-окна `qcarcam_test`, запрет сокета (только root) |
+| [docs/CAMD_RU.md](docs/CAMD_RU.md) | Приложение «Камеры ГУ» (`:camd`): описание, план, что сделано и чего нет |
+| [docs/DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](docs/DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md) | API окон `camd` для вендора DCL: TCP `127.0.0.1:8770`, команды OPEN/CLOSE/AVM/STATUS |
 | [AGENTS.md](AGENTS.md) (`:camview`) | «Тест камер ГУ (Mengbo)» (`:camview`): тестовое приложение превью камер AVM/OMS/DMS через Mengbo SDK и `*_sharecamera` на A9 |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 1.1.0) |
+| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 1.1.9) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Архитектура данных

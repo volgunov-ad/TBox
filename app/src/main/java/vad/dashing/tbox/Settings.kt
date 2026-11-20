@@ -4,12 +4,9 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
-import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -43,21 +40,13 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 
-private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
+internal const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
 internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = DATASTORE_NAME,
     corruptionHandler = resetOnCorruption(DATASTORE_NAME),
 )
-
-/** A corrupt preferences file would otherwise throw on every read and crash-loop the app. */
-internal fun resetOnCorruption(storeName: String): ReplaceFileCorruptionHandler<Preferences> =
-    ReplaceFileCorruptionHandler { error ->
-        Log.e("DataStore", "Corrupt $storeName, resetting", error)
-        TboxRepository.addLog("ERROR", "DataStore", "Corrupt $storeName reset: ${error.message}")
-        emptyPreferences()
-    }
 
 enum class SetLauncherAppCustomIconResult {
     Success,
@@ -145,14 +134,15 @@ data class FloatingDashboardWidgetConfig(
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**
-     * Launch path for [launcherAppPackage]: fullscreen, TBox freeform, or Adayo A10 stock window.
+     * Launch path for app-shortcut and music widgets: fullscreen / DCL / freeform /
+     * Adayo A10 stock window / virtual display.
      * [launcherFreeformEnabled] stays in sync for legacy JSON (`true` only when mode is freeform).
      */
     val launcherLaunchMode: AppLauncherLaunchMode = AppLauncherLaunchMode.DEFAULT,
     /**
-     * When true, [launcherAppPackage] launches in freeform beside TBox
-     * ([launcherFreeformSide] + [launcherFreeformPercent]). Only for `appLauncherWidget`.
-     * Prefer [launcherLaunchMode]; kept for backup/theme compatibility.
+     * When true, launches in freeform beside TBox
+     * ([launcherFreeformSide] + [launcherFreeformPercent]).
+     * App-shortcut and music widgets; prefer [launcherLaunchMode]; kept for backup/theme compatibility.
      */
     val launcherFreeformEnabled: Boolean = false,
     /** Edge of the display occupied by the companion app when [launcherFreeformEnabled]. */
@@ -187,8 +177,54 @@ data class FloatingDashboardWidgetConfig(
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /**
+     * When true, a single tap on `httpRequestWidget` launches [launcherAppPackage] (same modes as
+     * the app-shortcut tile) before sending the HTTP request. Default off.
+     */
+    val httpLaunchAppBeforeRequest: Boolean = false,
+    /**
+     * Seconds to wait after the optional pre-request launch before sending HTTP.
+     * Only used when [httpLaunchAppBeforeRequest] is true.
+     */
+    val httpLaunchAppDelaySec: Int = DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC,
+    /** Phone number for [PHONE_DIAL_WIDGET_DATA_KEY] (`tel:` / ACTION_CALL). */
+    val dialPhoneNumber: String = "",
+    /** When true, show [dialPhoneNumber] on the tile face. Default on. */
+    val dialShowNumber: Boolean = true,
+    /** When true, ask before placing a call from the tile. Default off. */
+    val dialConfirmBeforeCall: Boolean = false,
     /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
     val automationTriggerId: String = "",
+    /** Camera input for [CAMD_WINDOW_WIDGET_DATA_KEY]. Ignored for OPEN in preset frame mode. */
+    val camdWindowCameraId: Int = CAMD_WINDOW_DEFAULT_CAMERA,
+    /** Window origin and size for [CAMD_WINDOW_WIDGET_DATA_KEY], percent of the screen. */
+    val camdWindowX: Int = CAMD_WINDOW_DEFAULT_X,
+    val camdWindowY: Int = CAMD_WINDOW_DEFAULT_Y,
+    val camdWindowW: Int = CAMD_WINDOW_DEFAULT_W,
+    val camdWindowH: Int = CAMD_WINDOW_DEFAULT_H,
+    /**
+     * Frame content mode for [CAMD_WINDOW_WIDGET_DATA_KEY]: [CAMD_FRAME_MODE_AS_IS] shows the raw
+     * frame, [CAMD_FRAME_MODE_CUSTOM] uses the rot/flip/crop fields below, [CAMD_FRAME_MODE_PRESET]
+     * opens `camdWindowPresetName` (its settings cannot be overridden by the caller).
+     */
+    val camdWindowFrameMode: Int = CAMD_FRAME_MODE_AS_IS,
+    /** Preset name for [CAMD_FRAME_MODE_PRESET]: lowercase latin digits underscore, 1..32 chars. */
+    val camdWindowPresetName: String = "",
+    /** When true, OPEN carries shape=circle (inscribed circle, transparent corners). */
+    val camdWindowCircle: Boolean = false,
+    /** Clockwise image rotation for [CAMD_WINDOW_WIDGET_DATA_KEY]: 0, 90, 180, or 270. */
+    val camdWindowRotation: Int = 0,
+    /** Horizontal mirror for [CAMD_WINDOW_WIDGET_DATA_KEY] (OPEN flipH). */
+    val camdWindowFlipH: Boolean = false,
+    /** Vertical mirror for [CAMD_WINDOW_WIDGET_DATA_KEY] (OPEN flipV). */
+    val camdWindowFlipV: Boolean = false,
+    /** When true, OPEN carries crop=cx,cy,cw,ch (percent of the frame) for [CAMD_WINDOW_WIDGET_DATA_KEY]. */
+    val camdWindowCropEnabled: Boolean = false,
+    /** Frame crop rect for [CAMD_WINDOW_WIDGET_DATA_KEY], percent of the frame; stretched to fill the window. */
+    val camdWindowCropX: Int = 0,
+    val camdWindowCropY: Int = 0,
+    val camdWindowCropW: Int = 100,
+    val camdWindowCropH: Int = 100,
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**
@@ -1141,11 +1177,24 @@ class SettingsManager(private val context: Context) {
         private val CLIMATE_CONTROL_TYPE_KEY =
             stringPreferencesKey("${KEY_PREFIX}climate_control_type")
         /**
-         * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
-         * Default true when key absent.
+         * Open [MainActivity] via DCL app_area (when API available) or Adayo stock app window.
+         * Default true when key absent. Used when DCL environment is OFF (A10 Adayo / legacy).
          */
         private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
             booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
+        /**
+         * Main-only DCL launch mode when environment is ON:
+         * `fullscreen` / `full_width` / `app_area`. Absent → migrate from
+         * [LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] (true→app_area, false→fullscreen).
+         */
+        private val LAUNCH_MAIN_DCL_MODE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}launch_main_dcl_mode")
+        /**
+         * Route third-party «Обычный» / App List launches through DCL Launcher API.
+         * Default false when key absent. Independent of [LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY].
+         */
+        private val DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}dcl_launcher_environment_enabled")
         /** A10 only: re-apply the extra root CA overlay on app start. Default false. */
         private val HU_CA_CERTS_AUTO_INSTALL_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_ca_certs_auto_install")
@@ -2274,11 +2323,33 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     /**
-     * When true (default) and HU mode is Android 10, programmatic [MainActivity] opens use
-     * Adayo stock app window instead of fullscreen.
+     * When true (default), programmatic [MainActivity] opens use DCL app_area (if available)
+     * or Adayo stock app window instead of fullscreen. Used when DCL environment is OFF.
      */
     val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
+        .distinctUntilChanged()
+
+    /**
+     * Main-only DCL launch mode (`fullscreen` / `full_width` / `app_area`) when environment is ON.
+     * Migrates from [launchMainInStockAppWindowFlow] when the mode key is absent.
+     */
+    val launchMainDclModeFlow: Flow<MainDclLaunchMode> = context.settingsDataStore.data
+        .map { preferences ->
+            MainDclLaunchMode.resolveStored(
+                storedMode = preferences[LAUNCH_MAIN_DCL_MODE_KEY],
+                legacyBoolean = preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY],
+                modeKeyPresent = preferences.contains(LAUNCH_MAIN_DCL_MODE_KEY),
+            )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * When true, third-party app shortcut / App List «Обычный» launches go through DCL
+     * (`app_area` / opt-in `fullscreen`). Default false.
+     */
+    val dclLauncherEnvironmentEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val huCaCertsAutoInstallFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -5127,8 +5198,39 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
+            // Keep mode in sync for env-ON picker when user only touches the legacy switch.
+            if (!preferences.contains(LAUNCH_MAIN_DCL_MODE_KEY) ||
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] == MainDclLaunchMode.FULLSCREEN.storageKey ||
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] == MainDclLaunchMode.APP_AREA.storageKey
+            ) {
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] =
+                    MainDclLaunchMode.migrateFromLegacyBoolean(enabled).storageKey
+            }
         }
         LaunchMainInStockAppWindowSetting.update(enabled)
+        if (MainDclLaunchModeSetting.mode == MainDclLaunchMode.FULLSCREEN ||
+            MainDclLaunchModeSetting.mode == MainDclLaunchMode.APP_AREA
+        ) {
+            MainDclLaunchModeSetting.update(MainDclLaunchMode.migrateFromLegacyBoolean(enabled))
+        }
+    }
+
+    suspend fun saveLaunchMainDclMode(mode: MainDclLaunchMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAUNCH_MAIN_DCL_MODE_KEY] = mode.storageKey
+            // Mirror windowed vs fullscreen into the legacy boolean (A10 Adayo when env OFF).
+            preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] =
+                mode != MainDclLaunchMode.FULLSCREEN
+        }
+        MainDclLaunchModeSetting.update(mode)
+        LaunchMainInStockAppWindowSetting.update(mode != MainDclLaunchMode.FULLSCREEN)
+    }
+
+    suspend fun saveDclLauncherEnvironmentEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY] = enabled
+        }
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
     }
 
     suspend fun saveHuCaCertsAutoInstall(enabled: Boolean) {

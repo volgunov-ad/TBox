@@ -50,7 +50,9 @@ internal object HuTimeZoneClient {
                 block = block,
             )
         ) {
-            is LocalhostAdbSession.Result.Failed -> HuTimeZoneResult.AdbFailed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuTimeZoneResult.AdbFailed(
+                vad.dashing.tbox.adb.LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok -> session.value
         }
     }

@@ -86,7 +86,7 @@ class WidgetSelectionDialogSharedTest {
     }
 
     @Test
-    fun applyDraft_preserveDataKey_keepsCurrentTypeAndAppliesAppearance() {
+    fun applyDraft_preserveDataKey_keepsCurrentTypeAndTitleAndAppliesAppearance() {
         val source = dialogState(
             dataKey = "voltage",
             config = FloatingDashboardWidgetConfig(
@@ -115,7 +115,7 @@ class WidgetSelectionDialogSharedTest {
 
         assertEquals("speed", target.selectedDataKey)
         assertTrue(target.showTitle)
-        assertEquals("FromClip", target.customTitle)
+        assertEquals("KeepType", target.customTitle)
         assertEquals(1.3f, target.titleScale, 0.001f)
         assertEquals(1.3f, target.iconScale, 0.001f)
         assertEquals(1.3f, target.textScale, 0.001f)

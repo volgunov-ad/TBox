@@ -54,6 +54,7 @@ import vad.dashing.dataresize.gpt.DiskMapView
 import vad.dashing.dataresize.gpt.DiskSegment
 import vad.dashing.dataresize.gpt.SECTOR
 import vad.dashing.dataresize.gpt.SegmentKind
+import vad.dashing.dataresize.inventory.InventoryVerdict
 
 private val OkColor = Color(0xFF2E9E4F)
 private val RunColor = Color(0xFF0066CC)
@@ -68,6 +69,8 @@ fun ResizeScreen(
     onStage2: () -> Unit,
     onRollback: () -> Unit,
     onFixSecondary: () -> Unit,
+    onInventory: () -> Unit,
+    onCopyInventorySummary: () -> Unit,
 ) {
     var confirm by remember { mutableStateOf<Action?>(null) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -84,7 +87,21 @@ fun ResizeScreen(
                 state.banner?.let { BannerCard(it) }
                 if (state.diskMaps.isNotEmpty()) DiskMaps(state.diskMaps)
                 if (state.facts.isNotEmpty()) Facts(state.facts)
-                Actions(state, onRefresh = onRefresh, onStage2 = onStage2, onConfirm = { confirm = it })
+                if (state.inventoryVerdicts.isNotEmpty()) {
+                    InventoryCard(
+                        verdicts = state.inventoryVerdicts,
+                        path = state.inventoryPath,
+                        canCopy = !state.inventorySummary.isNullOrBlank(),
+                        onCopy = onCopyInventorySummary,
+                    )
+                }
+                Actions(
+                    state,
+                    onRefresh = onRefresh,
+                    onStage2 = onStage2,
+                    onInventory = onInventory,
+                    onConfirm = { confirm = it },
+                )
                 JournalCard(state.events, state.journal)
             }
         }
@@ -201,24 +218,64 @@ private fun Facts(facts: List<Pair<String, String>>) {
 }
 
 @Composable
-private fun Actions(state: UiState, onRefresh: () -> Unit, onStage2: () -> Unit, onConfirm: (Action) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (Action.Move in state.actions) {
-            Button(onClick = { onConfirm(Action.Move) }) { Text("Перенести и расширить", fontSize = 20.sp) }
+private fun Actions(
+    state: UiState,
+    onRefresh: () -> Unit,
+    onStage2: () -> Unit,
+    onInventory: () -> Unit,
+    onConfirm: (Action) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (Action.Move in state.actions) {
+                Button(onClick = { onConfirm(Action.Move) }) { Text("Перенести и расширить", fontSize = 20.sp) }
+            }
+            if (Action.Stage2 in state.actions) {
+                Button(onClick = onStage2) { Text("Расширить", fontSize = 20.sp) }
+            }
+            if (Action.Rollback in state.actions) {
+                OutlinedButton(onClick = { onConfirm(Action.Rollback) }) { Text("Откатить", fontSize = 20.sp) }
+            }
+            if (Action.FixSecondary in state.actions) {
+                Button(onClick = { onConfirm(Action.FixSecondary) }) { Text("Дописать резервную GPT", fontSize = 20.sp) }
+            }
+            if (Action.Refresh in state.actions) {
+                OutlinedButton(onClick = onRefresh) { Text("Проверить заново", fontSize = 20.sp) }
+            }
+            if (state.busy) CircularProgressIndicator(modifier = Modifier.size(28.dp))
         }
-        if (Action.Stage2 in state.actions) {
-            Button(onClick = onStage2) { Text("Расширить", fontSize = 20.sp) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onInventory, enabled = !state.busy) {
+                Text("Паспорт разделов", fontSize = 20.sp)
+            }
         }
-        if (Action.Rollback in state.actions) {
-            OutlinedButton(onClick = { onConfirm(Action.Rollback) }) { Text("Откатить", fontSize = 20.sp) }
+    }
+}
+
+@Composable
+private fun InventoryCard(
+    verdicts: List<InventoryVerdict>,
+    path: String?,
+    canCopy: Boolean,
+    onCopy: () -> Unit,
+) {
+    Panel {
+        Text("Вердикты паспорта", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.size(8.dp))
+        verdicts.forEach { v ->
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Text(v.topic, modifier = Modifier.weight(0.4f), fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(v.text, modifier = Modifier.weight(0.6f), fontSize = 17.sp)
+            }
         }
-        if (Action.FixSecondary in state.actions) {
-            Button(onClick = { onConfirm(Action.FixSecondary) }) { Text("Дописать резервную GPT", fontSize = 20.sp) }
+        if (!path.isNullOrBlank()) {
+            Spacer(Modifier.size(8.dp))
+            Text("Файл: $path", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (Action.Refresh in state.actions) {
-            OutlinedButton(onClick = onRefresh) { Text("Проверить заново", fontSize = 20.sp) }
+        if (canCopy) {
+            Spacer(Modifier.size(8.dp))
+            OutlinedButton(onClick = onCopy) { Text("Копировать сводку", fontSize = 18.sp) }
         }
-        if (state.busy) CircularProgressIndicator(modifier = Modifier.size(28.dp))
     }
 }
 

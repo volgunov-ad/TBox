@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.location.GeoDebugLogRecorder
 import vad.dashing.tbox.location.GeoDebugLogRotate
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
@@ -102,6 +103,13 @@ object AppLogFileRecorder {
         }
         // Avoid recurse through addLog while starting; message still goes to in-memory ring.
         appendDirect("[AppLog] recording started: ${file.name}")
+        if (MbCanDiagnostics.deepEnabled.value) {
+            TboxRepository.addFileOnlyLog(
+                "INFO",
+                "CANDIAG_TBOX",
+                "rawTboxFrames=on (deep diagnostics)",
+            )
+        }
         return true
     }
 

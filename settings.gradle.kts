@@ -31,4 +31,5 @@ include(":usbaudio")
 include(":fwunlock")
 include(":winpatch")
 include(":camview")
+include(":camd")
  

@@ -75,15 +75,52 @@ class KeyPressDiagnosticsTest {
         assertTrue(line.contains("type=[I"))
         assertTrue(line.contains("timestamp=123"))
         assertTrue(line.contains("status=0"))
+        assertFalse(line.contains("name="))
+    }
+
+    @Test
+    fun vhalFormat_namesDoorPanelButtons() {
+        val line = KeyPressDiagnosticFormat.vhal(
+            VhalKeyDiagnosticEvent(
+                propertyId = 289412276,
+                areaId = 0,
+                value = 1,
+                valueType = "java.lang.Integer",
+                timestampNanos = null,
+                status = null,
+            )
+        )
+
+        assertTrue(line.contains("propertyId=289412276"))
+        assertTrue(line.contains("name=DOOR_FRONT_PASSENGER"))
+        assertTrue(line.contains("value=1"))
+        assertEquals("DOOR_REAR_LEFT", KeyPressDiagnosticFormat.vhalDoorName(289412309))
+        assertEquals("DOOR_REAR_RIGHT", KeyPressDiagnosticFormat.vhalDoorName(289412275))
     }
 
     @Test
     fun adayoFormat_includesActionAndHardKey() {
-        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", "K_PTT")
+        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", "K_PTT", null)
 
         assertTrue(line.contains("action=adayo.keyEvent.onKeyDown"))
         assertTrue(line.contains("hardKey=K_PTT"))
-        assertTrue(KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyUp", null).contains("hardKey=-"))
+        assertTrue(KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyUp", null, null).contains("hardKey=-"))
+    }
+
+    @Test
+    fun adayoFormat_includesCarInputKeyCode() {
+        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", null, 24)
+
+        assertTrue(line.contains("action=adayo.keyEvent.onKeyDown"))
+        assertTrue(line.contains("InputKey=24"))
+        assertTrue(line.contains("name=WHEEL_RIGHT_JOY_UP"))
+        assertFalse(line.contains("hardKey=-"))
+        assertEquals("WHEEL_LEFT_JOY_PRESS", KeyPressDiagnosticFormat.adayoInputKeyName(195))
+        assertEquals("WHEEL_LEFT_BTN_BOTTOM", KeyPressDiagnosticFormat.adayoInputKeyName(189))
+        assertEquals("WHEEL_RIGHT_BTN_TOP", KeyPressDiagnosticFormat.adayoInputKeyName(4))
+        assertEquals("WHEEL_RIGHT_BTN_BOTTOM", KeyPressDiagnosticFormat.adayoInputKeyName(231))
+        assertEquals("WHEEL_RIGHT_JOY_PRESS", KeyPressDiagnosticFormat.adayoInputKeyName(91))
+        assertEquals("UNKNOWN", KeyPressDiagnosticFormat.adayoInputKeyName(999))
     }
 
     @Test

@@ -77,12 +77,12 @@ Authorization: Bearer <accessToken>
 
 Три способа: автоматический для приложений на самом ГУ, создание токена вручную и сопряжение по HTTP.
 
-### 3.0. Автоподключение приложений на ГУ (TBox MQTT, VAD Voice)
+### 3.0. Автоподключение приложений на ГУ (TBox MQTT, VAD Voice, Dashing Club Launcher)
 
-Если приложение **TBox MQTT** (`vad.dashing.mqtt`) или **VAD Voice** (`vad.dashing.voice`) установлено на том же головном устройстве, что и TBox Monitor, копировать токен или включать режим «Подключить приложение» в настройках **не нужно**:
+Если приложение **TBox MQTT** (`vad.dashing.mqtt`), **VAD Voice** (`vad.dashing.voice`) или **Dashing Club Launcher** (`ras.dashing.tbox.launcher`) установлено на том же головном устройстве, что и TBox Monitor, копировать токен или включать режим «Подключить приложение» в настройках **не нужно**:
 
 1. Включите **«Включить сервер API»** в **Настройки → API**.
-2. Откройте **TBox MQTT** или **VAD Voice** на ГУ (при необходимости нажмите **«Отправить запрос»**).
+2. Откройте **TBox MQTT**, **VAD Voice** или **Dashing Club Launcher** на ГУ (при необходимости нажмите **«Отправить запрос»**).
 3. Поверх экрана появится окно TBox Monitor **«Разрешить подключение?»** — нажмите **«Разрешить»**.
 4. Приложение автоматически получит токен и текущий порт API через локальный провайдер (`content://vad.dashing.tbox.localaccess`). Если позже токен устареет или вы измените порт API в настройках Monitor, приложение обновит их автоматически без повторного запроса. Отозвать доступ можно в любой момент в **Настройки → API → Доверенные клиенты**.
 
@@ -219,7 +219,7 @@ curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
 | `GET` | `/` и `/panel` | нет | Страница управления автомобилем, если включена простая веб-панель |
 | `POST` | `/v1/pair/request` | нет* | Начать pairing (`*` только при активном режиме) |
 | `GET` | `/v1/pair/status?requestId=` | нет* | Статус / `accessToken` после approve |
-| `GET` | `/v1/catalog` | да | Сигналы, действия, `voiceAliasesRu` (`catalogVersion` 5+) |
+| `GET` | `/v1/catalog` | да | Сигналы, действия, `voiceAliasesRu` (`catalogVersion` 6+) |
 | `GET` | `/v1/signals?ids=&source=` | да | Snapshot значений (в т.ч. `geo_*` / `modem_rssi_dbm` и др. enrichment) |
 | `POST` | `/v1/actions/invoke` | да | Выполнить 1…N действий |
 | `GET` | `/v1/automations` | да | Список правил (id, name, enabled) |

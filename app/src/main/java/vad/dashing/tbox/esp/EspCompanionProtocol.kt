@@ -91,6 +91,8 @@ object EspCompanionProtocol {
     const val TYPE_PHONE_CMD = "phoneCmd"
     const val TYPE_PHONE_SNAP_REQ = "phoneSnapReq"
     const val TYPE_PHONE_SNAP = "phoneSnap"
+    const val TYPE_RELAY_DEV = "relayDev"
+    const val TYPE_RELAY_DEV_SET = "relayDevSet"
     const val TYPE_AP_CFG = "apCfg"
     const val TYPE_AP_STATUS = "apStatus"
 
@@ -262,6 +264,16 @@ object EspCompanionProtocol {
 
     fun encodePhoneForget(id: String): String =
         line(TYPE_PHONE_FORGET, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    /** Empty [id] targets every paired BLE relay board; pulseMs > 0 is a timed pulse. */
+    fun encodeRelayDevSet(id: String, mask: Int, pulseMs: Int = 0): String {
+        val extras = linkedMapOf<String, Any>(
+            "mask" to (mask and 0xFF),
+            "pulseMs" to pulseMs.coerceIn(0, 0xFFFF),
+        )
+        if (id.isNotBlank()) extras["id"] = id.trim().lowercase(Locale.US)
+        return line(TYPE_RELAY_DEV_SET, extras)
+    }
 
     fun encodePhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot): String {
         val extras = linkedMapOf<String, Any>("gen" to gen)
@@ -561,6 +573,7 @@ object EspCompanionProtocol {
                         bleKey = o.optBoolean("bleKey", false),
                         ap = o.optBoolean("ap", false),
                         phone = o.optBoolean("phone", false),
+                        bleRelay = o.optBoolean("bleRelay", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -685,6 +698,7 @@ object EspCompanionProtocol {
                         .ifBlank { null },
                     phoneLearn = o.optBoolean("phoneLearn", false),
                     phones = parsePhones(o),
+                    relays = parseRelays(o),
                 )
                 TYPE_PHONE_PAIR -> EspMessage.PhonePair(
                     id = o.optString("id", "").trim().lowercase(Locale.US),
@@ -697,6 +711,12 @@ object EspCompanionProtocol {
                     arg = o.optInt("arg", 0),
                 )
                 TYPE_PHONE_SNAP_REQ -> EspMessage.PhoneSnapReq
+                TYPE_RELAY_DEV -> EspMessage.RelayDev(
+                    id = o.optString("id", "").trim().lowercase(Locale.US),
+                    mask = o.optInt("mask", 0) and 0xFF,
+                    flags = o.optInt("flags", 0),
+                    uptimeS = o.optInt("uptime", 0) and 0xFFFF,
+                )
                 TYPE_BLE_SEEN -> EspMessage.BleSeen(
                     mac = o.optString("mac", "").trim().lowercase(Locale.US),
                     rssi = o.optInt("rssi", 0),
@@ -772,6 +792,25 @@ object EspCompanionProtocol {
         }
     }
 
+    private fun parseRelays(o: JSONObject): List<EspRelayDevice> {
+        val arr = o.optJSONArray("relays") ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.optJSONObject(i) ?: continue
+                val id = item.optString("id", "").trim().lowercase(Locale.US)
+                if (id.isEmpty()) continue
+                add(
+                    EspRelayDevice(
+                        id = id,
+                        name = item.optString("name", "").trim(),
+                        online = item.optBoolean("online", false),
+                        mask = item.optInt("mask", 0) and 0xFF,
+                    ),
+                )
+            }
+        }
+    }
+
     private fun parseStringList(o: JSONObject, key: String): List<String> {
         val arr = o.optJSONArray(key) ?: return emptyList()
         return buildList {
@@ -821,6 +860,14 @@ data class EspPhoneDevice(
     val name: String,
 )
 
+/** Paired BLE relay board from `bleStatus.relays` (fw 0.13+). */
+data class EspRelayDevice(
+    val id: String,
+    val name: String,
+    val online: Boolean = false,
+    val mask: Int = 0,
+)
+
 sealed class EspMessage {
     data class Hello(
         val fw: String,
@@ -850,6 +897,8 @@ sealed class EspMessage {
         val ap: Boolean = false,
         /** Firmware 0.10+ phone companion channel. */
         val phone: Boolean = false,
+        /** Firmware 0.13+ BLE relay boards on the phone service. */
+        val bleRelay: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -963,6 +1012,7 @@ sealed class EspMessage {
         val lastMac: String? = null,
         val phoneLearn: Boolean = false,
         val phones: List<EspPhoneDevice> = emptyList(),
+        val relays: List<EspRelayDevice> = emptyList(),
     ) : EspMessage()
 
     data class PhonePair(
@@ -978,6 +1028,17 @@ sealed class EspMessage {
     ) : EspMessage()
 
     data object PhoneSnapReq : EspMessage()
+
+    /**
+     * Relay board state report. flags: bit0 applied (answers a command), bit1 restored
+     * at boot, bit2 pulse running.
+     */
+    data class RelayDev(
+        val id: String,
+        val mask: Int,
+        val flags: Int = 0,
+        val uptimeS: Int = 0,
+    ) : EspMessage()
 
     data class BleSeen(
         val mac: String,

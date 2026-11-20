@@ -37,7 +37,6 @@ import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneCompanionHost
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import java.util.concurrent.ConcurrentHashMap
 
 data class ExternalApiStatus(
     val enabled: Boolean = false,
@@ -83,9 +82,8 @@ class ExternalApiController(
     private val _pendingPairRequests = MutableStateFlow<List<ExternalApiPairRequest>>(emptyList())
     val pendingPairRequests: StateFlow<List<ExternalApiPairRequest>> = _pendingPairRequests.asStateFlow()
 
-    private val _localConsent = MutableStateFlow<ExternalApiLocalConsent?>(null)
-    val localConsent: StateFlow<ExternalApiLocalConsent?> = _localConsent.asStateFlow()
-    private val deniedLocalPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val localConsentSession = ExternalApiLocalConsentSession()
+    val localConsent: StateFlow<ExternalApiLocalConsent?> = localConsentSession.pending
 
     private val clientsLock = Any()
     private val persistMutex = Mutex()
@@ -93,6 +91,12 @@ class ExternalApiController(
 
     @Volatile
     private var pairedClients: List<ExternalApiPairedClient> = emptyList()
+
+    /** False until the first clients JSON from disk has been applied. Writes before that would save []. */
+    @Volatile
+    private var clientsHydrated = false
+    private var clientsRevision = 0L
+    private var persistedRevision = 0L
     private var enabled: Boolean = false
     private var port: Int = ExternalApiConstants.DEFAULT_PORT
     private var dangerousEnabled: Boolean = false
@@ -101,6 +105,7 @@ class ExternalApiController(
     private var pairingTimeoutJob: Job? = null
     private var tokenExpiryJob: Job? = null
     private var observeJob: Job? = null
+    private var pairingPollJob: Job? = null
 
     private val httpServer = ExternalApiHttpServer { method, path, query, headers, body ->
         router.handle(method, path, query, headers, body)
@@ -131,6 +136,15 @@ class ExternalApiController(
         climateControlType = { VehicleFeatureSettings.climateControlType.storageKey },
     )
 
+    init {
+        httpServer.onUnexpectedStop = {
+            scope.launch {
+                delay(UNEXPECTED_STOP_RESTART_DELAY_MS)
+                syncServer()
+            }
+        }
+    }
+
     private fun headUnitPlatform(): String = when (UniversalCanRepository.mode.value) {
         HeadUnitCanMode.Android9MbCan -> "android9"
         HeadUnitCanMode.Android10Vhal -> "android10"
@@ -153,10 +167,13 @@ class ExternalApiController(
                 dangerousEnabled = settings.dangerousEnabled
                 climatePanelEnabled = settings.webPanelEnabled
                 synchronized(clientsLock) {
-                    pairedClients = ExternalApiAuth.mergeNewerUsage(
-                        incoming = ExternalApiPairedClient.decodeList(settings.clientsJson),
-                        current = pairedClients,
+                    pairedClients = ExternalApiAuth.reconcileStoredClients(
+                        disk = ExternalApiPairedClient.decodeList(settings.clientsJson),
+                        memory = pairedClients,
+                        hydrated = clientsHydrated,
+                        dirty = clientsRevision != persistedRevision,
                     )
+                    clientsHydrated = true
                 }
                 syncServer()
                 publishStatus()
@@ -165,12 +182,6 @@ class ExternalApiController(
         scope.launch {
             automationStore.snapshots.collectLatest { snapshot ->
                 automations = snapshot.document.automations
-            }
-        }
-        scope.launch {
-            while (true) {
-                _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
-                delay(250)
             }
         }
     }
@@ -182,6 +193,8 @@ class ExternalApiController(
         pairingTimeoutJob = null
         tokenExpiryJob?.cancel()
         tokenExpiryJob = null
+        pairingPollJob?.cancel()
+        pairingPollJob = null
         pairingSession.stopPairing()
         httpServer.stop()
         persistClients()
@@ -190,6 +203,7 @@ class ExternalApiController(
 
     fun startPairing() {
         pairingSession.startPairing()
+        ensurePairingRequestPoll()
         pairingTimeoutJob?.cancel()
         pairingTimeoutJob = scope.launch {
             delay(ExternalApiConstants.PAIRING_TIMEOUT_MS)
@@ -210,6 +224,17 @@ class ExternalApiController(
         _pendingPairRequests.value = emptyList()
     }
 
+    private fun ensurePairingRequestPoll() {
+        if (pairingPollJob?.isActive == true) return
+        pairingPollJob = scope.launch {
+            while (pairingSession.isPairingActive()) {
+                _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+                delay(PAIRING_POLL_INTERVAL_MS)
+            }
+            _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+        }
+    }
+
     fun approvePair(requestId: String) {
         val request = pairingSession.getRequest(requestId) ?: return
         val token = ExternalApiAuth.generateToken()
@@ -224,6 +249,7 @@ class ExternalApiController(
                 createdAtEpochMs = createdAt,
             )
             lastPersistedUseAt[request.clientId] = createdAt
+            clientsRevision++
         }
         persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Pair approved: ${request.clientName}")
@@ -242,6 +268,10 @@ class ExternalApiController(
      * A confirmed caller gets a fresh token every time; its previous token stops working.
      */
     fun localAccess(packageName: String, certSha256: String, interactive: Boolean): ExternalApiLocalAnswer {
+        // Empty memory before the first disk read is not "this app was never approved".
+        if (!clientsHydrated) {
+            return localAnswer(LocalAccessContract.STATUS_UNAVAILABLE)
+        }
         val clientName = ExternalApiLocalClients.nameOf(packageName)
             ?: return ExternalApiLocalAnswer(LocalAccessContract.STATUS_UNKNOWN_CLIENT)
         val clientId = ExternalApiLocalClients.clientId(packageName)
@@ -261,6 +291,7 @@ class ExternalApiController(
                     certSha256 = certSha256,
                 )
                 lastPersistedUseAt[clientId] = now
+                clientsRevision++
                 token
             }
         }
@@ -270,21 +301,17 @@ class ExternalApiController(
             return localAnswer(LocalAccessContract.STATUS_GRANTED, token)
         }
         val consent = ExternalApiLocalConsent(packageName, clientName, certSha256)
-        val status = when {
-            interactive -> {
-                deniedLocalPackages.remove(packageName)
-                _localConsent.value = consent
-                scope.launch(Dispatchers.Main) {
-                    appContext.startActivity(
-                        Intent(appContext, ExternalApiLocalConsentActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-                LocalAccessContract.STATUS_PENDING
+        val status = if (interactive) {
+            localConsentSession.requestInteractive(consent)
+            scope.launch(Dispatchers.Main) {
+                appContext.startActivity(
+                    Intent(appContext, ExternalApiLocalConsentActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
             }
-            _localConsent.value == consent -> LocalAccessContract.STATUS_PENDING
-            packageName in deniedLocalPackages -> LocalAccessContract.STATUS_DENIED
-            else -> LocalAccessContract.STATUS_CONSENT_REQUIRED
+            LocalAccessContract.STATUS_PENDING
+        } else {
+            localConsentSession.pollStatus(consent)
         }
         return localAnswer(status)
     }
@@ -297,9 +324,7 @@ class ExternalApiController(
         }
 
     fun approveLocalConsent() {
-        val consent = _localConsent.value ?: return
-        _localConsent.value = null
-        deniedLocalPackages.remove(consent.packageName)
+        val consent = localConsentSession.takeForApprove() ?: return
         val clientId = ExternalApiLocalClients.clientId(consent.packageName)
         val now = System.currentTimeMillis()
         synchronized(clientsLock) {
@@ -314,22 +339,22 @@ class ExternalApiController(
                 certSha256 = consent.certSha256,
             )
             lastPersistedUseAt[clientId] = now
+            clientsRevision++
         }
         persistClients()
         publishStatus()
         TboxRepository.addLog("INFO", "ExternalApi", "Local access approved: ${consent.packageName}")
+        // Same path as Settings → «Работа в среде лаунчера DCL»: DataStore + routing cache.
+        if (ExternalApiLocalClients.shouldEnableDclEnvironmentOnApprove(consent.packageName)) {
+            scope.launch {
+                settingsManager.saveDclLauncherEnvironmentEnabled(true)
+            }
+        }
     }
 
     fun denyLocalConsent() {
-        val consent = _localConsent.value ?: return
-        _localConsent.value = null
-        deniedLocalPackages.add(consent.packageName)
+        val consent = localConsentSession.takeForDeny() ?: return
         TboxRepository.addLog("INFO", "ExternalApi", "Local access denied: ${consent.packageName}")
-    }
-
-    /** The dialog was closed without an answer; the client may ask again. */
-    fun dismissLocalConsent() {
-        _localConsent.value = null
     }
 
     private fun localAnswer(status: String, token: String? = null) = ExternalApiLocalAnswer(
@@ -343,6 +368,7 @@ class ExternalApiController(
         synchronized(clientsLock) {
             pairedClients = ExternalApiAuth.revokeClient(pairedClients, clientId)
             lastPersistedUseAt.remove(clientId.trim())
+            clientsRevision++
         }
         persistClients()
         publishStatus()
@@ -366,6 +392,7 @@ class ExternalApiController(
                 createdAtEpochMs = createdAt,
             )
             lastPersistedUseAt[clientId] = createdAt
+            clientsRevision++
         }
         persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Manual token created: $name")
@@ -475,6 +502,7 @@ class ExternalApiController(
             val removedIds = before.map { it.clientId }.toSet() - kept.map { it.clientId }.toSet()
             lastPersistedUseAt.keys.retainAll(kept.map { it.clientId }.toSet())
             kept.forEach { lastPersistedUseAt[it.clientId] = now }
+            if (removedIds.isNotEmpty()) clientsRevision++
             before.filter { it.clientId in removedIds }
         }
         removed.forEach { client ->
@@ -491,10 +519,30 @@ class ExternalApiController(
     private fun persistClients() {
         scope.launch {
             persistMutex.withLock {
-                val snapshot = synchronized(clientsLock) { pairedClients }
-                settingsManager.saveExternalApiClientsJson(
-                    ExternalApiPairedClient.encodeList(snapshot),
-                )
+                while (true) {
+                    val encoded: String
+                    val revision: Long
+                    val ready: Boolean
+                    synchronized(clientsLock) {
+                        ready = clientsHydrated
+                        encoded = ExternalApiPairedClient.encodeList(pairedClients)
+                        revision = clientsRevision
+                    }
+                    // Service stop during an update can run before DataStore emits. Saving then
+                    // would replace every token with [].
+                    if (!ready) {
+                        if (revision == 0L || observeJob?.isActive != true) return@withLock
+                        delay(50)
+                        continue
+                    }
+                    settingsManager.saveExternalApiClientsJson(encoded)
+                    synchronized(clientsLock) {
+                        if (clientsRevision == revision) {
+                            persistedRevision = revision
+                            return@withLock
+                        }
+                    }
+                }
             }
         }
     }
@@ -551,6 +599,11 @@ class ExternalApiController(
         val clientsJson: String,
         val webPanelEnabled: Boolean,
     )
+
+    private companion object {
+        const val UNEXPECTED_STOP_RESTART_DELAY_MS = 1_000L
+        const val PAIRING_POLL_INTERVAL_MS = 250L
+    }
 }
 
 object ExternalApiControllerHolder {

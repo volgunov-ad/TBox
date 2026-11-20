@@ -34,13 +34,19 @@ class OlaxReqprocClient(
     /**
      * Full status poll: home (bars / PPP / thrpt) then radio+device (RSSI / IMEI).
      * Pass [cmds] for a single targeted multi_data read.
+     *
+     * HOME is best-effort: some firmwares (e.g. Olax F90 on the F95 profile) may
+     * fail or return empty HOME fields while RADIO still works. A HOME failure must
+     * not blank the whole poll — mapper retains prior PPP / identity when fields
+     * are empty.
      */
     fun fetchStatus(cmds: List<String>? = null): Map<String, String> {
         ensureLoggedIn()
         if (cmds != null) {
             return fetchCmdFields(cmds)
         }
-        val home = fetchCmdFields(OlaxReqprocStatusCmds.HOME)
+        val home = runCatching { fetchCmdFields(OlaxReqprocStatusCmds.HOME) }
+            .getOrDefault(emptyMap())
         val radioDevice = fetchCmdFields(
             OlaxReqprocStatusCmds.RADIO + OlaxReqprocStatusCmds.DEVICE,
         )

@@ -736,6 +736,54 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodePhoneForget(id))
     }
 
+    /** Channel count of the X1 single-channel relay board family. */
+    private val bleRelayChannelBit = 1
+
+    private fun bleRelayTargetId(index: Int): String? {
+        val relays = EspCompanionRepository.bleRelays.value
+        return relays.getOrNull(index)?.id
+    }
+
+    /** Relay boards keep the commanded state on the companion after link loss. */
+    fun setBleRelayState(idOrIndex: Any, on: Boolean) {
+        if (EspCompanionRepository.otaBusy.value) return
+        val id = when (idOrIndex) {
+            is String -> idOrIndex.trim().lowercase()
+            is Int -> bleRelayTargetId(idOrIndex) ?: return
+            else -> return
+        }
+        if (id.isEmpty()) return
+        val bit = bleRelayChannelBit
+        val cur = EspCompanionRepository.bleRelayMask(id)
+        val next = if (on) cur or bit else cur and bit.inv()
+        Log.i(TAG, "relayDevSet id=$id mask=$next")
+        writeLine(EspCompanionProtocol.encodeRelayDevSet(id, next, 0))
+    }
+
+    fun toggleBleRelay(idOrIndex: Any) {
+        if (EspCompanionRepository.otaBusy.value) return
+        val id = when (idOrIndex) {
+            is String -> idOrIndex.trim().lowercase()
+            is Int -> bleRelayTargetId(idOrIndex) ?: return
+            else -> return
+        }
+        if (id.isEmpty()) return
+        setBleRelayState(id, (EspCompanionRepository.bleRelayMask(id) and 1) == 0)
+    }
+
+    fun pulseBleRelay(idOrIndex: Any, durationMs: Long = EspRelayWidgetMode.BUTTON_PULSE_MS) {
+        if (EspCompanionRepository.otaBusy.value) return
+        val id = when (idOrIndex) {
+            is String -> idOrIndex.trim().lowercase()
+            is Int -> bleRelayTargetId(idOrIndex) ?: return
+            else -> return
+        }
+        if (id.isEmpty()) return
+        val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
+        Log.i(TAG, "relayDevSet pulse id=$id ${pulse}ms")
+        writeLine(EspCompanionProtocol.encodeRelayDevSet(id, 1, pulse))
+    }
+
     fun sendPhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot) {
         if (EspCompanionRepository.otaBusy.value) return
         writeLine(EspCompanionProtocol.encodePhoneSnap(gen, snap))
@@ -1110,6 +1158,7 @@ class EspCompanionManager(
                         bleKey = msg.bleKey,
                         ap = msg.ap,
                         phone = msg.phone,
+                        bleRelay = msg.bleRelay,
                     )
                 )
                 sendRememberedApCfg()
@@ -1285,7 +1334,14 @@ class EspCompanionManager(
                     phoneLearn = msg.phoneLearn,
                     phones = msg.phones,
                     keyed = msg.keyed,
+                    relays = msg.relays,
                 )
+                // A board that never reported 0x31 still shows its bleStatus mask.
+                for (relay in msg.relays) {
+                    if (relay.mask != 0 && !EspCompanionRepository.bleRelayMasks.value.containsKey(relay.id)) {
+                        EspCompanionRepository.applyRelayDev(relay.id, relay.mask, 0, 0)
+                    }
+                }
             }
             is EspMessage.PhonePair -> {
                 Log.i(TAG, "phonePair id=${msg.id} name=${msg.name}")
@@ -1299,6 +1355,10 @@ class EspCompanionManager(
             }
             is EspMessage.PhoneSnapReq -> {
                 EspCompanionRepository.emitPhoneSnapReq()
+            }
+            is EspMessage.RelayDev -> {
+                Log.i(TAG, "relayDev id=${msg.id} mask=${msg.mask} flags=${msg.flags} up=${msg.uptimeS}")
+                EspCompanionRepository.applyRelayDev(msg.id, msg.mask, msg.flags, msg.uptimeS)
             }
             is EspMessage.BleSeen -> {
                 Log.i(TAG, "bleSeen mac=${msg.mac} rssi=${msg.rssi}")

@@ -11,7 +11,6 @@ import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.GlobalCruiseControlType
-import vad.dashing.tbox.VehicleFeatureSettings
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -28,26 +27,28 @@ class AutomationCruiseActionsTest {
 
     @Test
     fun parseEngageParams_normalizesTargetAndOptionalIntervals() {
-        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.ACC)
+        // Pass global explicitly: Robolectric starts TboxApplication, whose DataStore
+        // collector can asynchronously overwrite VehicleFeatureSettings mid-test.
         val defaults = AutomationCruiseActions.parseEngageParams(
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
                 intValue = 0,
                 stringValue = "acc",
             ),
+            global = GlobalCruiseControlType.ACC,
         )
         assertEquals(CruiseControlType.ACC, defaults.cruiseControlType)
         assertEquals(ACC_CRUISE_TARGET_KMH_DEFAULT, defaults.targetKmh)
         assertEquals(ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT, defaults.increaseIntervalMs)
         assertEquals(ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT, defaults.decreaseIntervalMs)
 
-        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.CCS)
         val custom = AutomationCruiseActions.parseEngageParams(
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
                 intValue = 120,
                 stringValue = "ccs:200:100",
             ),
+            global = GlobalCruiseControlType.CCS,
         )
         assertEquals(CruiseControlType.CCS, custom.cruiseControlType)
         assertEquals(120, custom.targetKmh)
@@ -60,10 +61,10 @@ class AutomationCruiseActionsTest {
                 intValue = 999,
                 stringValue = "",
             ),
+            global = GlobalCruiseControlType.CCS,
         )
         assertEquals(150, clamped.targetKmh)
         assertEquals(CruiseControlType.CCS, clamped.cruiseControlType)
-        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.DEFAULT)
     }
 
     @Test

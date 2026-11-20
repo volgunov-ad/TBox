@@ -53,6 +53,19 @@ class MainActivity : ComponentActivity() {
 
         @Volatile
         private var lastExternalRedirectAtMs = 0L
+
+        /** Cooldown for onNewIntent DCL re-host after post-update sticky fullscreen. */
+        @Volatile
+        private var lastDclModeReapplyAtMs = 0L
+
+        /**
+         * Sticky anti-loop for A9 / single-display DCL hosts on display 0.
+         * Set after a successful DCL cold redirect in this process; cleared never (process lifetime).
+         * Does **not** block [onNewIntent] re-apply of the chosen DCL mode.
+         */
+        @Volatile
+        var dclAppAreaExternalRedirectConsumedThisProcess: Boolean = false
+            internal set
     }
 
     private val finishForWindowModeReceiver = object : BroadcastReceiver() {
@@ -146,6 +159,9 @@ class MainActivity : ComponentActivity() {
     // Флаг для отслеживания состояния переключателя mock-локации
     private var isMockLocationSettingPending = false
 
+    /** Guards [completeNormalOnCreate] against double setContent after async DCL redirect fails. */
+    private var normalOnCreateCompleted = false
+
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
 
@@ -163,8 +179,25 @@ class MainActivity : ComponentActivity() {
         consumeThemeOpenIntent(intent)
         MainActivityLoadTimings.mark("main_after_intent")
 
-        if (redirectExternalLaunchToStockAppWindow(savedInstanceState)) return
+        when (beginExternalStockWindowRedirect(savedInstanceState)) {
+            ExternalRedirectOutcome.FinishedSync,
+            ExternalRedirectOutcome.PendingAsync,
+            -> return
+            ExternalRedirectOutcome.NotNeeded -> Unit
+        }
 
+        completeNormalOnCreate()
+    }
+
+    private enum class ExternalRedirectOutcome {
+        NotNeeded,
+        FinishedSync,
+        PendingAsync,
+    }
+
+    private fun completeNormalOnCreate() {
+        if (normalOnCreateCompleted || isFinishing || isDestroyed) return
+        normalOnCreateCompleted = true
         MainActivityLoadTimings.mark("main_before_setContent")
         setContent {
             AppLauncherPickerIconCacheHostEffect(Unit)
@@ -231,6 +264,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         consumeFloatingDashboardTileEditIntent(intent)
         consumeThemeOpenIntent(intent)
+        // singleTask: after post-update first open skipped redirect, launcher / am start
+        // land here — re-host via DCL launchApp without finish() (no empty husks).
+        maybeReapplyDclLaunchModeOnAliveMain(intent)
     }
 
     /**
@@ -253,15 +289,39 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; on A10 with
-     * the stock-window setting on, hand them to the Adayo launcher ActivityView. Pending
-     * tile-edit / theme requests are already on their buses for the relaunched instance.
+     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; hand them
+     * to the resolved Main backend (DCL mode picker when env ON, else legacy boolean /
+     * Adayo). DCL Binder [ContentResolver.call] runs on [Dispatchers.IO] (P0-1); Adayo stays sync.
+     *
+     * First open after install/update may skip redirect (fullscreen OK) via
+     * [PostUpdateMainLaunchGate]. Successful DCL launch must not [finish] this singleTask.
      */
-    private fun redirectExternalLaunchToStockAppWindow(savedInstanceState: Bundle?): Boolean {
+    private fun beginExternalStockWindowRedirect(savedInstanceState: Bundle?): ExternalRedirectOutcome {
         @Suppress("DEPRECATION")
         val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
-        if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) return false
-        if (!AdayoStockAppWindow.isAvailable(this)) return false
+        if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) {
+            return ExternalRedirectOutcome.NotNeeded
+        }
+        if (PostUpdateMainLaunchGate.consumeSkipExternalRedirect(this)) {
+            Log.i(TAG, "Stock-window redirect skipped (first open after install/update)")
+            return ExternalRedirectOutcome.NotNeeded
+        }
+        val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
+        val dclAvailable = dclRepo.available.value
+        val dclCaps = dclRepo.capabilities.value
+        val dclUi = dclRepo.uiState.value
+        val intentSkips = intent?.getBooleanExtra(
+            MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
+            false,
+        ) == true
+        val dclAlreadyHosting = LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+            alreadyRedirectedViaDclThisProcess = false,
+            intentSkipsRedirect = false,
+            dclForegroundPackage = dclUi?.foregroundPackage,
+            dclScreenMode = dclUi?.screenMode,
+            selfPackageName = packageName,
+        )
+        val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
         // Application-level caches may still hold defaults on a cold start, so read DataStore, but
         // never stall the first frame on it: on timeout fall back to the caches (worst case the
         // launch simply stays fullscreen).
@@ -269,8 +329,12 @@ class MainActivity : ComponentActivity() {
         val stored = runCatching {
             runBlocking {
                 withTimeoutOrNull(EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS) {
-                    settingsManager.launchMainInStockAppWindowFlow.first() to
-                        settingsManager.headUnitCanModeFlow.first()
+                    Triple(
+                        settingsManager.dclLauncherEnvironmentEnabledFlow.first(),
+                        settingsManager.launchMainDclModeFlow.first(),
+                        settingsManager.launchMainInStockAppWindowFlow.first() to
+                            settingsManager.headUnitCanModeFlow.first(),
+                    )
                 }
             }
         }.getOrNull()
@@ -278,30 +342,173 @@ class MainActivity : ComponentActivity() {
         if (stored == null) {
             Log.w(TAG, "Stock-window redirect: settings read timed out after ${now - readStartMs} ms, using cache")
         }
-        val (settingEnabled, canMode) = stored
+        val dclEnv = stored?.first
+            ?: vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled
+        val mainMode = stored?.second ?: MainDclLaunchModeSetting.mode
+        val (settingEnabled, canMode) = stored?.third
             ?: (LaunchMainInStockAppWindowSetting.enabled to UniversalCanRepository.mode.value)
+        val headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal
+        val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
+            dclEnvironmentEnabled = dclEnv,
+            mainDclMode = mainMode,
+            legacyStockWindowEnabled = settingEnabled,
+            dclApiAvailable = dclAvailable,
+            dclCapabilities = dclCaps,
+            headUnitIsAndroid10 = headUnitIsAndroid10,
+            adayoLauncherAvailable = adayoAvailable,
+        )
+        if (backend == MainAppWindowBackend.NONE && !adayoAvailable) {
+            return ExternalRedirectOutcome.NotNeeded
+        }
         val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
             freshInstance = true,
             displayId = displayId,
             nowMs = now,
             lastRedirectAtMs = lastExternalRedirectAtMs,
-            settingEnabled = settingEnabled,
-            headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal,
-            adayoLauncherAvailable = true,
+            backend = backend,
+            alreadyRedirectedViaDclThisProcess = dclAppAreaExternalRedirectConsumedThisProcess,
+            intentSkipsRedirect = intentSkips,
+            dclAlreadyHostingPackage = dclAlreadyHosting,
         )
-        if (!redirect) return false
-        val launched = AdayoStockAppWindow.launchInAppWindow(
-            context = this,
-            packageName = packageName,
-            activityClass = MainActivity::class.java.name,
+        if (!redirect || backend == MainAppWindowBackend.NONE) {
+            return ExternalRedirectOutcome.NotNeeded
+        }
+        return when (backend) {
+            MainAppWindowBackend.ADAYO_STOCK -> {
+                val launched = AdayoStockAppWindow.launchInAppWindow(
+                    context = this,
+                    packageName = packageName,
+                    activityClass = MainActivity::class.java.name,
+                )
+                if (!launched) return ExternalRedirectOutcome.NotNeeded
+                finishAfterExternalRedirect(now, backend)
+                ExternalRedirectOutcome.FinishedSync
+            }
+            MainAppWindowBackend.DCL_APP_AREA,
+            MainAppWindowBackend.DCL_FULL_WIDTH,
+            MainAppWindowBackend.DCL_FULLSCREEN,
+            -> {
+                val dclMode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend)
+                    ?: return ExternalRedirectOutcome.NotNeeded
+                // Never block onCreate / main thread on ContentResolver.call (P0-1).
+                lifecycleScope.launch {
+                    val dclOk = withContext(Dispatchers.IO) {
+                        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
+                            context = this@MainActivity,
+                            packageName = packageName,
+                            mode = dclMode,
+                            activityClass = MainActivity::class.java.name,
+                        )
+                    }
+                    val allowAdayoFallback = backend != MainAppWindowBackend.DCL_FULLSCREEN
+                    val adayoOk = !dclOk &&
+                        allowAdayoFallback &&
+                        adayoAvailable &&
+                        AdayoStockAppWindow.launchInAppWindow(
+                            context = this@MainActivity,
+                            packageName = packageName,
+                            activityClass = MainActivity::class.java.name,
+                        )
+                    when {
+                        dclOk -> {
+                            val nowMs = SystemClock.elapsedRealtime()
+                            dclAppAreaExternalRedirectConsumedThisProcess = true
+                            lastExternalRedirectAtMs = nowMs
+                            lastDclModeReapplyAtMs = nowMs
+                            // DCL reuses this singleTask (resize/move). finish() would kill the
+                            // only Main — see shouldFinishSelfAfterSuccessfulDclRedirect.
+                            if (
+                                LaunchMainInStockAppWindowDecision
+                                    .shouldFinishSelfAfterSuccessfulDclRedirect()
+                            ) {
+                                finishAfterExternalRedirect(nowMs, backend)
+                            } else {
+                                Log.i(
+                                    TAG,
+                                    "External launch hosted in DCL mode=$dclMode (same task); continuing normal onCreate",
+                                )
+                                completeNormalOnCreate()
+                            }
+                        }
+                        adayoOk -> {
+                            finishAfterExternalRedirect(
+                                SystemClock.elapsedRealtime(),
+                                MainAppWindowBackend.ADAYO_STOCK,
+                            )
+                        }
+                        else -> {
+                            Log.w(TAG, "Stock-window redirect failed; falling back to normal onCreate")
+                            completeNormalOnCreate()
+                        }
+                    }
+                }
+                ExternalRedirectOutcome.PendingAsync
+            }
+            MainAppWindowBackend.NONE -> ExternalRedirectOutcome.NotNeeded
+        }
+    }
+
+    /**
+     * Second+ opens of the live `singleTask` Main: ask DCL to apply the chosen mode without
+     * finishing. Skips when already hosted in a matching screen mode or within cooldown.
+     * Does not consult [PostUpdateMainLaunchGate] (that gate is only for cold onCreate).
+     */
+    private fun maybeReapplyDclLaunchModeOnAliveMain(intent: Intent?) {
+        val intentSkips = intent?.getBooleanExtra(
+            MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
+            false,
+        ) == true
+        val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
+        val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
+        val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
+            dclEnvironmentEnabled = vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled,
+            mainDclMode = MainDclLaunchModeSetting.mode,
+            legacyStockWindowEnabled = LaunchMainInStockAppWindowSetting.enabled,
+            dclApiAvailable = dclRepo.available.value,
+            dclCapabilities = dclRepo.capabilities.value,
+            headUnitIsAndroid10 =
+                UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal,
+            adayoLauncherAvailable = adayoAvailable,
         )
-        if (!launched) return false
-        lastExternalRedirectAtMs = now
-        Log.i(TAG, "External launch on default display redirected to stock app window")
+        val dclMode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend) ?: return
+        val dclUi = dclRepo.uiState.value
+        val now = SystemClock.elapsedRealtime()
+        val should = LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+            backend = backend,
+            intentSkipsRedirect = intentSkips,
+            dclForegroundPackage = dclUi?.foregroundPackage,
+            dclScreenMode = dclUi?.screenMode,
+            selfPackageName = packageName,
+            nowMs = now,
+            lastReapplyAtMs = lastDclModeReapplyAtMs,
+        )
+        if (!should) return
+        lastDclModeReapplyAtMs = now
+        Log.i(TAG, "Re-applying DCL launch mode=$dclMode on alive Main (no finish)")
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
+                    context = this@MainActivity,
+                    packageName = packageName,
+                    mode = dclMode,
+                    activityClass = MainActivity::class.java.name,
+                )
+            }
+            if (ok) {
+                dclAppAreaExternalRedirectConsumedThisProcess = true
+                lastExternalRedirectAtMs = SystemClock.elapsedRealtime()
+            } else {
+                Log.w(TAG, "DCL re-apply mode=$dclMode failed; leaving current Main host")
+            }
+        }
+    }
+
+    private fun finishAfterExternalRedirect(nowMs: Long, backend: MainAppWindowBackend) {
+        lastExternalRedirectAtMs = nowMs
+        Log.i(TAG, "External launch on default display redirected to app window ($backend)")
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
-        return true
     }
 
     private fun consumeThemeOpenIntent(intent: Intent?) {
@@ -538,15 +745,13 @@ class MainActivity : ComponentActivity() {
                 "tbox_backup_$timestamp.json"
             }
             val dataFile = File(savePath, fileName)
-            FileWriter(dataFile).use { writer ->
-                writer.write(json)
-            }
+            val written = AtomicUtf8FileWriter.writeJsonObjectText(dataFile, json).getOrThrow()
             Toast.makeText(
                 this,
-                getString(R.string.toast_saved_to, dataFile.absolutePath),
+                getString(R.string.toast_saved_to, written.absolutePath),
                 Toast.LENGTH_LONG
             ).show()
-            Log.d(TAG, "Резервная копия сохранена: ${dataFile.absolutePath}")
+            Log.d(TAG, "Резервная копия сохранена: ${written.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка сохранения резервной копии", e)
             Toast.makeText(

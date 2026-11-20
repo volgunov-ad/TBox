@@ -45,7 +45,10 @@ internal fun TileBackgroundImageSettingsSection(
     settingsViewModel: SettingsViewModel,
     panelStorageId: String,
     widgetIndex: Int,
+    darkTheme: Boolean,
     modifier: Modifier = Modifier,
+    /** Replaces the default heading and description (e.g. «День» / «Ночь» in a pair). */
+    title: String? = null,
 ) {
     val context = LocalContext.current
     val toastImageTooLarge = stringResource(R.string.widget_tile_background_image_too_large)
@@ -54,7 +57,7 @@ internal fun TileBackgroundImageSettingsSection(
     val toastNoPicker = stringResource(R.string.settings_main_screen_wallpaper_no_picker)
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val tileRevision by settingsViewModel.tileBackgroundImageRevision.collectAsStateWithLifecycle()
-    val darkSegment = state.advancedColorThemeSegment == 1
+    val darkSegment = darkTheme
     val currentPath = if (darkSegment) {
         state.tileBackgroundImageRelPathDark
     } else {
@@ -124,17 +127,19 @@ internal fun TileBackgroundImageSettingsSection(
     }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = stringResource(R.string.widget_tile_background_image_title),
+            text = title ?: stringResource(R.string.widget_tile_background_image_title),
             style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        Text(
-            text = stringResource(R.string.widget_tile_background_image_desc),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        if (title == null) {
+            Text(
+                text = stringResource(R.string.widget_tile_background_image_desc),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

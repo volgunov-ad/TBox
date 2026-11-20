@@ -1,11 +1,41 @@
 package vad.dashing.tbox.adb
 
+import java.io.File
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class HuAdbControlTest {
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    @After
+    fun clearError() {
+        HuAdbControl.consumeError()
+    }
+
+    @Test
+    fun setUsbEnabled_dualRolePortWithTcpOff_sessionTcpToggleDoesNotDeadlock() = runBlocking {
+        val gateway = HuAdbControlTcpGateway()
+        withTimeout(10_000) {
+            HuAdbControl.setUsbEnabledWith(
+                dualRolePort = true,
+                gateway = gateway,
+                keysDir = tempFolder.newFolder("adb"),
+                clientName = "test@hu",
+                enabled = true,
+            )
+        }
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+        assertEquals(listOf(HuAdbControl.usbPortRoleCommand(true)), gateway.shellCommands)
+    }
+
     @Test
     fun tcpCommands_enableUsesBothPortsAndRestartsAdbd() {
         assertEquals(
@@ -62,5 +92,37 @@ class HuAdbControlTest {
         assertFalse(HuAdbControl.isTcpPortPropEnabled(null, null))
         assertTrue(HuAdbControl.isUsbAdbPropEnabled(" 1 "))
         assertFalse(HuAdbControl.isUsbAdbPropEnabled("0"))
+    }
+
+    /** TCP toggles go through the real [HuAdbControl.setTcpEnabled] and its apply mutex, as in production. */
+    private class HuAdbControlTcpGateway : LocalhostAdbSession.Gateway {
+        val setTcpCalls = mutableListOf<Boolean>()
+        val shellCommands = mutableListOf<String>()
+        private var portOpen = false
+
+        override suspend fun refreshHuAdb() = Unit
+
+        override suspend fun isTcpEnabled(): Boolean = portOpen
+
+        override suspend fun setTcpEnabled(enabled: Boolean) {
+            HuAdbControl.setTcpEnabled(enabled)
+            setTcpCalls += enabled
+            portOpen = enabled
+        }
+
+        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = portOpen
+
+        override suspend fun <T> withShellSession(
+            host: String,
+            port: Int,
+            connectTimeoutMs: Int,
+            sessionTimeoutMs: Int,
+            keysDir: File,
+            clientName: String,
+            block: (execute: (String) -> AdbShellResult) -> T,
+        ): T = block { command ->
+            shellCommands += command
+            AdbShellResult("${HuAdbControl.PORT_MODE_DEVICE}\n", "", 0, true)
+        }
     }
 }

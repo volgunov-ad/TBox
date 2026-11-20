@@ -40,9 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.HttpRequestIconPaths
+import vad.dashing.tbox.MAX_HTTP_LAUNCH_APP_DELAY_SEC
+import vad.dashing.tbox.MIN_HTTP_LAUNCH_APP_DELAY_SEC
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.normalizeHttpLaunchAppDelaySec
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -219,11 +222,40 @@ internal fun HttpRequestWidgetSettingsSection(
         )
         SettingSwitch(
             state.httpOpenBrowser,
-            { state.httpOpenBrowser = it },
+            {
+                state.httpOpenBrowser = it
+                if (it) {
+                    state.httpLaunchAppBeforeRequest = false
+                }
+            },
             stringResource(R.string.widget_http_request_open_browser),
             stringResource(R.string.widget_http_request_open_browser_desc),
             state.togglesEnabled
         )
+        SettingSwitch(
+            state.httpLaunchAppBeforeRequest,
+            { state.httpLaunchAppBeforeRequest = it },
+            stringResource(R.string.widget_http_request_launch_app_before),
+            stringResource(R.string.widget_http_request_launch_app_before_desc),
+            state.togglesEnabled && !state.httpOpenBrowser,
+        )
+        if (state.httpLaunchAppBeforeRequest && !state.httpOpenBrowser) {
+            SettingInt(
+                value = normalizeHttpLaunchAppDelaySec(state.httpLaunchAppDelaySec),
+                onValueChange = { state.httpLaunchAppDelaySec = it },
+                text = stringResource(R.string.widget_http_request_launch_app_delay),
+                description = stringResource(R.string.widget_http_request_launch_app_delay_desc),
+                minValue = MIN_HTTP_LAUNCH_APP_DELAY_SEC,
+                maxValue = MAX_HTTP_LAUNCH_APP_DELAY_SEC,
+            )
+            AppLauncherLaunchSettingsContent(
+                state = state,
+                settingsViewModel = settingsViewModel,
+                showDoubleTapForceStopHint = false,
+                requirePackageSelected = true,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+        }
         Text(
             text = stringResource(R.string.widget_http_request_secret_warning),
             style = MaterialTheme.typography.tboxCaption,

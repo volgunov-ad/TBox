@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.12.2"
+#define ESP_COMPANION_FW_VERSION "0.13.1"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
@@ -80,6 +80,9 @@ void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
 void protocol_send_phone_pair(const char *id_hex, const char *name);
 void protocol_send_phone_cmd(const char *id_hex, int op, int seat, int arg);
 void protocol_send_phone_snap_req(void);
+
+/** Relay board state report (fw 0.13). flags: bit0 applied, bit1 restored, bit2 pulse. */
+void protocol_send_relay_dev(const char *id_hex, int mask, int flags, int uptime_s);
 
 /** SoftAP router status (fw 0.9+). */
 void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *psk,

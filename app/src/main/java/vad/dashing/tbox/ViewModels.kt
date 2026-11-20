@@ -509,6 +509,18 @@ object WidgetsRepository {
         HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
             R.string.data_title_hud_brightness_widget_vertical
         ),
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunshade_position_widget_horizontal
+        ),
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunshade_position_widget_vertical
+        ),
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunroof_position_widget_horizontal
+        ),
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunroof_position_widget_vertical
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_main_screen_page_selector_widget_horizontal
         ),
@@ -543,9 +555,13 @@ object WidgetsRepository {
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         APP_LIST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_list_widget),
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
+        PHONE_DIAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_phone_dial_widget),
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY to DataTitle(
             R.string.data_title_automation_trigger_widget
         ),
+        CAMD_WINDOW_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_window_widget),
+        CAMD_KEEP_AVM_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_keep_avm_widget),
+        CAMD_RECORDER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_recorder_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         "espConnected" to DataTitle(R.string.data_title_esp_connected),
@@ -555,6 +571,8 @@ object WidgetsRepository {
         "espGpioIn3" to DataTitle(R.string.data_title_esp_gpio_in_3),
         "espRelay0" to DataTitle(R.string.data_title_esp_relay_0),
         "espRelay1" to DataTitle(R.string.data_title_esp_relay_1),
+        "espBleRelay0" to DataTitle(R.string.data_title_esp_ble_relay_0),
+        "espBleRelay1" to DataTitle(R.string.data_title_esp_ble_relay_1),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
         TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
@@ -881,6 +899,22 @@ object WidgetsRepository {
             R.string.widget_desc_hud_brightness_vertical,
             R.string.widget_actions_hud_brightness,
         ),
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunshade_position_horizontal,
+            R.string.widget_actions_sunshade_position,
+        ),
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunshade_position_vertical,
+            R.string.widget_actions_sunshade_position,
+        ),
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunroof_position_horizontal,
+            R.string.widget_actions_sunroof_position,
+        ),
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunroof_position_vertical,
+            R.string.widget_actions_sunroof_position,
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
             R.string.widget_desc_main_screen_page_selector_horizontal,
             R.string.widget_actions_main_screen_page_selector,
@@ -953,9 +987,25 @@ object WidgetsRepository {
             R.string.widget_desc_http_request,
             R.string.widget_actions_http_request,
         ),
+        PHONE_DIAL_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_phone_dial,
+            R.string.widget_actions_phone_dial,
+        ),
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_automation_trigger,
             R.string.widget_actions_automation_trigger,
+        ),
+        CAMD_WINDOW_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_camd_window,
+            R.string.widget_actions_camd_window,
+        ),
+        CAMD_KEEP_AVM_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_camd_keep_avm,
+            R.string.widget_actions_camd_keep_avm,
+        ),
+        CAMD_RECORDER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_camd_recorder,
+            R.string.widget_actions_camd_recorder,
         ),
         EMPTY_TILE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_empty_tile),
         "restartTbox" to WidgetDescription(
@@ -969,6 +1019,8 @@ object WidgetsRepository {
         "espGpioIn3" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espRelay0" to WidgetDescription(R.string.widget_desc_esp_relay),
         "espRelay1" to WidgetDescription(R.string.widget_desc_esp_relay),
+        "espBleRelay0" to WidgetDescription(R.string.widget_desc_esp_ble_relay),
+        "espBleRelay1" to WidgetDescription(R.string.widget_desc_esp_ble_relay),
         EXTERNAL_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_external_app,
             R.string.widget_actions_external_app,
@@ -1024,11 +1076,12 @@ object WidgetsRepository {
     }
 
     /**
-     * Types offered in the main «Плитки» tab picker. Main-screen page selectors are only useful
-     * on main-screen / floating panels (they switch [SettingsViewModel] current page).
+     * Types offered in the main «Плитки» tab picker. Main-screen page selectors and the phone
+     * dial tile are only useful on main-screen / floating panels.
      */
     fun isOfferedOnMainDashboardTab(dataKey: String): Boolean =
-        !isMainScreenPageSelectorWidgetDataKey(dataKey)
+        !isMainScreenPageSelectorWidgetDataKey(dataKey) &&
+            !isPhoneDialWidgetDataKey(dataKey)
 
     @StringRes
     fun getDescriptionResForDataKey(dataKey: String): Int? {
@@ -1105,6 +1158,10 @@ object WidgetsRepository {
             ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
@@ -1127,7 +1184,11 @@ object WidgetsRepository {
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
+            CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -1169,7 +1230,11 @@ object WidgetsRepository {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             APP_LIST_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
+            CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
@@ -1237,6 +1302,10 @@ object WidgetsRepository {
             ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -1282,6 +1351,8 @@ object WidgetsRepository {
             AIR_QUALITY_WIDGET_DATA_KEY,
             STEER_ANGLE_WIDGET_DATA_KEY,
             STEER_SPEED_WIDGET_DATA_KEY,
+            "voltage",
+            "voltage+engineTemperatureWidget",
         )
     }
 
@@ -1292,7 +1363,6 @@ object WidgetsRepository {
     fun requiresTboxConnection(dataKey: String): Boolean {
         if (dataKey.isBlank()) return false
         return dataKey in setOf(
-            "voltage",
             "carSpeedAccurate",
             "cruiseSetSpeed",
             "breakingForce",
@@ -1303,7 +1373,6 @@ object WidgetsRepository {
             "gearBoxWidget",
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             "insideTemperature",
-            "voltage+engineTemperatureWidget",
             "tempInOutWidget",
             "restartTbox",
         )

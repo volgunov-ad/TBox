@@ -72,6 +72,10 @@ internal object AutomationSignalReads {
                 AutomationSignalId.ESP_GPIO_IN_3 -> espGpioInputFlow(3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
+                AutomationSignalId.ESP_BLE_RELAY_0 ->
+                    espRelayMaskMapBitFlow(EspCompanionRepository.bleRelayMasks, 0)
+                AutomationSignalId.ESP_BLE_RELAY_1 ->
+                    espRelayMaskMapBitFlow(EspCompanionRepository.bleRelayMasks, 1)
                 AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()
                 AutomationSignalId.ESP_BLE_BATTERY -> {
                     val mac = key.mac?.trim().orEmpty()
@@ -101,6 +105,22 @@ internal object AutomationSignalReads {
                         AutomationSignalValue.State(
                             vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
                         )
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_HFP_CONNECTED ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(if (snap.hfpConnected) "on" else "off")
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_STATE ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.callState.storageKey)
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_DIRECTION ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.direction.storageKey)
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_NUMBER ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.number)
                     }.distinctUntilChanged()
                 AutomationSignalId.MODEM_MOBILE_DATA ->
                     TboxRepository.apnStatus.map { up ->
@@ -138,6 +158,61 @@ internal object AutomationSignalReads {
                 )
                 AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
+                AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> dclUiBooleanFlow { it.adasPanelVisible }
+                AutomationSignalId.DCL_TOP_BAR_VISIBLE -> dclUiBooleanFlow { it.topBarVisible }
+                AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> dclUiBooleanFlow { it.bottomBarVisible }
+                AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED ->
+                    dclUiBooleanFlow { it.notificationShadeExpanded }
+                AutomationSignalId.DCL_SCREEN_MODE ->
+                    vad.dashing.tbox.dcl.DclLauncherApiRepository.uiState
+                        .map { state ->
+                            val mode = state?.screenMode?.trim().orEmpty()
+                            if (mode.isEmpty()) {
+                                AutomationSignalValue.Unavailable
+                            } else {
+                                AutomationSignalValue.State(mode)
+                            }
+                        }
+                        .distinctUntilChanged()
+                AutomationSignalId.DCL_SMART_ACC_ACTIVE ->
+                    dclSmartAccBooleanFlow { it.smartAccActive }
+                AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED ->
+                    dclSmartAccBooleanFlow { it.smartAccConfigEnabled }
+                AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE ->
+                    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+                        .map { state ->
+                            val cruise = state?.cruiseState?.trim().orEmpty()
+                            if (cruise.isEmpty()) {
+                                AutomationSignalValue.Unavailable
+                            } else {
+                                AutomationSignalValue.State(cruise)
+                            }
+                        }
+                        .distinctUntilChanged()
+                AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT ->
+                    dclSmartAccNumberFlow { it.effectiveSpeedLimit }
+                AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET ->
+                    dclSmartAccNumberFlow { it.adasAccSpeedOffset }
+                AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED ->
+                    dclSmartAccNumberFlow { it.targetSpeed }
+                AutomationSignalId.CAMD_RECORDER_ENABLED ->
+                    vad.dashing.tbox.CamdStatusRepository.status.map { status ->
+                        val enabled = status?.recorderEnabled
+                        if (enabled == null) {
+                            AutomationSignalValue.Unavailable
+                        } else {
+                            AutomationSignalValue.State(if (enabled) "on" else "off")
+                        }
+                    }.distinctUntilChanged()
+                AutomationSignalId.CAMD_RECORDING_ACTIVE ->
+                    vad.dashing.tbox.CamdStatusRepository.status.map { status ->
+                        val active = status?.recordingActive
+                        if (active == null) {
+                            AutomationSignalValue.Unavailable
+                        } else {
+                            AutomationSignalValue.State(if (active) "on" else "off")
+                        }
+                    }.distinctUntilChanged()
                 AutomationSignalId.TBOX_CONNECTED ->
                     TboxRepository.tboxConnected.map { connected ->
                         AutomationSignalValue.State(if (connected) "on" else "off")
@@ -220,6 +295,7 @@ internal object AutomationSignalReads {
                 AutomationSignalId.ROAD_HIGHWAY_CLASS,
                 AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
                 AutomationSignalId.ROAD_TUNNEL,
+                AutomationSignalId.ROAD_SETTLEMENT,
                 -> AutomationRoadMatchSignals.flowFor(key.signal)
                 else -> null
             }

@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
+import vad.dashing.tbox.boardVoltageFromHeadUnit
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
@@ -53,8 +54,14 @@ import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_KEEP_AVM_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_RECORDER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
+import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeCamdWindowFrameMode
 import vad.dashing.tbox.HttpRequestIconPaths
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -84,6 +91,10 @@ import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
@@ -157,6 +168,8 @@ fun DashboardWidgetRenderer(
     val globalCruiseType by VehicleFeatureSettings.cruiseControlTypeFlow.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val voltageFromHeadUnit = widgetConfig.boardVoltageFromHeadUnit(noTboxConnect)
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val controlAppearance = rememberResolvedControlAppearance(
         config = widgetConfig,
@@ -314,9 +327,32 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "voltage" -> {
+            DashboardWidgetItem(
+                widget = if (voltageFromHeadUnit) {
+                    widget.copy(dataKey = VOLTAGE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         "voltage+engineTemperatureWidget" -> {
             DashboardVoltEngTempWidgetItem(
                 widget = widget,
+                useHeadUnit = voltageFromHeadUnit,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 dataProvider = dataProvider,
@@ -1319,8 +1355,8 @@ fun DashboardWidgetRenderer(
             DashboardHttpRequestWidgetItem(
                 widget = widget,
                 iconKey = HttpRequestIconPaths.iconKey(panelStorageId, widget.id),
-                requestYaml = widgetConfig.httpRequestYaml,
-                openBrowser = widgetConfig.httpOpenBrowser,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
                 customIconRevision = httpRequestIconRevision,
                 iconLookup = iconLookup,
                 suppressCustomIcon = themeActivating,
@@ -1333,6 +1369,25 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        PHONE_DIAL_WIDGET_DATA_KEY -> {
+            DashboardPhoneDialWidgetItem(
+                widget = widget,
+                phoneNumber = widgetConfig.dialPhoneNumber,
+                showNumber = widgetConfig.dialShowNumber,
+                confirmBeforeCall = widgetConfig.dialConfirmBeforeCall,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_phone_dial_widget),
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
             )
         }
 
@@ -1349,6 +1404,69 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 defaultTitle = stringResource(R.string.data_title_automation_trigger_widget),
                 automationTriggerId = widgetConfig.automationTriggerId
+            )
+        }
+
+        CAMD_WINDOW_WIDGET_DATA_KEY -> {
+            DashboardCamdWindowWidgetItem(
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                cameraId = widgetConfig.camdWindowCameraId,
+                x = widgetConfig.camdWindowX,
+                y = widgetConfig.camdWindowY,
+                w = widgetConfig.camdWindowW,
+                h = widgetConfig.camdWindowH,
+                frameMode = normalizeCamdWindowFrameMode(widgetConfig.camdWindowFrameMode),
+                presetName = widgetConfig.camdWindowPresetName,
+                circle = widgetConfig.camdWindowCircle,
+                rotation = widgetConfig.camdWindowRotation,
+                flipH = widgetConfig.camdWindowFlipH,
+                flipV = widgetConfig.camdWindowFlipV,
+                crop = if (widgetConfig.camdWindowCropEnabled) {
+                    CamdWindowCrop(
+                        widgetConfig.camdWindowCropX,
+                        widgetConfig.camdWindowCropY,
+                        widgetConfig.camdWindowCropW,
+                        widgetConfig.camdWindowCropH,
+                    )
+                } else {
+                    null
+                },
+            )
+        }
+
+        CAMD_KEEP_AVM_WIDGET_DATA_KEY -> {
+            DashboardCamdKeepAvmWidgetItem(
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        CAMD_RECORDER_WIDGET_DATA_KEY -> {
+            DashboardCamdRecorderWidgetItem(
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
             )
         }
 
@@ -1579,6 +1697,70 @@ fun DashboardWidgetRenderer(
 
         HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
             DashboardHudBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardSunshadePositionWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardSunshadePositionWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardSunroofPositionWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardSunroofPositionWidgetItem(
                 isVertical = true,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
@@ -2218,6 +2400,67 @@ fun DashboardWidgetRenderer(
                     android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
                         action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_PULSE
                         putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
+                            EspRelayWidgetMode.BUTTON_PULSE_MS,
+                        )
+                    }
+                )
+            }
+            DashboardWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = {
+                    if (enableInnerInteractions && !isEditMode) {
+                        when (relayMode) {
+                            EspRelayWidgetMode.BUTTON -> startRelayPulse()
+                            EspRelayWidgetMode.RELAY -> startRelayToggle()
+                        }
+                    } else {
+                        onClick()
+                    }
+                },
+                onDoubleClick = if (enableInnerInteractions && !isEditMode) {
+                    { startRelayToggle() }
+                } else {
+                    {}
+                },
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = false,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "espBleRelay0", "espBleRelay1" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val index = if (widget.dataKey == "espBleRelay0") 0 else 1
+            val relayMode = widgetConfig.espRelayMode
+            fun startRelayToggle() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_TOGGLE
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
+                            index,
+                        )
+                    }
+                )
+            }
+            fun startRelayPulse() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_PULSE
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
+                            index,
+                        )
                         putExtra(
                             vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
                             EspRelayWidgetMode.BUTTON_PULSE_MS,

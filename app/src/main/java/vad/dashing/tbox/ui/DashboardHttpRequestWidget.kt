@@ -17,32 +17,30 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_POST_ACTION_BLOCK_MS
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HttpRequestWidgetResult
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.decodeFileToOwnedImageBitmap
-import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.httpRequestWidgetErrorMessage
+import vad.dashing.tbox.normalizeHttpLaunchAppDelaySec
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -54,8 +52,8 @@ import vad.dashing.tbox.normalizeWidgetTitlePosition
 internal fun DashboardHttpRequestWidgetItem(
     widget: DashboardWidget,
     iconKey: String,
-    requestYaml: String,
-    openBrowser: Boolean,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     customIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
     suppressCustomIcon: Boolean = false,
@@ -70,7 +68,17 @@ internal fun DashboardHttpRequestWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val appContext = context.applicationContext
+    val requestYaml = widgetConfig.httpRequestYaml
+    val openBrowser = widgetConfig.httpOpenBrowser
+    val launchAppBeforeRequest = widgetConfig.httpLaunchAppBeforeRequest &&
+        !openBrowser &&
+        widgetConfig.launcherAppPackage.isNotBlank()
+    val launchDelayMs = if (launchAppBeforeRequest) {
+        normalizeHttpLaunchAppDelaySec(widgetConfig.httpLaunchAppDelaySec) * 1000L
+    } else {
+        0L
+    }
     val invalidYamlTemplate = stringResource(R.string.widget_http_request_invalid_yaml)
     val requestFailedTemplate = stringResource(R.string.widget_http_request_failed)
     var blockedUntilMs by remember { mutableLongStateOf(0L) }
@@ -137,9 +145,17 @@ internal fun DashboardHttpRequestWidgetItem(
                 flashDurationMs = 2000
                 return@DashboardWidgetScaffold
             }
-            blockedUntilMs = now + config.timeoutMillis + HTTP_REQUEST_POST_ACTION_BLOCK_MS
-            scope.launch {
-                val result = executeHttpRequestWidget(config)
+            blockedUntilMs = now + launchDelayMs + config.timeoutMillis +
+                HTTP_REQUEST_POST_ACTION_BLOCK_MS
+            // Process-lifetime scope: survive floating-panel hide / Compose dispose during delay.
+            DashboardHttpRequestTileActionRunner.enqueue(
+                launchContext = context,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                requestConfig = config,
+                launchAppBeforeRequest = launchAppBeforeRequest,
+                launchDelayMs = launchDelayMs,
+            ) { result ->
                 blockedUntilMs = System.currentTimeMillis() + HTTP_REQUEST_POST_ACTION_BLOCK_MS
                 when (result) {
                     is HttpRequestWidgetResult.Success -> {
@@ -148,7 +164,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     }
                     is HttpRequestWidgetResult.Failure -> {
                         android.widget.Toast.makeText(
-                            context,
+                            appContext,
                             requestFailedTemplate.format(httpRequestWidgetErrorMessage(result)),
                             android.widget.Toast.LENGTH_LONG
                         ).show()

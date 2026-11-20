@@ -25,6 +25,15 @@ import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.settings.connectionChanged
+import vad.dashing.mqtt.wqtt.WqttApi
+import vad.dashing.mqtt.wqtt.WqttCleanup
+import vad.dashing.mqtt.wqtt.WqttCleanupCandidate
+import vad.dashing.mqtt.wqtt.WqttDeviceAction
+import vad.dashing.mqtt.wqtt.WqttDeviceResult
+import vad.dashing.mqtt.wqtt.WqttPackId
+import vad.dashing.mqtt.wqtt.WqttPacks
+import vad.dashing.mqtt.wqtt.WqttProvisioner
+import vad.dashing.mqtt.wqtt.WqttSkippedEntity
 import vad.dashing.tbox.localaccess.LocalAccessClient
 import vad.dashing.tbox.localaccess.LocalAccessContract
 
@@ -43,11 +52,24 @@ data class MqttHomeState(
     val connectionDraft: MqttSettings = MqttSettings(),
     val connectionMessage: String = "",
     val bridge: BridgeStatus = BridgeStatus(),
+    val wqttOpen: Boolean = false,
+    val wqttTokenDraft: String = "",
+    val wqttRoomDraft: String = "",
+    val wqttBusy: Boolean = false,
+    val wqttMessage: String = "",
+    val wqttBrokerHint: String = "",
+    val wqttResults: List<WqttDeviceResult> = emptyList(),
+    val wqttSkipped: List<WqttSkippedEntity> = emptyList(),
+    /** Non-null when the irreversible-delete confirm dialog should be shown. */
+    val wqttDeletePending: List<WqttCleanupCandidate>? = null,
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     private val store = MqttSettingsStore.get(app)
     private val api = MonitorApi()
+    private val wqttApi = WqttApi()
+    private val wqttProvisioner = WqttProvisioner(wqttApi)
+    private val wqttCleanup = WqttCleanup(wqttApi)
     private val _state = MutableStateFlow(MqttHomeState())
     val state: StateFlow<MqttHomeState> = _state
     private var pairJob: Job? = null
@@ -59,6 +81,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             settings = settings,
             connectionDraft = settings,
             tab = startTab,
+            wqttTokenDraft = settings.wqttApiToken,
+            wqttRoomDraft = settings.wqttRoom,
         )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
@@ -363,6 +387,366 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             null
         }
+    }
+
+    fun toggleWqtt() {
+        _state.update { current ->
+            current.copy(
+                wqttOpen = !current.wqttOpen,
+                wqttTokenDraft = current.settings.wqttApiToken,
+                wqttRoomDraft = current.settings.wqttRoom,
+            )
+        }
+    }
+
+    fun setWqttTokenDraft(value: String) {
+        _state.update { it.copy(wqttTokenDraft = value) }
+    }
+
+    fun setWqttRoomDraft(value: String) {
+        _state.update { it.copy(wqttRoomDraft = value) }
+    }
+
+    /** Convenience: check/uncheck the pack's entities in the MQTT selection. */
+    fun toggleWqttPack(id: WqttPackId, enabled: Boolean) {
+        val ids = WqttPacks.objectIdsForPack(id, _state.value.entities)
+        if (ids.isEmpty()) {
+            _state.update {
+                it.copy(wqttMessage = "В каталоге Monitor нет сущностей набора «${WqttPacks.byId(id).title}»")
+            }
+            return
+        }
+        setEntities(ids, enabled)
+        _state.update {
+            it.copy(
+                wqttMessage = if (enabled) {
+                    "Отмечено ${ids.size} из «${WqttPacks.byId(id).title}»"
+                } else {
+                    "Снято ${ids.size} из «${WqttPacks.byId(id).title}»"
+                },
+            )
+        }
+    }
+
+    fun isWqttPackSelected(id: WqttPackId): Boolean =
+        WqttPacks.isPackFullySelected(id, _state.value.settings.selectedObjectIds, _state.value.entities)
+
+    fun saveWqttCredentials() {
+        val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+        val room = _state.value.wqttRoomDraft
+        update { it.copy(wqttApiToken = token, wqttRoom = room) }
+        _state.update {
+            it.copy(
+                wqttTokenDraft = token,
+                wqttRoomDraft = it.settings.wqttRoom,
+                wqttMessage = if (token.isBlank()) "Токен очищен" else "Токен WQTT сохранён",
+            )
+        }
+    }
+
+    fun testWqttConnection() {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
+                return@launch
+            }
+            updateUi { it.copy(wqttBusy = true, wqttMessage = "Проверка WQTT…", wqttBrokerHint = "") }
+            try {
+                val broker = wqttApi.testConnection(token)
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = "WQTT отвечает",
+                        wqttBrokerHint = brokerHint(broker.server, broker.portTls, broker.port, broker.user),
+                    )
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = error.message ?: "Не удалось подключиться к WQTT",
+                        wqttBrokerHint = "",
+                    )
+                }
+            }
+        }
+    }
+
+    fun applyWqttBrokerToDraft() {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Сначала вставьте токен WQTT") }
+                return@launch
+            }
+            updateUi { it.copy(wqttBusy = true, wqttMessage = "Читаю данные брокера…") }
+            try {
+                val broker = wqttApi.broker(token)
+                withContext(Dispatchers.Main) {
+                    editConnection { draft ->
+                        draft.copy(
+                            brokerHost = broker.server,
+                            brokerPort = if (broker.portTls > 0) broker.portTls else broker.port,
+                            username = broker.user,
+                            password = broker.password,
+                            tlsEnabled = broker.portTls > 0,
+                            wireguardEnabled = false,
+                        )
+                    }
+                    updateUi {
+                        it.copy(
+                            wqttBusy = false,
+                            wqttMessage = "Поля брокера заполнены. Проверьте и нажмите «Сохранить» на вкладке «Подключение».",
+                            wqttBrokerHint = brokerHint(broker.server, broker.portTls, broker.port, broker.user),
+                            tab = 0,
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = error.message ?: "Не удалось прочитать брокер",
+                    )
+                }
+            }
+        }
+    }
+
+    fun createWqttDevices(onSettingsSaved: () -> Unit) {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = _state.value
+            val token = WqttApi.normalizeToken(current.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
+                return@launch
+            }
+            val selected = current.settings.selectedObjectIds
+            if (selected.isEmpty()) {
+                updateUi { it.copy(wqttMessage = "Отметьте сущности ниже — в WQTT уйдут все отмеченные") }
+                return@launch
+            }
+            updateUi {
+                it.copy(
+                    wqttBusy = true,
+                    wqttMessage = "Создаю устройства…",
+                    wqttResults = emptyList(),
+                    wqttSkipped = emptyList(),
+                )
+            }
+            val settings = withStoredAccess(current.settings)
+            val report = wqttProvisioner.provision(
+                token = token,
+                selectedObjectIds = selected,
+                entities = current.entities,
+                topicPrefix = settings.topicPrefix,
+                deviceId = settings.deviceId,
+                room = current.wqttRoomDraft.ifBlank { settings.wqttRoom },
+            ) { step ->
+                updateUi { it.copy(wqttMessage = step) }
+            }
+            withContext(Dispatchers.Main) {
+                val provisionedIds = report.devices.mapNotNull { result ->
+                    result.deviceId?.takeIf { id ->
+                        id > 0 && result.action != WqttDeviceAction.FAILED
+                    }
+                }.toSet()
+                update { saved ->
+                    saved.copy(
+                        wqttApiToken = token,
+                        wqttRoom = current.wqttRoomDraft.ifBlank { saved.wqttRoom },
+                        wqttDeviceIds = saved.wqttDeviceIds + provisionedIds,
+                        acceptCommands = if (report.enabledObjectIds.any { id ->
+                            current.entities.any { entity -> entity.objectId == id && entity.writable }
+                        }) {
+                            true
+                        } else {
+                            saved.acceptCommands
+                        },
+                    )
+                }
+                onSettingsSaved()
+                val summary = summarize(report.devices, report.skipped.size)
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttTokenDraft = token,
+                        wqttResults = report.devices,
+                        wqttSkipped = report.skipped,
+                        wqttMessage = buildString {
+                            append(summary)
+                            if (report.refreshMessage.isNotBlank()) {
+                                if (isNotEmpty()) append(". ")
+                                append(report.refreshMessage)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /** Scan cabinet for TBox-looking devices, then show irreversible confirm with count. */
+    fun prepareWqttDelete() {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = _state.value
+            val token = WqttApi.normalizeToken(current.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
+                return@launch
+            }
+            updateUi {
+                it.copy(
+                    wqttBusy = true,
+                    wqttMessage = "Ищу устройства TBox в WQTT…",
+                    wqttDeletePending = null,
+                    wqttResults = emptyList(),
+                    wqttSkipped = emptyList(),
+                )
+            }
+            val settings = withStoredAccess(current.settings)
+            try {
+                val candidates = wqttCleanup.findTboxDevices(
+                    token = token,
+                    topicPrefix = settings.topicPrefix,
+                    deviceId = settings.deviceId,
+                    knownIds = settings.wqttDeviceIds,
+                ) { step ->
+                    updateUi { it.copy(wqttMessage = step) }
+                }
+                withContext(Dispatchers.Main) {
+                    if (candidates.isEmpty()) {
+                        updateUi {
+                            it.copy(
+                                wqttBusy = false,
+                                wqttDeletePending = null,
+                                wqttMessage = "Устройств TBox в кабинете WQTT не найдено",
+                            )
+                        }
+                    } else {
+                        updateUi {
+                            it.copy(
+                                wqttBusy = false,
+                                wqttDeletePending = candidates,
+                                wqttMessage = "Найдено ${candidates.size}. Подтвердите удаление.",
+                            )
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main) {
+                    updateUi {
+                        it.copy(
+                            wqttBusy = false,
+                            wqttDeletePending = null,
+                            wqttMessage = error.message ?: "Не удалось прочитать устройства WQTT",
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun cancelWqttDelete() {
+        updateUi {
+            it.copy(
+                wqttDeletePending = null,
+                wqttMessage = if (it.wqttDeletePending.isNullOrEmpty()) {
+                    it.wqttMessage
+                } else {
+                    "Удаление отменено"
+                },
+            )
+        }
+    }
+
+    fun confirmWqttDelete(onSettingsSaved: () -> Unit) {
+        if (_state.value.wqttBusy) return
+        val pending = _state.value.wqttDeletePending.orEmpty()
+        if (pending.isEmpty()) {
+            updateUi { it.copy(wqttDeletePending = null) }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = _state.value
+            val token = WqttApi.normalizeToken(current.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttDeletePending = null,
+                        wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru",
+                    )
+                }
+                return@launch
+            }
+            updateUi {
+                it.copy(
+                    wqttBusy = true,
+                    wqttDeletePending = null,
+                    wqttMessage = "Удаляю устройства…",
+                )
+            }
+            val report = wqttCleanup.deleteDevices(token, pending) { step ->
+                updateUi { it.copy(wqttMessage = step) }
+            }
+            withContext(Dispatchers.Main) {
+                val deletedIds = pending.map { it.id }.toSet()
+                if (report.deleted > 0) {
+                    update { saved ->
+                        saved.copy(
+                            wqttApiToken = token,
+                            wqttDeviceIds = saved.wqttDeviceIds - deletedIds,
+                        )
+                    }
+                    onSettingsSaved()
+                }
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttTokenDraft = token,
+                        wqttDeletePending = null,
+                        wqttMessage = buildString {
+                            append("Удалено ${report.deleted}")
+                            if (report.failed > 0) append(", ошибок ${report.failed}")
+                            if (report.refreshMessage.isNotBlank()) {
+                                append(". ")
+                                append(report.refreshMessage)
+                            }
+                            if (report.errors.isNotEmpty()) {
+                                append(". ")
+                                append(report.errors.take(3).joinToString("; "))
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun summarize(results: List<WqttDeviceResult>, unmapped: Int): String {
+        if (results.isEmpty() && unmapped == 0) return "Устройств не создано"
+        val created = results.count { it.action == WqttDeviceAction.CREATED }
+        val updated = results.count { it.action == WqttDeviceAction.UPDATED }
+        val skipped = results.count { it.action == WqttDeviceAction.SKIPPED }
+        val failed = results.count { it.action == WqttDeviceAction.FAILED }
+        return buildList {
+            if (created > 0) add("создано $created")
+            if (updated > 0) add("обновлено $updated")
+            if (skipped > 0) add("без изменений $skipped")
+            if (failed > 0) add("ошибок $failed")
+            if (unmapped > 0) add("не удалось сопоставить $unmapped")
+        }.joinToString(", ").ifBlank { "Устройств не создано" }
+    }
+
+    private fun brokerHint(server: String, portTls: Int, port: Int, user: String): String {
+        val portText = if (portTls > 0) "TLS $portTls" else "TCP $port"
+        return listOf(server, portText, user).filter { it.isNotBlank() }.joinToString(" · ")
     }
 
     private fun startBridgeIfReady() {

@@ -1142,6 +1142,84 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun roadSettlement_stateEqualsFiresOnEnterAndExit_notOnUnavailableOrStartup() {
+        val enter = AutomationTrigger.StateEquals(
+            id = "settlement_enter",
+            signal = AutomationSignalId.ROAD_SETTLEMENT,
+            source = AutomationSignalSource.APP,
+            expectedState = "on",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val exit = AutomationTrigger.StateEquals(
+            id = "settlement_exit",
+            signal = AutomationSignalId.ROAD_SETTLEMENT,
+            source = AutomationSignalSource.APP,
+            expectedState = "off",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val enterEval = evaluator(enter, allowStartupFire = true)
+        val exitEval = evaluator(exit, allowStartupFire = true)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_SETTLEMENT,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertEquals(
+            "settlement_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 3_000L),
+            )?.triggerId,
+        )
+        assertNull(
+            exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 3_000L)),
+        )
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L)))
+        val exitAfterGap = exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L))
+        assertEquals("settlement_exit", exitAfterGap?.triggerId)
+        assertEquals(AutomationSignalValue.State("on"), exitAfterGap?.oldValue)
+
+        assertEquals(
+            "settlement_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 6_000L),
+            )?.triggerId,
+        )
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 6_000L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 7_000L)))
+        assertEquals(
+            "settlement_exit",
+            exitEval.onSignalSample(
+                sample(AutomationSignalValue.State("off"), 7_000L),
+            )?.triggerId,
+        )
+    }
+
+    @Test
     fun roadTunnel_conditionFalseWhenUnavailable() {
         val key = AutomationSignalKey(
             AutomationSignalId.ROAD_TUNNEL,
@@ -1327,6 +1405,83 @@ class AutomationEvaluatorTest {
         month: Int = 8,
         dayOfMonth: Int = 31,
     ) = AutomationWallTime(year, month, dayOfMonth, hour, minute, weekday)
+
+    @Test
+    fun systemEvent_holdMillis_firesAfterPresenceHeld() {
+        AutomationUiSnapshot.setServiceRunning(true)
+        try {
+            val trigger = AutomationTrigger.SystemEvent(
+                id = "svc",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                holdMillis = 2_000L,
+            )
+            val evaluator = evaluator(trigger, allowStartupFire = false)
+
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 0L))
+            assertNull(evaluator.onTick(1_000L))
+            assertEquals(
+                "svc",
+                evaluator.onTick(2_000L)?.triggerId,
+            )
+        } finally {
+            AutomationUiSnapshot.resetForTests()
+        }
+    }
+
+    @Test
+    fun systemEvent_holdMillis_resetsWhenPresenceLost() {
+        AutomationUiSnapshot.setServiceRunning(true)
+        try {
+            val trigger = AutomationTrigger.SystemEvent(
+                id = "svc",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                holdMillis = 2_000L,
+            )
+            val evaluator = evaluator(trigger, allowStartupFire = false)
+
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 0L))
+            assertNull(evaluator.onTick(1_000L))
+            AutomationUiSnapshot.setServiceRunning(false)
+            assertNull(evaluator.onTick(1_500L))
+            AutomationUiSnapshot.setServiceRunning(true)
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 2_000L))
+            assertNull(evaluator.onTick(3_500L))
+            assertEquals(
+                "svc",
+                evaluator.onTick(4_000L)?.triggerId,
+            )
+        } finally {
+            AutomationUiSnapshot.resetForTests()
+        }
+    }
+
+    @Test
+    fun adbTcpCondition_matchesListenFact() {
+        var now = 10_000L
+        vad.dashing.tbox.adb.AdbTcpListenFact.setNowElapsedMsForTests { now }
+        vad.dashing.tbox.adb.AdbTcpListenFact.setProbeForTests { _, _, _ -> true }
+        try {
+            val on = AutomationCondition.AdbTcp(listening = true)
+            val off = AutomationCondition.AdbTcp(listening = false)
+            val context = AutomationTriggerContext("a", "1", 0L)
+            assertTrue(
+                AutomationEvaluator.evaluateCondition(on, context, emptyMap()),
+            )
+            assertFalse(
+                AutomationEvaluator.evaluateCondition(off, context, emptyMap()),
+            )
+            now = 11_000L
+            vad.dashing.tbox.adb.AdbTcpListenFact.setProbeForTests { _, _, _ -> false }
+            assertFalse(
+                AutomationEvaluator.evaluateCondition(on, context, emptyMap()),
+            )
+            assertTrue(
+                AutomationEvaluator.evaluateCondition(off, context, emptyMap()),
+            )
+        } finally {
+            vad.dashing.tbox.adb.AdbTcpListenFact.resetForTests()
+        }
+    }
 
     private class MutableAutomationClock(
         var time: AutomationWallTime,

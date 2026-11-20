@@ -20,6 +20,28 @@ class AdbRepositoryAdbdRestartTest {
     }
 
     @Test
+    fun adbdRestart_dropsTcpTabSessionButKeepsUsbDeviceSession() {
+        assertTrue(
+            AdbRepository.isAffectedByLocalAdbdRestart(
+                AdbRepository.State(
+                    phase = AdbRepository.Phase.CONNECTED,
+                    transport = AdbRepository.TransportType.TCP,
+                    endpoint = "127.0.0.1:5555",
+                ),
+            ),
+        )
+        assertFalse(
+            AdbRepository.isAffectedByLocalAdbdRestart(
+                AdbRepository.State(
+                    phase = AdbRepository.Phase.CONNECTED,
+                    transport = AdbRepository.TransportType.USB,
+                    endpoint = "TBox",
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun intentionalCloseGate_nestedRestoreAndToggleWindows_staysArmed() = runBlocking {
         AdbShutdownGate.resetForTests()
         assertFalse(AdbShutdownGate.isIntentionalTransportClose())

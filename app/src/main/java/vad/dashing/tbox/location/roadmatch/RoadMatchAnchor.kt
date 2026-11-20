@@ -18,6 +18,8 @@ data class RoadMatchAnchorState(
     val highwayClass: String? = null,
     /** OSM tunnel flag of the sticky/applied edge; null when unmatched. */
     val tunnel: Boolean? = null,
+    /** Settlement / RU:urban flag of the sticky/applied edge; null when unmatched. */
+    val settlement: Boolean? = null,
     val confidence: String? = null,
     val edgeBearingDeg: Float? = null,
     val skippedReason: String? = null,
@@ -44,6 +46,8 @@ data class RoadMatchAnchorState(
             highwayClass = debug.highwayClass,
             // Matched edge always publishes a boolean; missing debug/pack field → not a tunnel.
             tunnel = if (debug.edgeId != null) (debug.tunnel ?: false) else null,
+            // Same for settlement: legacy packs without the field → outside НП.
+            settlement = if (debug.edgeId != null) (debug.settlement ?: false) else null,
             confidence = debug.confidence,
             edgeBearingDeg = debug.edgeBearingDeg,
             skippedReason = debug.skippedReason,

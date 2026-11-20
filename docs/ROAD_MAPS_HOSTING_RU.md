@@ -116,6 +116,12 @@ python tools/build_road_map_packs.py \
 
 `graphVersion` в remote catalog выше установленного → UI показывает «Обновить».
 
+Новые поля ребра (`tunnel`, `settlement`, urban-60 fallback) появляются только после
+**пересборки** ZIP через актуальный `osm_to_tboxroads` / `build_road_map_packs.py`
+и публикации нового `graphVersion`. Уже скачанные паки без `settlement` читаются
+как «вне НП» (`road_settlement=off` при match). Формат тайла (`format: 1` /
+`TBOXRDS1`) не меняется.
+
 ODbL attribution уже есть в окне «Карты дорог».
 
 ## 5. Проверка на HU

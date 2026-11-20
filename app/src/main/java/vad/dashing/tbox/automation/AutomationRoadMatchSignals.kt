@@ -17,6 +17,7 @@ object AutomationRoadMatchSignals {
         AutomationSignalId.ROAD_HIGHWAY_CLASS,
         AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
         AutomationSignalId.ROAD_TUNNEL,
+        AutomationSignalId.ROAD_SETTLEMENT,
     )
 
     /** Common OSM highway classes present in `.tboxroads` packs (picker options). */
@@ -59,6 +60,11 @@ object AutomationRoadMatchSignals {
         return AutomationSignalValue.State(if (anchor.tunnel == true) "on" else "off")
     }
 
+    fun settlementValue(anchor: RoadMatchAnchorState): AutomationSignalValue {
+        if (anchor.edgeId == null) return AutomationSignalValue.Unavailable
+        return AutomationSignalValue.State(if (anchor.settlement == true) "on" else "off")
+    }
+
     fun flowFor(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
         AutomationSignalId.ROAD_HIGHWAY_CLASS ->
             RoadMatchAnchorRepository.state
@@ -71,6 +77,10 @@ object AutomationRoadMatchSignals {
         AutomationSignalId.ROAD_TUNNEL ->
             RoadMatchAnchorRepository.state
                 .map(::tunnelValue)
+                .distinctUntilChanged()
+        AutomationSignalId.ROAD_SETTLEMENT ->
+            RoadMatchAnchorRepository.state
+                .map(::settlementValue)
                 .distinctUntilChanged()
         else -> null
     }
