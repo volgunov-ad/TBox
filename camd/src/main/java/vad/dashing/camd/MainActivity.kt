@@ -89,6 +89,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val exportPresetsFile = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            Thread {
+                val json = controller.exportPresets()
+                val ok = runCatching {
+                    contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(json.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.getOrDefault(false)
+                controller.setMessage(if (ok) "Экспорт пресетов сохранён: $uri" else "Не удалось записать файл")
+            }.start()
+        }
+    }
+
     private val importFile = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -109,6 +125,32 @@ class MainActivity : ComponentActivity() {
                         "Файл не распознан: нужен JSON экспорта «Камеры ГУ» версии 1"
                     } else {
                         "Импорт: коррекции ${summary.corrections}, пресеты ${summary.userPresets}+${summary.builtinPresets}, AVM=${summary.keepAvm}"
+                    }
+                )
+            }.start()
+        }
+    }
+
+    private val importPresetsFile = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            Thread {
+                val text = runCatching {
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        stream.bufferedReader().readText()
+                    }
+                }.getOrNull()
+                if (text == null) {
+                    controller.setMessage("Не удалось прочитать файл")
+                    return@Thread
+                }
+                val summary = controller.importPresets(text)
+                controller.setMessage(
+                    if (summary == null) {
+                        "Файл не распознан: нужен JSON пресетов «Камеры ГУ» версии 1"
+                    } else {
+                        "Импорт пресетов: ${summary.userPresets}+${summary.builtinPresets}"
                     }
                 )
             }.start()
@@ -222,6 +264,11 @@ class MainActivity : ComponentActivity() {
                             exportFile.launch("${CamdBackup.FILE_PREFIX}_$stamp.json")
                         },
                         onImport = { importFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) },
+                        onExportPresets = {
+                            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                            exportPresetsFile.launch("${CamdBackup.PRESETS_FILE_PREFIX}_$stamp.json")
+                        },
+                        onImportPresets = { importPresetsFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) },
                         onKeepAvm = controller::setKeepAvmStopped,
                     )
                     if (showPrompt) {
@@ -334,7 +381,7 @@ data class CamdUiState(
     val keepAvmStopped: Boolean = false,
     val showCloseButton: Boolean = true,
     val tapToClose: Boolean = false,
-    val message: String = "Окно откроется после «Открыть». Записи пока нет.",
+    val message: String = "",
     val status: String = "",
     val log: String = ""
 )
@@ -816,6 +863,14 @@ class CamdController(
         return summary
     }
 
+    fun exportPresets(): String = windows.exportPresets()
+
+    fun importPresets(text: String): CamdPresetsImportSummary? {
+        val summary = windows.importPresets(text)
+        if (summary != null) refreshSettings()
+        return summary
+    }
+
     fun setMessage(text: String) {
         _state.update { it.copy(message = text) }
     }
@@ -883,6 +938,8 @@ private fun CamdScreen(
     onTapToClose: (Boolean) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onExportPresets: () -> Unit,
+    onImportPresets: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
 ) {
     // Fixed header: title and tab row stay visible while the content scrolls.
@@ -984,12 +1041,18 @@ private fun CamdScreen(
                 onSavePreset = onSavePreset,
                 onCancelEditPreset = onCancelEditPreset,
             )
-            CamdTab.BACKUP -> BackupTab(onExport = onExport, onImport = onImport)
+            CamdTab.BACKUP -> BackupTab(
+                onExport = onExport,
+                onImport = onImport,
+                onExportPresets = onExportPresets,
+                onImportPresets = onImportPresets,
+            )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         // Diagnostics (raw command results, service status, grabber log tail) live
         // on the Cameras tab only; other tabs keep plain feedback messages.
-        val showMessage = state.tab == CamdTab.CAMERAS || !state.message.startsWith("state=")
+        val showMessage = state.message.isNotBlank() &&
+            (state.tab == CamdTab.CAMERAS || !state.message.startsWith("state="))
         if (showMessage) {
             Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         }
@@ -1895,19 +1958,34 @@ private fun PresetsTab(
 private fun BackupTab(
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onExportPresets: () -> Unit,
+    onImportPresets: () -> Unit,
 ) {
     Text(
-        "Экспорт/импорт: коррекции всех камер (включая тилт), все пресеты (свои и изменённые встроенные) " +
-            "и режим AVM одним JSON-файлом.",
+        "Экспорт/импорт пресетов: свои и изменённые встроенные пресеты одним JSON-файлом. " +
+            "Коррекции, окна и режим AVM не переносятся.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onExportPresets) {
+            Text("Экспорт пресетов", style = MaterialTheme.typography.labelLarge)
+        }
+        Button(onClick = onImportPresets) {
+            Text("Импорт пресетов", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+    Text(
+        "Полный бэкап: коррекции всех камер (включая тилт), все пресеты и режим AVM одним JSON-файлом.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = onExport) {
-            Text("Экспорт", style = MaterialTheme.typography.labelLarge)
+            Text("Экспорт всего", style = MaterialTheme.typography.labelLarge)
         }
         Button(onClick = onImport) {
-            Text("Импорт", style = MaterialTheme.typography.labelLarge)
+            Text("Импорт всего", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

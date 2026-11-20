@@ -291,6 +291,10 @@ class CameraWindows(private val context: Context) {
 
     fun importSettings(text: String): CamdImportSummary? = CamdBackup.importJson(prefs, text)
 
+    fun exportPresets(): String = CamdBackup.exportPresetsJson(prefs)
+
+    fun importPresets(text: String): CamdPresetsImportSummary? = CamdBackup.importPresetsJson(prefs, text)
+
     /**
      * Live preview: moves / reshapes the open window of [inputId] from UI state.
      * No-op when that camera has no window; other windows are not touched.

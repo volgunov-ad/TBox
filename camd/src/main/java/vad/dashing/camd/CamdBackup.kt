@@ -9,10 +9,17 @@ data class CamdImportSummary(
     val keepAvm: Boolean,
 )
 
+data class CamdPresetsImportSummary(
+    val userPresets: Int,
+    val builtinPresets: Int,
+)
+
 object CamdBackup {
     const val VERSION = 1
     const val FILE_PREFIX = "camd_settings"
+    const val PRESETS_FILE_PREFIX = "camd_presets"
     private const val APP_TAG = "camd"
+    private const val PRESETS_APP_TAG = "camd_presets"
 
     /**
      * Full settings document: per-camera corrections (including tilt), presets
@@ -80,6 +87,67 @@ object CamdBackup {
             corrections.add(cameraId to correction)
         }
 
+        val presets = parsePresets(root) ?: return null
+        val keepAvm = root["keepAvmStopped"]?.asBool() ?: false
+
+        corrections.forEach { (cameraId, correction) ->
+            CamdLensCorrectionStore.save(prefs, cameraId, correction)
+        }
+        applyPresets(prefs, presets.first, presets.second)
+        prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, keepAvm).apply()
+        // Optional fields: files from older exports keep the current values.
+        root["showCloseButton"]?.asBool()?.let {
+            prefs.edit().putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, it).apply()
+        }
+        root["tapToClose"]?.asBool()?.let {
+            prefs.edit().putBoolean(CameraWindows.TAP_TO_CLOSE_KEY, it).apply()
+        }
+        return CamdImportSummary(
+            corrections = corrections.size,
+            userPresets = presets.first.size,
+            builtinPresets = presets.second.size,
+            keepAvm = keepAvm,
+        )
+    }
+
+    /**
+     * Presets-only document: user presets and edited built-ins, no corrections
+     * or flags. Version 1, app tag [PRESETS_APP_TAG].
+     */
+    fun exportPresetsJson(prefs: SharedPreferences): String {
+        val presets = CamdPresetStore.all(prefs)
+        return CamdJson.write(
+            CamdJson.obj(
+                listOf(
+                    "version" to CamdJson.num(VERSION),
+                    "app" to CamdJson.str(PRESETS_APP_TAG),
+                    "presets" to CamdJson.arr(presets.map { CamdPresetStore.encodePreset(it) }),
+                )
+            )
+        )
+    }
+
+    /**
+     * Applies only the presets of a document: presets-only files ([PRESETS_APP_TAG])
+     * and full backup files ([APP_TAG], presets section) are both accepted.
+     * Corrections and flags from full backups are ignored.
+     */
+    fun importPresetsJson(prefs: SharedPreferences, text: String): CamdPresetsImportSummary? {
+        val root = CamdJson.parse(text)?.asObj() ?: return null
+        val app = root["app"]?.asStr()
+        if (app != PRESETS_APP_TAG && app != APP_TAG) return null
+        val version = root["version"]?.asInt() ?: return null
+        if (version != VERSION) return null
+        val presets = parsePresets(root) ?: return null
+        applyPresets(prefs, presets.first, presets.second)
+        return CamdPresetsImportSummary(
+            userPresets = presets.first.size,
+            builtinPresets = presets.second.size,
+        )
+    }
+
+    /** Parses the `presets` array; duplicate names or bad entries reject the document. */
+    private fun parsePresets(root: Map<String, CamdJson>): Pair<List<CamdPreset>, List<CamdPreset>>? {
         val presetsJson = root["presets"]?.asArr() ?: return null
         val imported = presetsJson.map { CamdPresetStore.decodePreset(it, builtinDefault = false) }
         if (imported.any { it == null }) return null
@@ -91,12 +159,14 @@ object CamdBackup {
         if (users.any { !CamdPreset.isValidName(it.name) || !CamdSources.isKnown(it.cameraId) }) {
             return null
         }
+        return users to builtins
+    }
 
-        val keepAvm = root["keepAvmStopped"]?.asBool() ?: false
-
-        corrections.forEach { (cameraId, correction) ->
-            CamdLensCorrectionStore.save(prefs, cameraId, correction)
-        }
+    private fun applyPresets(
+        prefs: SharedPreferences,
+        users: List<CamdPreset>,
+        builtins: List<CamdPreset>,
+    ) {
         users.forEach { CamdPresetStore.saveUser(prefs, it) }
         builtins.forEach {
             CamdPresetStore.saveBuiltinOverride(
@@ -110,19 +180,5 @@ object CamdBackup {
                 it.correction,
             )
         }
-        prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, keepAvm).apply()
-        // Optional fields: files from older exports keep the current values.
-        root["showCloseButton"]?.asBool()?.let {
-            prefs.edit().putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, it).apply()
-        }
-        root["tapToClose"]?.asBool()?.let {
-            prefs.edit().putBoolean(CameraWindows.TAP_TO_CLOSE_KEY, it).apply()
-        }
-        return CamdImportSummary(
-            corrections = corrections.size,
-            userPresets = users.size,
-            builtinPresets = builtins.size,
-            keepAvm = keepAvm,
-        )
     }
 }

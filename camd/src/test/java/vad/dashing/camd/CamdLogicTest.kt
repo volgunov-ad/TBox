@@ -527,6 +527,135 @@ class CamdBackupTest {
     )
 }
 
+class CamdPresetsBackupTest {
+    @Test
+    fun presetsExportImportRoundTrip() {
+        val prefs = FakePrefs()
+        CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90))
+        CamdPresetStore.saveBuiltinOverride(
+            prefs,
+            "front_left",
+            180,
+            true,
+            false,
+            CamdCrop(0f, 0f, 0.5f, 1f),
+            defaultCorrection = false,
+            correction = CamdLensCorrection(k1 = -0.2f),
+        )
+
+        val json = CamdBackup.exportPresetsJson(prefs)
+
+        val fresh = FakePrefs()
+        val summary = CamdBackup.importPresetsJson(fresh, json)!!
+        assertEquals(1, summary.userPresets)
+        assertEquals(21, summary.builtinPresets)
+        assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
+        assertEquals(180, CamdPresetStore.byName(fresh, "front_left")!!.rotation)
+    }
+
+    @Test
+    fun presetsImportKeepsCorrectionsAndFlags() {
+        val prefs = FakePrefs()
+        CamdLensCorrectionStore.save(prefs, 8, CamdLensCorrection(k1 = -0.2f))
+        prefs.edit()
+            .putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true)
+            .putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, false)
+            .apply()
+        val other = FakePrefs()
+        CamdPresetStore.saveUser(other, CamdPreset("my_corner", 4))
+        val presets = CamdBackup.exportPresetsJson(other)
+
+        val summary = CamdBackup.importPresetsJson(prefs, presets)!!
+
+        assertEquals(1, summary.userPresets)
+        // Corrections and flags are untouched by the presets-only import.
+        assertEquals(CamdLensCorrection(k1 = -0.2f), CamdLensCorrectionStore.load(prefs, 8))
+        assertTrue(prefs.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false))
+        assertFalse(prefs.getBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, true))
+    }
+
+    @Test
+    fun presetsImportAcceptsFullBackupPresetsSection() {
+        val prefs = FakePrefs()
+        CamdLensCorrectionStore.save(prefs, 8, CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f))
+        CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90))
+        prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true).apply()
+        val fullBackup = CamdBackup.exportJson(prefs)
+
+        val fresh = FakePrefs()
+        val summary = CamdBackup.importPresetsJson(fresh, fullBackup)!!
+        assertEquals(1, summary.userPresets)
+        assertEquals(21, summary.builtinPresets)
+        assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
+        // Corrections and flags are not applied by the presets-only import.
+        assertEquals(CamdLensCorrection.IDENTITY, CamdLensCorrectionStore.load(fresh, 8))
+        assertFalse(fresh.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false))
+    }
+
+    @Test
+    fun presetsImportRejectsForeignAndBrokenDocuments() {
+        val prefs = FakePrefs()
+        assertNull(CamdBackup.importPresetsJson(prefs, "not json"))
+        assertNull(CamdBackup.importPresetsJson(prefs, "{}"))
+        assertNull(
+            CamdBackup.importPresetsJson(
+                prefs,
+                CamdJson.write(CamdJson.obj(listOf("version" to CamdJson.num(1), "app" to CamdJson.str("other")))),
+            )
+        )
+        assertNull(
+            CamdBackup.importPresetsJson(
+                prefs,
+                CamdJson.write(CamdJson.obj(listOf("version" to CamdJson.num(2), "app" to CamdJson.str("camd_presets")))),
+            )
+        )
+        // A presets document without the presets array is rejected.
+        assertNull(
+            CamdBackup.importPresetsJson(
+                prefs,
+                CamdJson.write(CamdJson.obj(listOf("version" to CamdJson.num(1), "app" to CamdJson.str("camd_presets")))),
+            )
+        )
+    }
+
+    @Test
+    fun presetsImportRejectsDuplicateNames() {
+        val prefs = FakePrefs()
+        val document = CamdJson.write(
+            CamdJson.obj(
+                listOf(
+                    "version" to CamdJson.num(1),
+                    "app" to CamdJson.str("camd_presets"),
+                    "presets" to CamdJson.arr(listOf(presetEntry("dup", 4), presetEntry("dup", 8))),
+                )
+            )
+        )
+        assertNull(CamdBackup.importPresetsJson(prefs, document))
+    }
+
+    private fun presetEntry(name: String, camera: Int): CamdJson = CamdJson.obj(
+        listOf(
+            "name" to CamdJson.str(name),
+            "camera" to CamdJson.num(camera),
+        )
+    )
+
+    @Test
+    fun presetsImportMergesIntoExistingPresets() {
+        val prefs = FakePrefs()
+        CamdPresetStore.saveUser(prefs, CamdPreset("kept", 8))
+        val other = FakePrefs()
+        CamdPresetStore.saveUser(other, CamdPreset("incoming", 4, rotation = 90))
+        val json = CamdBackup.exportPresetsJson(other)
+
+        val summary = CamdBackup.importPresetsJson(prefs, json)!!
+
+        assertEquals(1, summary.userPresets)
+        assertEquals(8, CamdPresetStore.byName(prefs, "kept")!!.cameraId)
+        assertEquals(90, CamdPresetStore.byName(prefs, "incoming")!!.rotation)
+    }
+}
+
 private class FakePrefs : SharedPreferences {
     val map = HashMap<String, Any?>()
 
