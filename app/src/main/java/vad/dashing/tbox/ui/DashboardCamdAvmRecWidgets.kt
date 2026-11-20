@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.CAMD_KEEP_AVM_WIDGET_CENTER_LABEL
+import vad.dashing.tbox.CAMD_RECORDER_SOS_WIDGET_CENTER_LABEL
 import vad.dashing.tbox.CAMD_RECORDER_WIDGET_CENTER_LABEL
 import vad.dashing.tbox.CamdRecorderWidgetPaint
 import vad.dashing.tbox.CamdStatusRepository
@@ -190,6 +191,49 @@ internal fun DashboardCamdRecorderWidgetItem(
             titleColor = resolvedTextColor,
             centerLabel = CAMD_RECORDER_WIDGET_CENTER_LABEL,
             labelColor = labelColor,
+        )
+    }
+}
+
+@Composable
+internal fun DashboardCamdRecorderSosWidgetItem(
+    isEditMode: Boolean,
+    onEditClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    backgroundColor: Color,
+    textColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+) {
+    val context = LocalContext.current
+    val defaultTitle = stringResource(R.string.data_title_camd_sos_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+
+    DashboardWidgetScaffold(
+        onClick = {
+            if (isEditMode) {
+                onEditClick()
+                return@DashboardWidgetScaffold
+            }
+            // Fire-and-forget: recorderSos runs on the client io thread and toasts
+            // the reply class itself (started / busy / rec_off / no_sos_folder).
+            CamdWindowClient.recorderSos(context.applicationContext)
+        },
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+    ) { availableHeight, resolvedTextColor ->
+        CamdCenterLabelTileContent(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            titleColor = resolvedTextColor,
+            centerLabel = CAMD_RECORDER_SOS_WIDGET_CENTER_LABEL,
+            labelColor = resolvedTextColor,
         )
     }
 }

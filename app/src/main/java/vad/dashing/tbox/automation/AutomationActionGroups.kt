@@ -117,6 +117,8 @@ fun builtinActionKeywords(type: AutomationBuiltinActionType): List<String> = whe
         listOf("камера", "avm", "круговой", "обзор", "отключить")
     AutomationBuiltinActionType.CAMD_RECORDER ->
         listOf("камера", "регистратор", "запись", "rec")
+    AutomationBuiltinActionType.CAMD_RECORDER_SOS ->
+        listOf("камера", "регистратор", "sos", "сохранить", "кадр")
     AutomationBuiltinActionType.DCL_SET_SMART_ACC ->
         listOf("dcl", "умный", "круиз", "acc", "ограничение")
     AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC ->
@@ -353,6 +355,7 @@ fun builtinActionGroup(type: AutomationBuiltinActionType): AutomationActionGroup
     AutomationBuiltinActionType.CAMD_WINDOW,
     AutomationBuiltinActionType.CAMD_KEEP_AVM,
     AutomationBuiltinActionType.CAMD_RECORDER,
+    AutomationBuiltinActionType.CAMD_RECORDER_SOS,
     -> AutomationActionGroup.CAMERAS
 
     AutomationBuiltinActionType.DCL_SET_SMART_ACC,

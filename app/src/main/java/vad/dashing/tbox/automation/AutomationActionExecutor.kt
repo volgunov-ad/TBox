@@ -24,6 +24,9 @@ import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.camdAutomationCommandLine
 import vad.dashing.tbox.camdKeepAvmCommandLine
 import vad.dashing.tbox.camdRecorderCommandLine
+import vad.dashing.tbox.camdRecorderSosCommandLine
+import vad.dashing.tbox.CamdRecorderSosResult
+import vad.dashing.tbox.parseCamdRecorderSosResult
 import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightMapping
@@ -867,6 +870,21 @@ class AutomationActionExecutor(
                 "Регистратор Камеры ГУ выключен"
             },
         )
+        AutomationBuiltinActionType.CAMD_RECORDER_SOS -> {
+            val result = withContext(Dispatchers.IO) {
+                CamdWindowClient.command(camdRecorderSosCommandLine(), context = appContext)
+            }
+            when (parseCamdRecorderSosResult(result)) {
+                CamdRecorderSosResult.Started -> AutomationActionResult.ok("Важный кадр сохраняется")
+                CamdRecorderSosResult.Busy -> AutomationActionResult.ok("Сохранение уже идёт")
+                CamdRecorderSosResult.RecorderOff ->
+                    AutomationActionResult.failure("Регистратор выключен — включите его плиткой «Регистратор»")
+                CamdRecorderSosResult.NoSosFolder ->
+                    AutomationActionResult.failure("Регистратор: нет папки SOS в «Камерах ГУ»")
+                CamdRecorderSosResult.Failed ->
+                    AutomationActionResult.failure("Камеры ГУ не отвечают")
+            }
+        }
 
         AutomationBuiltinActionType.DCL_SET_SMART_ACC -> executeDclSetSmartAcc(action)
 

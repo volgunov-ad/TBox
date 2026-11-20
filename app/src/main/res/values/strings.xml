@@ -2547,6 +2547,7 @@
     <string name="data_title_camd_window_widget">Камера ГУ</string>
     <string name="data_title_camd_keep_avm_widget">Держать штатный AVM отключенным</string>
     <string name="data_title_camd_recorder_widget">Регистратор</string>
+    <string name="data_title_camd_sos_widget">SOS регистратора</string>
     <string name="data_title_empty_tile_widget">Пустая</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
@@ -2821,6 +2822,7 @@
     <string name="widget_desc_camd_window">Окно чистого кадра с камеры головного устройства. Камера, размер и положение задаются в настройках плитки. Нужно установленное приложение «Камеры ГУ».</string>
     <string name="widget_desc_camd_keep_avm">Переключатель «держать штатный AVM отключенным» через «Камеры ГУ». По центру — AVM: активный цвет, когда удержание выкл. (штатный AVM работает); неактивный — когда удержание вкл. Нужны «Камеры ГУ».</string>
     <string name="widget_desc_camd_recorder">Мастер-переключатель регистратора «Камер ГУ». По центру — REC: неактивный цвет при выкл., активный при вкл. без записи, красный во время записи. Папка и камеры задаются в «Камерах ГУ» (не ниже 0.8.2).</string>
+    <string name="widget_desc_camd_sos">Разовая кнопка «сохранить важный кадр» регистратора «Камер ГУ» (REC SOS, camd 0.8.6+). Тап — сохранить текущий сегмент записи в папку SOS. Плитка без индикации состояния; регистратор должен быть включен.</string>
     <string name="widget_desc_empty_tile">Пустая плитка для создания свободного места в сетке.</string>
     <string name="widget_desc_restart_tbox">Перезагрузка модуля TBox.</string>
     <string name="widget_desc_external_app">Системный Android-виджет выбранного стороннего приложения.</string>
@@ -2907,6 +2909,7 @@
     <string name="widget_actions_camd_window">Одиночное нажатие — открыть окно. Двойное — закрыть. В режиме редактирования — открыть настройки виджета.</string>
     <string name="widget_actions_camd_keep_avm">Тап — включить или выключить удержание штатного AVM через «Камеры ГУ». В режиме редактирования — настройки плитки.</string>
     <string name="widget_actions_camd_recorder">Тап — включить или выключить регистратор (REC ON/OFF). В режиме редактирования — настройки плитки.</string>
+    <string name="widget_actions_camd_sos">Тап — сохранить текущий сегмент записи в папку SOS (REC SOS). В режиме редактирования — настройки плитки.</string>
     <string name="widget_camd_window_camera">Камера</string>
     <string name="widget_camd_window_x">Слева, %</string>
     <string name="widget_camd_window_y">Сверху, %</string>
@@ -2947,6 +2950,10 @@
     <string name="camd_window_unreachable">Камеры ГУ не отвечают</string>
     <string name="camd_recorder_error_no_cameras">Регистратор: выберите хотя бы одну камеру в «Камерах ГУ»</string>
     <string name="camd_recorder_error_no_folder">Регистратор: выберите папку для записи в «Камерах ГУ»</string>
+    <string name="camd_recorder_error_rec_off">Регистратор выключен — включите его плиткой «Регистратор»</string>
+    <string name="camd_recorder_error_no_sos_folder">Регистратор: нет папки SOS в «Камерах ГУ»</string>
+    <string name="camd_recorder_sos_started">Важный кадр сохраняется</string>
+    <string name="camd_recorder_sos_busy">Сохранение уже идёт</string>
     <string name="camd_window_command_failed">Камеры ГУ: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>

@@ -23,11 +23,17 @@ const val CAMD_KEEP_AVM_WIDGET_DATA_KEY = "camdKeepAvmWidget"
 /** Tile: toggle camd dashcam master switch (`REC ON` / `REC OFF`). */
 const val CAMD_RECORDER_WIDGET_DATA_KEY = "camdRecorderWidget"
 
+/** Tile: one-shot camd dashcam emergency save (`REC SOS`). */
+const val CAMD_RECORDER_SOS_WIDGET_DATA_KEY = "camdRecorderSosWidget"
+
 /** Fixed center label on [CAMD_KEEP_AVM_WIDGET_DATA_KEY]. */
 const val CAMD_KEEP_AVM_WIDGET_CENTER_LABEL = "AVM"
 
 /** Fixed center label on [CAMD_RECORDER_WIDGET_DATA_KEY]. */
 const val CAMD_RECORDER_WIDGET_CENTER_LABEL = "REC"
+
+/** Fixed center label on [CAMD_RECORDER_SOS_WIDGET_DATA_KEY]. */
+const val CAMD_RECORDER_SOS_WIDGET_CENTER_LABEL = "SOS"
 
 /**
  * Visual «on» for the keep-AVM tile: active when keep-off is **off** (stock AVM works).
@@ -381,6 +387,21 @@ object CamdWindowClient {
             }
         }
     }
+
+    /**
+     * Fire-and-forget `REC SOS`: the reply is one of the stable `state=rec_sos …` /
+     * `state=error error=…` classes, so the toast is built from the whole result
+     * (success included) instead of the error-only [send].
+     */
+    fun recorderSos(context: Context) {
+        val app = context.applicationContext
+        io.execute {
+            val result = command(camdRecorderSosCommandLine(), context = app)
+            main.post {
+                Toast.makeText(app, camdRecorderSosToast(app, result), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 }
 
 /** camd answered on TCP, but the command failed (bad line or state=error). */
@@ -493,6 +514,49 @@ fun camdKeepAvmCommandLine(keepStopped: Boolean): String =
 /** `REC ON` / `REC OFF` — dashcam master switch (not recording-active). */
 fun camdRecorderCommandLine(enabled: Boolean): String =
     if (enabled) "REC ON" else "REC OFF"
+
+/** `REC SOS` — dashcam emergency save (camd 0.8.6+; alias `REC SAVE`). */
+fun camdRecorderSosCommandLine(): String = "REC SOS"
+
+/** How a `REC SOS` tap resolved (reply classes documented by camd 0.8.6+). */
+enum class CamdRecorderSosResult {
+    /** `OK state=rec_sos started` — save kicked off. */
+    Started,
+    /** `OK state=rec_sos busy` — a save is already running. */
+    Busy,
+    /** `OK state=error error=rec_off` — dashcam master switch is off. */
+    RecorderOff,
+    /** `OK state=error error=no_sos_folder` — SOS folder missing. */
+    NoSosFolder,
+    /** `ERR …` (camd < 0.8.6 answers `ERR bad_command`) or an unknown reply. */
+    Failed,
+}
+
+fun parseCamdRecorderSosResult(result: Result<String>): CamdRecorderSosResult {
+    val reply = result.getOrNull()
+        ?: (result.exceptionOrNull() as? CamdCommandException)?.reply
+        ?: return CamdRecorderSosResult.Failed
+    return when {
+        "state=rec_sos started" in reply -> CamdRecorderSosResult.Started
+        "state=rec_sos busy" in reply -> CamdRecorderSosResult.Busy
+        "error=rec_off" in reply -> CamdRecorderSosResult.RecorderOff
+        "error=no_sos_folder" in reply -> CamdRecorderSosResult.NoSosFolder
+        else -> CamdRecorderSosResult.Failed
+    }
+}
+
+/** Result toast for the SOS tile; unknown failures fall back to [camdFailureToast]. */
+fun camdRecorderSosToast(context: Context, result: Result<String>): String =
+    when (parseCamdRecorderSosResult(result)) {
+        CamdRecorderSosResult.Started -> context.getString(R.string.camd_recorder_sos_started)
+        CamdRecorderSosResult.Busy -> context.getString(R.string.camd_recorder_sos_busy)
+        CamdRecorderSosResult.RecorderOff -> context.getString(R.string.camd_recorder_error_rec_off)
+        CamdRecorderSosResult.NoSosFolder -> context.getString(R.string.camd_recorder_error_no_sos_folder)
+        CamdRecorderSosResult.Failed -> {
+            val error = result.exceptionOrNull() ?: CamdCommandException(result.getOrNull().orEmpty())
+            camdFailureToast(context, error)
+        }
+    }
 
 fun formatCamdAutomationWindowArgs(
     mode: String,

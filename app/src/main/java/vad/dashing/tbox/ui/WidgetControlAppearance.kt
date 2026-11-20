@@ -37,6 +37,7 @@ import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_KEEP_AVM_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_RECORDER_SOS_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_RECORDER_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
 import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
@@ -180,6 +181,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
         CAMD_KEEP_AVM_WIDGET_DATA_KEY,
         CAMD_RECORDER_WIDGET_DATA_KEY,
+        CAMD_RECORDER_SOS_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
         EPB_PARK_LAMP_WIDGET_DATA_KEY,

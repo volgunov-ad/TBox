@@ -1344,6 +1344,18 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.CAMD_RECORDER_SOS -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Разовая команда REC SOS (camd 0.8.6+): сохраняет текущий сегмент записи " +
+                    "в папку SOS. Без параметров; регистратор должен быть включен.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         AutomationBuiltinActionType.ANSWER_CALL,
         AutomationBuiltinActionType.HANGUP_CALL,
         -> Column(
@@ -1853,6 +1865,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
     AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
     AutomationBuiltinActionType.CAMD_RECORDER -> "Регистратор Камеры ГУ"
+    AutomationBuiltinActionType.CAMD_RECORDER_SOS -> "SOS регистратора (сохранить кадр)"
     AutomationBuiltinActionType.DCL_SET_SMART_ACC -> "DCL: Умный ACC вкл/выкл"
     AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> "DCL: переключить Умный ACC"
 }

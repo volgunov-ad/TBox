@@ -940,6 +940,12 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      */
     CAMD_RECORDER("camd_recorder"),
     /**
+     * Dashcam emergency save (camd 0.8.6+), one-shot `REC SOS` (alias `REC SAVE`).
+     * No parameters. Replies: `OK state=rec_sos started|busy`; errors
+     * `error=rec_off` / `error=no_sos_folder`. The dashcam must be on.
+     */
+    CAMD_RECORDER_SOS("camd_recorder_sos"),
+    /**
      * DCL Smart ACC on/off via `setSmartAcc`.
      * [AutomationAction.Builtin.boolValue] = enabled.
      * [AutomationAction.Builtin.intValue] > 0 → optional `targetSpeed` km/h; `0` = omit.
