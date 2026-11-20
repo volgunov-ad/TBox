@@ -44,7 +44,10 @@ final class DclStatus {
                 dealer ? "работает штатный лаунчер; выключите режим здесь же" : ""));
         String version = versionName(packages, InstallPlan.DCL_PACKAGE);
         boolean installed = version != null;
+        boolean nativeUnlock = InstallPlan.hasNativeUnlock(version);
         rows.add(row("Лаунчер DCL установлен", installed, false, installed ? version : "файл ещё не выбран или не поставлен"));
+        rows.add(row("Лаунчер сам подключает флешки", nativeUnlock && installed, false,
+                nativeUnlock ? "" : "нужен лаунчер 0.8.2+, отдельная программа берётся с галочки ниже"));
         rows.add(row("Кнопка HOME открывает DCL", isHome(packages), false, ""));
         rows.add(row("Геолокация", permission(packages, "android.permission.ACCESS_FINE_LOCATION")
                 && permission(packages, "android.permission.ACCESS_COARSE_LOCATION"), false, ""));
@@ -64,7 +67,7 @@ final class DclStatus {
                 secureContains(context, "enabled_notification_listeners", InstallPlan.DCL_NOTIFICATION), bootPending));
         rows.add(afterBoot("Служба специальных возможностей", accessibility(context), bootPending));
         rows.add(wallpaperRow(context));
-        rows.add(row("Программа флешек", usbReady(packages), false, usbDetail(packages)));
+        rows.add(usbRow(packages, nativeUnlock));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
         rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
         rows.add(row("IoT Tube скрыт", hidden(packages, InstallPlan.IOTTUBE), true, ""));
@@ -73,6 +76,17 @@ final class DclStatus {
         rows.add(row("Электронное руководство скрыто", hidden(packages, InstallPlan.MANUAL), true, ""));
         rows.add(row("Обработчик USB скрыт", hidden(packages, InstallPlan.USB_HANDLER), true, ""));
         return rows;
+    }
+
+    /** With launcher 0.8.2+ the sticks program is a spare for old launchers only, so it is optional. */
+    private static DclStatus usbRow(PackageManager packages, boolean nativeUnlock) {
+        if (nativeUnlock) {
+            boolean present = usbPackage(packages) != null;
+            return row("Программа флешек (запасная)", !present, true,
+                    present ? "установлена, можно снести: `adb uninstall vad.dashing.usbmount`"
+                            : "не нужна: подключает лаунчер 0.8.2+");
+        }
+        return row("Программа флешек", usbReady(packages), false, usbDetail(packages));
     }
 
     private static boolean usbReady(PackageManager packages) {

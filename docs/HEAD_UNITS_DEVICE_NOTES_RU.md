@@ -515,6 +515,21 @@ blockdev --setro /dev/block/sde35
 
 Данные получены read-only-инспектом + тремя прогонами root-диагностики через примитив §10.1 (adb 192.168.1.128:5555); после тестов ГУ возвращён в исходное состояние (`sde35` ro=1, `/vendor` ro, флаги сняты), артефакты на `/sdcard` удалены.
 
+### 10.4. Разблокировка USB-томов при старте: встроенный unlock DCL-лаунчера (проверено 20.11.2026)
+
+Разблокировку из [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md) с 20.11.2026 делает сам DCL-лаунчер `ras.dashing.tbox.launcher` (RootOrchestrator, build 0.8.2+): дожидается чужого `autorun.flag` (координация «Waiting for previous autorun.flag … 3 s → proceeding»), кладёт свой скрипт с dex-обёрткой из `/data/data/ras.dashing.tbox.launcher/files/unlockusb.dex` и выполняет те же `setLockScreenShown(false)` + `vold.onSecureKeyguardStateChanged(false)` через примитив §10.1. Результат доступен в `/data/local/tmp/unlockusb_boot.txt` (`-rw-rw-rw-`, строки `… ok`); после запуска `mb_daemon` сам удаляет `autorun.sh` и сбрасывает `vendor.autorun.sdcard.logfile`. Ретраи ограничены (Stage-2 watcher — раз в секунду, до 10 попыток; бесконечный реарм билда лаунчера 15:27:06 — 40+ запусков за бут — устранён в 0.8.2).
+
+Маунт NTFS-флешки (том `public:8,97`, вставлена заранее) по бутам стенда `192.168.1.128`:
+
+| Конфигурация | unlock / маунт |
+|---|---|
+| сток с SystemUI (эталон 18.11) | +92,9 с |
+| `UsbMount.apk` (04.11, старый лаунчер) | +49,8…+52,7 с |
+| лаунчер 15:27:06 (свой unlock) | +53,2 / +54,2 с |
+| лаунчер 0.8.2 (boot5) | success +23,4 с, маунт +24,3 с |
+
+В boot5 всего 5 пар `detect → execute → delete`, после +47,6 с тишина до конца дампа (~+1200 с). Кто взводил: +18,2 с — Stage 1 лаунчера; +23,5 с — его рабочий вызов (success +23,4 с); +25,1 с — Stage-2 watcher; +27,7 с — старый `vad.dashing.usbmount` («UsbMountFix: autorun armed»), дубль; +46,4 с — бут-фиксап `dcl_install` (`/sdcard/dcl_boot_log.txt`, там же «OK unstop vad.dashing.usbmount» — он снимает старому пакету stopped-бит при каждой загрузке). Итог: на ГУ с DCL-лаунчером `UsbMount.apk` не нужен — сносить сам APK (`adb uninstall vad.dashing.usbmount`) и убрать шаг unstop из `dcl_install`, иначе дубль возвращается. Прочее из boot5: SNTP-скачок часов (+4911 с) приходит посреди лога на ~+25 с uptime (`SntpClient … clock offset` → `AlarmManagerService Setting time`), штампы logcat до скачка врут (stale RTC) — якоря `mb-daemon boot_completed, uptime=` и dmesg `audit(179…)`; `CAR.PACKAGE … not installed from permitted sources NULL` — стоковый whitelist Adayo, шум для всех сторонних пакетов; dclwm стартует с попытки 1/10 storage-watcher'а лаунчера. Крашей и ANR нет.
+
 ## 11. SystemUI на A9: плавающая кнопка и шторка (проверено 31.10.2026)
 
 Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Скрытый SystemUI также не снимает флаг keyguard у `vold`, и флешки NTFS/exFAT не монтируются; это закрывает [`tools/usb_mount/`](../tools/usb_mount/) (проверено 04.11.2026). Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).

@@ -67,8 +67,10 @@ public class BootReceiver extends BroadcastReceiver {
         copyAsset(context, "setwallpaper.dex", helper);
         copyAsset(context, "unlockusb.dex", unlock);
         boolean restoreWallpaper = wallpaperLost(context);
-        Log.i(TAG, "restore wallpaper " + restoreWallpaper);
-        String script = new InstallPlan("", false, false, false, false, false, false)
+        Log.i(TAG, "restore wallpaper " + restoreWallpaper
+                + " native unlock " + InstallPlan.hasNativeUnlock(versionName(context)));
+        String script = new InstallPlan("", false, false, false, false, false, false,
+                InstallPlan.hasNativeUnlock(versionName(context)))
                 .toBootScript(helper.getAbsolutePath(), unlock.getAbsolutePath(), restoreWallpaper);
         MbDaemon.run(script, MbDaemon.BOOT_BODY);
         Log.i(TAG, "boot fix armed");
@@ -79,6 +81,15 @@ public class BootReceiver extends BroadcastReceiver {
      * which lives in SystemUI. With SystemUI hidden that costs a 30 s wait on every boot.
      * Another live wallpaper is the user's choice and is left alone.
      */
+    private static String versionName(Context context) {
+        try {
+            return context.getPackageManager()
+                    .getPackageInfo(InstallPlan.DCL_PACKAGE, 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+
     private static boolean wallpaperLost(Context context) {
         if (!WallpaperStore.modeFile(context).isFile()) return false;
         try {

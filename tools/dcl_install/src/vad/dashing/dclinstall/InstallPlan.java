@@ -40,6 +40,8 @@ final class InstallPlan {
     final boolean hideVoice;
     final boolean hideSpeechClient;
     final boolean hideManual;
+    /** Launcher 0.8.2+ releases the vold USB gate and mounts sticks itself. */
+    final boolean launcherHasNativeUnlock;
 
     InstallPlan(
             String dclApkPath,
@@ -48,7 +50,8 @@ final class InstallPlan {
             boolean hideIottube,
             boolean hideVoice,
             boolean hideSpeechClient,
-            boolean hideManual) {
+            boolean hideManual,
+            boolean launcherHasNativeUnlock) {
         this.dclApkPath = dclApkPath;
         this.uninstallExisting = uninstallExisting;
         this.hideSystemUi = hideSystemUi;
@@ -56,6 +59,25 @@ final class InstallPlan {
         this.hideVoice = hideVoice;
         this.hideSpeechClient = hideSpeechClient;
         this.hideManual = hideManual;
+        this.launcherHasNativeUnlock = launcherHasNativeUnlock;
+    }
+
+    /** versionName up to the first dash, e.g. "0.8.2-ru"; true when it reads as 0.8.2 or newer. */
+    static boolean hasNativeUnlock(String versionName) {
+        if (versionName == null) return false;
+        String head = versionName;
+        int dash = head.indexOf('-');
+        if (dash >= 0) head = head.substring(0, dash);
+        String[] parts = head.trim().split("\\.");
+        long packed = 0;
+        try {
+            for (int i = 0; i < parts.length && i < 3; i++) {
+                packed = packed * 1000 + Long.parseLong(parts[i]);
+            }
+        } catch (NumberFormatException unparsable) {
+            return false;
+        }
+        return packed >= 8002;
     }
 
     String wallpaperComponent() {
@@ -88,7 +110,7 @@ final class InstallPlan {
         appendSetupBody(sh, true, true);
     }
 
-    /** Grants, HOME, sticks program, wallpaper, hides; the USB mount install and the compile are optional. */
+    /** Grants, HOME, wallpaper, hides; the USB mount install and the compile are optional. */
     private void appendSetupBody(StringBuilder sh, boolean installUsbmount, boolean compile) {
         appendGrants(sh);
         sh.append("echo STEP home\n");
@@ -97,7 +119,7 @@ final class InstallPlan {
             sh.append("echo STEP usbmount\n");
             sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
         }
-        appendUnstopUsb(sh, PAYLOAD_DIR + "/setwallpaper.dex", true);
+        if (!launcherHasNativeUnlock) appendUnstopUsb(sh, PAYLOAD_DIR + "/setwallpaper.dex", true);
         sh.append("echo STEP wallpaper\n");
         sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
         sh.append(" app_process /system/bin SetWallpaper ").append(q(wallpaperComponent())).append(" || fail wallpaper\n");
@@ -127,7 +149,9 @@ final class InstallPlan {
         sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
         sh.append("echo STEP dealer_hide\n");
         sh.append("pm hide ").append(DCL_PACKAGE).append(" || fail hide_dcl\n");
-        sh.append("pm hide ").append(USB_MOUNT).append(" || echo WARN hide_usbmount\n");
+        if (!launcherHasNativeUnlock) {
+            sh.append("pm hide ").append(USB_MOUNT).append(" || echo WARN hide_usbmount\n");
+        }
         sh.append("pm hide ").append(BLANK_WALLPAPER).append(" || echo WARN hide_blank\n");
         sh.append("pm unhide ").append(USB_HANDLER).append(" || echo WARN unhide_usb_handler\n");
         sh.append("pm enable ").append(USB_HANDLER).append(" || echo WARN enable_usb_handler\n");
@@ -137,12 +161,12 @@ final class InstallPlan {
         return sh.toString();
     }
 
-    /** Dealer visit off: bring DCL, the sticks program and the wallpaper back, re-apply the setup, reboot. */
+    /** Dealer visit off: bring DCL (and the sticks program on old launchers) and the wallpaper back, re-apply the setup, reboot. */
     String toDealerOffScript() {
         StringBuilder sh = scriptHeader();
         sh.append("echo STEP dealer_unhide\n");
         unhide(sh, DCL_PACKAGE);
-        unhide(sh, USB_MOUNT);
+        if (!launcherHasNativeUnlock) unhide(sh, USB_MOUNT);
         unhide(sh, BLANK_WALLPAPER);
         sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
         appendSetupBody(sh, false, false);
@@ -197,10 +221,17 @@ final class InstallPlan {
      */
     String toBootScript(String helperDex, String unlockDex, boolean restoreWallpaper) {
         StringBuilder sh = scriptHeader(BOOT_LOG_FILE, BOOT_RESULT_FILE);
-        sh.append("echo STEP usb\n");
-        appendUnstopUsb(sh, helperDex, false);
-        sh.append("CLASSPATH=").append(q(unlockDex));
-        sh.append(" app_process /system/bin UnlockUsb || echo WARN unlock_usb\n");
+        if (launcherHasNativeUnlock) {
+            sh.append("echo STEP usb\n");
+            sh.append("if pm path ").append(USB_MOUNT).append(" >/dev/null; then\n");
+            sh.append("  echo WARN usbmount_present\n");
+            sh.append("fi\n");
+        } else {
+            sh.append("echo STEP usb\n");
+            appendUnstopUsb(sh, helperDex, false);
+            sh.append("CLASSPATH=").append(q(unlockDex));
+            sh.append(" app_process /system/bin UnlockUsb || echo WARN unlock_usb\n");
+        }
         if (restoreWallpaper) {
             sh.append("echo STEP wallpaper\n");
             sh.append("CLASSPATH=").append(q(helperDex));

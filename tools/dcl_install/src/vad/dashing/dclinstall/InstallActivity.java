@@ -65,10 +65,12 @@ public class InstallActivity extends Activity {
     private boolean running;
     private boolean expectReboot;
     private volatile boolean stopPoll;
+    private boolean nativeUnlock;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        nativeUnlock = launcherHasNativeUnlock();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         int pad = dp(16);
         LinearLayout column = new LinearLayout(this);
@@ -152,7 +154,10 @@ public class InstallActivity extends Activity {
                         + "Кнопка HOME после этого открывает DCL. "
                         + "Климат, телефон, камера и настройки автомобиля остаются отдельными программами. "
                         + "Рядом скрывается и системный обработчик USB: при загрузке с уже вставленной флешкой "
-                        + "он открывает чёрный экран поверх лаунчера."));
+                        + "он открывает чёрный экран поверх лаунчера."
+                        + (nativeUnlock
+                                ? " Лаунчер " + installedDcl() + " сам подключает флешки, отдельная программа им не нужна."
+                                : "")));
         column.addView(heading("Скрыть по желанию"));
         column.addView(note("Снятая галочка пакет не трогает."));
         systemUi = check("System UI", true);
@@ -166,7 +171,9 @@ public class InstallActivity extends Activity {
                         + "Скрытие убирает их с экрана лаунчера. "
                         + "Вместе с ними пропадают уведомления, всплывающая громкость "
                         + "и системные вопросы, например доступ программы к USB-устройству. "
-                        + "Флешки после этого подключает отдельная программа, её установщик ставит сам. "
+                        + (nativeUnlock
+                                ? "Флешки после этого подключает сам лаунчер."
+                                : "Флешки после этого подключает отдельная программа, её установщик ставит сам. ")
                         + "Без своих обоев загрузка тогда ждёт около 30 секунд."));
         column.addView(iottube);
         column.addView(note("Телематика. Постоянно падает, потому что не находит сервер, и заполняет системный журнал."));
@@ -241,7 +248,9 @@ public class InstallActivity extends Activity {
         column.addView(restoreStock, extraParams);
         column.addView(note(
                 "Кнопка «Настроить установленный DCL» повторяет всю настройку без установки APK: "
-                        + "разрешения, кнопка HOME, программа флешек, обои, скрытие и компиляция, "
+                        + "разрешения, кнопка HOME, "
+                        + (nativeUnlock ? "обои" : "программа флешек, обои")
+                        + ", скрытие и компиляция, "
                         + "затем перезагрузка. "
                         + "Остальные кнопки нужны по отдельности. "
                         + "Разрешения применяются сразу. "
@@ -250,13 +259,20 @@ public class InstallActivity extends Activity {
                         + "На этом ГУ сама она не запускается, поэтому после установки лаунчер тормозит. "
                         + "Скрытие останавливает постоянные пакеты после перезагрузки. "
                         + "Штатный лаунчер и системный обработчик USB скрываются всегда, остальные пакеты — по галочкам. "
-                        + "Возврат удаляет DCL, программу флешек и старые пустые обои, "
+                        + (nativeUnlock
+                                ? "Лаунчер сам подключает флешки, отдельная программа не ставится. "
+                                : "")
+                        + "Возврат удаляет DCL"
+                        + (nativeUnlock ? "" : ", программу флешек")
+                        + " и старые пустые обои, "
                         + "показывает штатный лаунчер, System UI, обработчик USB, голос, IoT Tube и руководство "
                         + "и ставит штатные обои. Сама программа установки остаётся."));
 
         column.addView(heading("Визит к дилеру"));
         column.addView(note(
-                "Включение прячет DCL, программу флешек и наши обои: возвращаются штатный лаунчер, "
+                "Включение прячет DCL"
+                        + (nativeUnlock ? "" : ", программу флешек")
+                        + " и наши обои: возвращаются штатный лаунчер, "
                         + "System UI, штатные обои и обработчик USB, свободные окна и полный экран сбрасываются. "
                         + "TBox Monitor и сам установщик остаются. "
                         + "Выключение возвращает всё обратно. Оба действия перезагружают ГУ."));
@@ -522,6 +538,7 @@ public class InstallActivity extends Activity {
         final boolean black = blackWallpaper.isChecked();
         final boolean custom = customWallpaper.isChecked();
         final String imagePath = customImagePath;
+        final boolean planUsb = launcherHasNativeUnlock();
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -533,7 +550,7 @@ public class InstallActivity extends Activity {
                     if (!dir.exists() && !dir.mkdirs()) {
                         throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
                     }
-                    copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
+                    if (!planUsb) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
                     copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
                     arm(currentPlan(false).toSetupScript());
                     poll();
@@ -578,7 +595,9 @@ public class InstallActivity extends Activity {
         if (running || !isA9()) return;
         new AlertDialog.Builder(this)
                 .setTitle("Вернуть штатное состояние")
-                .setMessage("Удалить DCL, программу флешек и пустые обои? "
+                .setMessage("Удалить DCL"
+                        + (nativeUnlock ? "" : ", программу флешек")
+                        + " и пустые обои? "
                         + "Штатный лаунчер, System UI, системный обработчик USB, "
                         + "голосовой помощник, IoT Tube и руководство снова появятся. "
                         + "Головное устройство перезагрузится. "
@@ -754,7 +773,18 @@ public class InstallActivity extends Activity {
                 iottube.isChecked(),
                 voice.isChecked(),
                 speechClient.isChecked(),
-                manual.isChecked());
+                manual.isChecked(),
+                launcherHasNativeUnlock());
+    }
+
+    /** Launcher 0.8.2+ unlocks USB volumes itself, so the installer skips its own sticks program. */
+    private boolean launcherHasNativeUnlock() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(InstallPlan.DCL_PACKAGE, 0);
+            return InstallPlan.hasNativeUnlock(info == null ? null : info.versionName);
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
     }
 
     private void setBusy(boolean busy) {
@@ -782,7 +812,7 @@ public class InstallActivity extends Activity {
                     if (!dir.exists() && !dir.mkdirs()) {
                         throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
                     }
-                    copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
+                    if (!plan.launcherHasNativeUnlock) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
                     copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
                     arm(plan.toScript());
                     poll();
@@ -893,7 +923,8 @@ public class InstallActivity extends Activity {
         status.setTextColor(0xFFB7C0C8);
         String installed = installedDcl();
         if (dealer) {
-            status.setText("ГУ A9. Визит к дилеру включён: DCL и программа флешек скрыты, работает штатный лаунчер.");
+            status.setText("ГУ A9. Визит к дилеру включён: DCL"
+                    + (nativeUnlock ? "" : " и программа флешек") + " скрыты, работает штатный лаунчер.");
         } else if (installed == null) {
             status.setText("ГУ A9. DCL ещё не установлен.");
         } else {
