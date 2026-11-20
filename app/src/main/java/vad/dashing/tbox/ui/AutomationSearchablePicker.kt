@@ -1,5 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.graphics.Rect
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +26,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,12 +41,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import vad.dashing.tbox.automation.AutomationPickerSearch
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
@@ -190,9 +197,39 @@ internal fun <T> AutomationSearchablePickerDialog(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     // Taller list: ~85% of screen height, minus dialog paddings/title/search field.
+    // The IME is extra: the dialog window is not resized by default (decorFitsSystemWindows
+    // true lets the system pan/resize it), so cap the list to the visible window frame,
+    // which shrinks when ADJUST_RESIZE reports the keyboard.
     val configuration = LocalConfiguration.current
-    val listMaxHeight = (configuration.screenHeightDp * 0.85f).dp -
+    val density = LocalDensity.current
+    val screenCapHeight = (configuration.screenHeightDp * 0.85f).dp
+    var visibleFrameHeight by remember { mutableStateOf(screenCapHeight) }
+    val listMaxHeight = minOf(screenCapHeight, visibleFrameHeight) -
         (dialogVerticalPadding + dialogTitleEstimate + searchFieldEstimate)
+    val view = LocalView.current
+    // SOFT_INPUT_ADJUST_RESIZE is the only working IME-resize mode on the API 28 HU
+    // platforms (WindowInsets.ime is always 0 there); deprecated since API 30.
+    @Suppress("DEPRECATION")
+    DisposableEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window
+        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        val decor = window?.decorView
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            if (decor != null) {
+                val frame = Rect()
+                decor.getWindowVisibleDisplayFrame(frame)
+                if (frame.bottom > 0) {
+                    visibleFrameHeight = with(density) { frame.bottom.toDp() }
+                }
+            }
+        }
+        decor?.viewTreeObserver?.addOnGlobalLayoutListener(listener)
+        onDispose {
+            decor?.viewTreeObserver?.removeOnGlobalLayoutListener(listener)
+            @Suppress("DEPRECATION")
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED)
+        }
+    }
     val filtered = remember(query, options) {
         if (AutomationPickerSearch.normalize(query).isEmpty()) {
             options
@@ -224,7 +261,9 @@ internal fun <T> AutomationSearchablePickerDialog(
                 .widthIn(min = widthDp.coerceAtLeast(280.dp) + 32.dp),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier
+                    .padding(12.dp)
+                    .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(

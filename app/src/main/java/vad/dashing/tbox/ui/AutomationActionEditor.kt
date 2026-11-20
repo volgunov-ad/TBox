@@ -696,6 +696,62 @@ private fun HttpRequestFields(
     )
 }
 
+internal fun defaultBuiltinAction(
+    type: AutomationBuiltinActionType,
+    apps: List<LaunchableAppEntry>,
+    savedWifiSsid: String,
+    peerAutomations: List<AutomationDefinition>,
+): AutomationAction.Builtin = AutomationAction.Builtin(
+    type = type,
+    intValue = when (type) {
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
+            vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+        AutomationBuiltinActionType.CRUISE_NUDGE -> 1
+        AutomationBuiltinActionType.CAMD_WINDOW -> CAMD_WINDOW_DEFAULT_CAMERA
+        else -> 0
+    },
+    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
+        type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
+        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
+        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
+        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
+        type == AutomationBuiltinActionType.ADB_SET_TCP ||
+        type == AutomationBuiltinActionType.CAMD_RECORDER ||
+        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC ||
+        type == AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
+    stringValue = when {
+        type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
+            apps.firstOrNull()?.packageName.orEmpty()
+        type == AutomationBuiltinActionType.WIFI_CONNECT -> savedWifiSsid
+        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
+        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
+        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
+            peerAutomations.firstOrNull()?.id.orEmpty()
+        // Cruise mode comes from the global Settings → Car type; no UI kind.
+        type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
+            type == AutomationBuiltinActionType.CRUISE_PAUSE ||
+            type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
+            type == AutomationBuiltinActionType.CRUISE_RESUME ||
+            type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
+            type == AutomationBuiltinActionType.CRUISE_NUDGE ->
+            ""
+        type == AutomationBuiltinActionType.CAMD_WINDOW ->
+            formatCamdAutomationWindowArgs(
+                CAMD_ACTION_OPEN,
+                CAMD_WINDOW_DEFAULT_X,
+                CAMD_WINDOW_DEFAULT_Y,
+                CAMD_WINDOW_DEFAULT_W,
+                CAMD_WINDOW_DEFAULT_H,
+            )
+        else -> ""
+    },
+)
+
 @Composable
 private fun BuiltinActionFields(
     action: AutomationAction.Builtin,
@@ -725,59 +781,7 @@ private fun BuiltinActionFields(
         options = builtinOptions,
         optionLabel = ::builtinActionLabel,
         onValueChange = { type ->
-            onChange(
-                AutomationAction.Builtin(
-                    type = type,
-                    intValue = when (type) {
-                        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
-                        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
-                        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
-                        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
-                        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
-                        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
-                            vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
-                        AutomationBuiltinActionType.CRUISE_NUDGE -> 1
-                        AutomationBuiltinActionType.CAMD_WINDOW -> CAMD_WINDOW_DEFAULT_CAMERA
-                        else -> 0
-                    },
-                    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
-                        type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
-                        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
-                        type == AutomationBuiltinActionType.ADB_SET_TCP ||
-                        type == AutomationBuiltinActionType.CAMD_RECORDER ||
-                        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC ||
-                        type == AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
-                    stringValue = when {
-                        type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
-                            apps.firstOrNull()?.packageName.orEmpty()
-                        type == AutomationBuiltinActionType.WIFI_CONNECT ->
-                            WifiStaController.savedSsids(context).firstOrNull().orEmpty()
-                        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
-                        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
-                            peerAutomations.firstOrNull()?.id.orEmpty()
-                        // Cruise mode comes from the global Settings → Car type; no UI kind.
-                        type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
-                            type == AutomationBuiltinActionType.CRUISE_PAUSE ||
-                            type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
-                            type == AutomationBuiltinActionType.CRUISE_RESUME ||
-                            type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
-                            type == AutomationBuiltinActionType.CRUISE_NUDGE ->
-                            ""
-                        type == AutomationBuiltinActionType.CAMD_WINDOW ->
-                            formatCamdAutomationWindowArgs(
-                                CAMD_ACTION_OPEN,
-                                CAMD_WINDOW_DEFAULT_X,
-                                CAMD_WINDOW_DEFAULT_Y,
-                                CAMD_WINDOW_DEFAULT_W,
-                                CAMD_WINDOW_DEFAULT_H,
-                            )
-                        else -> ""
-                    },
-                ),
-            )
+            onChange(defaultBuiltinAction(type, apps, WifiStaController.savedSsids(context).firstOrNull().orEmpty(), peerAutomations))
         },
     )
     when (action.type) {
@@ -1621,6 +1625,7 @@ private fun AddAutomationActionRow(
 ) {
     var kind by remember { mutableStateOf(ActionUiKind.ACTIONS) }
     var showActionsPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val canMode by UniversalCanRepository.mode.collectAsState()
     val mergedActionOptions: List<AutomationPickerOption<Any>> =
         remember(canMode) {
@@ -1669,7 +1674,7 @@ private fun AddAutomationActionRow(
                 onAdd(
                     when (selected) {
                         is AutomationBuiltinActionType ->
-                            AutomationAction.Builtin(selected)
+                            defaultBuiltinAction(selected, apps, WifiStaController.savedSsids(context).firstOrNull().orEmpty(), peerAutomations)
 
                         is AutomationCanCatalogEntry -> {
                             val entry = selected
