@@ -100,6 +100,15 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 ./gradlew :mqtt:testDebugUnitTest
 ./gradlew :mqtt:assembleDebug
 ```
+
+### App Store APK (`:store`)
+
+Separate app **TBox Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs from the same Yandex Disk `release`/`dev` shares (`apps/catalog.json`). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Catalog builder: `tools/build_apps_catalog.py`.
+
+```
+./gradlew :store:testDebugUnitTest
+./gradlew :store:assembleDebug
+```
 ### Data Resize APK (`:dataresize`) and `:adbcore`
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.

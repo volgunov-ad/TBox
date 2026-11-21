@@ -30,6 +30,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.store.TboxStoreLauncher
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
@@ -40,6 +41,7 @@ import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxTitle
+
 
 @Composable
 fun UpdateTab(
@@ -92,6 +94,24 @@ fun UpdateTab(
             style = MaterialTheme.typography.tboxHeadline,
             color = MaterialTheme.colorScheme.onSurface
         )
+
+        val storeInstalled = remember {
+            TboxStoreLauncher.isInstalled(context.packageManager)
+        }
+        if (storeInstalled) {
+            Button(onClick = { TboxStoreLauncher.open(context) }) {
+                Text(
+                    text = stringResource(R.string.update_open_store),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.update_store_not_installed),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         Text(
             text = stringResource(

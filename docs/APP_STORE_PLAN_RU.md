@@ -1,6 +1,6 @@
 # Магазин приложений ГУ — план
 
-Статус: **план** (код ещё не начат).
+Статус: **в разработке** (MVP: модуль `:store`, каталог, установка Intent, кнопка из Monitor OTA).
 
 Отдельное Android-приложение — витрина и установщик экосистемы TBox на ГУ Jetour
 Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндекс.Диск** (те же каналы
@@ -24,7 +24,7 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 | Тема | Решение |
 |------|---------|
 | Форма | **Отдельный APK**, не вкладка внутри Monitor |
-| Имя / package (рабочее) | **TBox Store** / `vad.dashing.store` (уточнить при создании модуля) |
+| Имя / package | **TBox Store** / `vad.dashing.store` (модуль `:store`) |
 | Каналы | **Те же**, что OTA Monitor: `UPDATE_RELEASE_PUBLIC_KEY` → папка `release/`, `UPDATE_DEV_PUBLIC_KEY` → `dev/` |
 | Хостинг | Яндекс.Диск primary; Mail.ru Cloud — **зеркало 1:1** той же раскладки |
 | Состав каталога | Приложения экосистемы **и сторонние проверенные** APK |
@@ -307,12 +307,12 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 | # | Этап | Результат |
 |---|------|-----------|
-| 1 | Спека на Диске | Папки `release/apps`, `dev/apps`; черновик `catalog.json`; legacy OTA не тронут |
-| 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` |
-| 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog |
-| 4 | Модуль `:store` | UI списка/карточки, download, verify, install; unit-тесты парсера |
-| 5 | Связка с Monitor | Intent «открыть магазин»; краткая инструкция bootstrap с USB |
-| 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog |
+| 1 | Спека на Диске | Папки `release/apps`, `dev/apps`; черновик `catalog.json`; legacy OTA не тронут — **нужно на Диске** |
+| 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` — **с вашей стороны** |
+| 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — скрипт `tools/build_apps_catalog.py` готов |
+| 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
+| 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
+| 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
 | 7 | Зеркало Mail.ru | Sync + клиентский fallback |
 | 8 | Фаза 2 | voice, A10 oneshot, dexopt/root install, свертка OTA Monitor |
 

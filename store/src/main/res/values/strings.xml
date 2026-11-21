@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TBox Store</string>
+    <string name="store_title">Магазин приложений</string>
+    <string name="store_refresh">Обновить каталог</string>
+    <string name="store_channel_release">Релиз</string>
+    <string name="store_channel_development">Разработка</string>
+    <string name="store_channel_label">Ветка: %1$s</string>
+    <string name="store_hu_label">ГУ: %1$s</string>
+    <string name="store_hu_a9">Android 9 (mbCAN)</string>
+    <string name="store_hu_a10">Android 10 (VHAL)</string>
+    <string name="store_hu_unknown">не определено</string>
+    <string name="store_status_not_installed">Не установлено</string>
+    <string name="store_status_installed">Установлено %1$s (%2$d)</string>
+    <string name="store_status_update">Обновление %1$s (%2$d)</string>
+    <string name="store_status_unsupported">Не для этой ГУ</string>
+    <string name="store_badge_third_party">Стороннее</string>
+    <string name="store_download">Скачать</string>
+    <string name="store_update">Обновить</string>
+    <string name="store_install">Установить</string>
+    <string name="store_open">Открыть</string>
+    <string name="store_cancel">Отменить</string>
+    <string name="store_downloading">Загрузка %1$d%%</string>
+    <string name="store_downloading_unknown">Загрузка…</string>
+    <string name="store_verifying">Проверка файла…</string>
+    <string name="store_loading">Загрузка каталога…</string>
+    <string name="store_empty">В каталоге нет приложений для этой ГУ</string>
+    <string name="store_error">Ошибка: %1$s</string>
+    <string name="store_error_network">Нет подключения к интернету</string>
+    <string name="store_grant_install">Разрешить установку из других источников</string>
+    <string name="store_install_hint">Для установки APK разрешите установку из неизвестных источников для TBox Store.</string>
+    <string name="store_apk_size_mb">Размер: %1$s МБ</string>
+    <string name="store_changelog">Изменения</string>
+    <string name="store_publisher">Издатель: %1$s</string>
+    <string name="store_back">Назад к списку</string>
+</resources>
