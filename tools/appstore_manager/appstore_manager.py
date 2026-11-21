@@ -135,19 +135,20 @@ class AppStoreManagerApp:
             ("reviewNotes", "Заметки проверки"),
             ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
             ("signingCertSha256", "cert sha256 (через запятую)"),
-            ("versionCode", "versionCode"),
-            ("versionName", "versionName"),
+            ("versionCode", "versionCode (из APK)"),
+            ("versionName", "versionName (из APK)"),
             ("changelog", "Changelog APK"),
             ("apkInfo", "Текущий APK"),
             ("iconInfo", "Иконка"),
         ]
+        readonly = {"id", "versionCode", "versionName", "apkInfo", "iconInfo"}
         for key, label in rows:
             row = ttk.Frame(form)
             row.pack(fill=X, pady=2)
             ttk.Label(row, text=label, width=32).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
-            state = DISABLED if key in ("id", "apkInfo", "iconInfo") else NORMAL
+            state = DISABLED if key in readonly else NORMAL
             entry = ttk.Entry(row, textvariable=var, state=state)
             entry.pack(side=LEFT, fill=X, expand=True)
             setattr(self, f"_entry_{key}", entry)
@@ -176,11 +177,12 @@ class AppStoreManagerApp:
             ("reviewNotes", "_entry_reviewNotes"),
             ("copyApkToDownloadsAppId", "_entry_copyApkToDownloadsAppId"),
             ("signingCertSha256", "_entry_signingCertSha256"),
-            ("versionCode", "_entry_versionCode"),
-            ("versionName", "_entry_versionName"),
             ("changelog", "_entry_changelog"),
         ):
             getattr(self, entry_name).configure(state=state)
+        # versionCode / versionName всегда из манифеста APK — только просмотр
+        self._entry_versionCode.configure(state=DISABLED)
+        self._entry_versionName.configure(state=DISABLED)
 
     def choose_root(self) -> None:
         path = filedialog.askdirectory(title="Папка AppStore (или release/apps)")
@@ -346,24 +348,32 @@ class AppStoreManagerApp:
         if not path:
             return
         try:
-            version_code = int(self.fields["versionCode"].get().strip() or "0")
-            version_name = self.fields["versionName"].get().strip() or "0.1.0"
-            if version_code <= 0:
-                raise ValueError("versionCode должен быть > 0")
+            from apk_manifest import read_apk_info
+
+            info = read_apk_info(path)
+            # Preserve catalog description edits; packageName must match APK.
+            form_meta = self._meta_from_form()
+            if form_meta.packageName and form_meta.packageName != info.packageName:
+                raise ValueError(
+                    f"packageName в форме ({form_meta.packageName}) ≠ APK "
+                    f"({info.packageName})",
+                )
+            if not form_meta.packageName:
+                form_meta.packageName = info.packageName
+            upsert_meta(self._current_apps_dir(), form_meta)
             release = set_apk(
                 self._current_apps_dir(),
                 self.selected_id,
                 Path(path),
-                version_code=version_code,
-                version_name=version_name,
+                # versionCode / versionName берутся из манифеста APK
+                version_code=None,
+                version_name=None,
                 changelog=self.fields["changelog"].get().strip(),
                 remove_other_apks=True,
             )
-            # Keep meta in sync if user edited fields
-            upsert_meta(self._current_apps_dir(), self._meta_from_form())
             write_catalog(self._current_apps_dir())
             self.status.set(
-                f"APK обновлён: {release.apkFileName} ({release.versionName})",
+                f"APK обновлён: {release.apkFileName} — {info.summary()} [{info.source}]",
             )
             self.reload()
         except Exception as exc:
@@ -432,41 +442,78 @@ class AppStoreManagerApp:
             "origin": "first-party",
             "hu": "a9,a10",
             "category": "app",
-            "versionCode": "1",
-            "versionName": "0.1.0",
+            "versionCode": "",
+            "versionName": "",
             "changelog": "",
         }
+        entries: dict[str, ttk.Entry] = {}
         for key, default in defaults.items():
             row = ttk.Frame(dlg, padding=4)
             row.pack(fill=X)
-            ttk.Label(row, text=key, width=16).pack(side=LEFT)
+            label = key
+            if key in ("versionCode", "versionName"):
+                label = f"{key} (из APK)"
+            ttk.Label(row, text=label, width=18).pack(side=LEFT)
             var = StringVar(value=default)
             vars_map[key] = var
-            ttk.Entry(row, textvariable=var, width=48).pack(side=LEFT, fill=X, expand=True)
+            state = DISABLED if key in ("versionCode", "versionName") else NORMAL
+            entry = ttk.Entry(row, textvariable=var, width=48, state=state)
+            entry.pack(side=LEFT, fill=X, expand=True)
+            entries[key] = entry
 
         apk_var = StringVar(value="")
         apk_row = ttk.Frame(dlg, padding=4)
         apk_row.pack(fill=X)
+        apk_hint = StringVar(value="Выберите APK — version/package подставятся сами")
 
         def pick_apk() -> None:
             path = filedialog.askopenfilename(
                 parent=dlg,
-                title="APK (можно позже)",
+                title="APK",
                 filetypes=[("APK", "*.apk")],
             )
-            if path:
-                apk_var.set(path)
+            if not path:
+                return
+            try:
+                from apk_manifest import read_apk_info
 
-        ttk.Label(apk_row, text="APK", width=16).pack(side=LEFT)
+                info = read_apk_info(path)
+            except Exception as exc:
+                messagebox.showerror("APK", str(exc), parent=dlg)
+                return
+            apk_var.set(path)
+            vars_map["packageName"].set(info.packageName)
+            vars_map["versionCode"].set(str(info.versionCode))
+            vars_map["versionName"].set(info.versionName)
+            if not vars_map["title"].get().strip() and info.label:
+                vars_map["title"].set(info.label)
+            if not vars_map["id"].get().strip():
+                # Suggest id from package last segment
+                suggested = info.packageName.rsplit(".", 1)[-1].lower()
+                vars_map["id"].set(suggested)
+            apk_hint.set(info.summary() + f" [{info.source}]")
+
+        ttk.Label(apk_row, text="APK", width=18).pack(side=LEFT)
         ttk.Entry(apk_row, textvariable=apk_var).pack(side=LEFT, fill=X, expand=True)
         ttk.Button(apk_row, text="…", width=3, command=pick_apk).pack(side=LEFT)
+        ttk.Label(dlg, textvariable=apk_hint, padding=4).pack(fill=X)
 
         def submit() -> None:
             try:
                 hu = [x.strip() for x in vars_map["hu"].get().split(",") if x.strip()]
+                apk = Path(apk_var.get()) if apk_var.get().strip() else None
+                package = vars_map["packageName"].get().strip()
+                if apk is not None:
+                    from apk_manifest import read_apk_info
+
+                    info = read_apk_info(apk)
+                    package = info.packageName
+                    vars_map["packageName"].set(package)
+                    vars_map["versionCode"].set(str(info.versionCode))
+                    vars_map["versionName"].set(info.versionName)
                 meta = AppMeta(
                     id=vars_map["id"].get().strip(),
-                    packageName=vars_map["packageName"].get().strip(),
+                    packageName=package,
                     title=vars_map["title"].get().strip(),
                     summary=vars_map["summary"].get().strip(),
                     publisher=vars_map["publisher"].get().strip() or "TBox",
@@ -475,13 +522,13 @@ class AppStoreManagerApp:
                     category=vars_map["category"].get().strip() or "app",
                     verified=True,
                 )
-                apk = Path(apk_var.get()) if apk_var.get().strip() else None
                 add_app(
                     apps_dir,
                     meta,
                     apk_source=apk,
-                    version_code=int(vars_map["versionCode"].get() or "1"),
-                    version_name=vars_map["versionName"].get().strip() or "0.1.0",
+                    # None → set_apk читает манифест APK
+                    version_code=None,
+                    version_name=None,
                     changelog=vars_map["changelog"].get().strip(),
                 )
                 dlg.destroy()

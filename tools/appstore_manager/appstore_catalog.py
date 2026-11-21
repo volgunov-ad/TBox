@@ -433,7 +433,16 @@ def set_apk(
     flavor: str = "default",
     remove_other_apks: bool = True,
     min_supported_version_code: int = 0,
+    sync_package_from_apk: bool = True,
 ) -> AppRelease:
+    """
+    Copy APK into apps/<id>/ and write version.json.
+
+    versionCode / versionName default to values from the APK manifest
+    (aapt or binary AndroidManifest.xml). Pass them explicitly only to override.
+    """
+    from apk_manifest import ApkInfo, read_apk_info
+
     app_id = validate_app_id(app_id)
     apk_source = apk_source.expanduser().resolve()
     if not apk_source.is_file():
@@ -441,14 +450,28 @@ def set_apk(
     if apk_source.suffix.lower() != ".apk":
         raise ValueError("Нужен файл .apk")
 
+    info: ApkInfo | None
+    try:
+        info = read_apk_info(apk_source)
+    except Exception as exc:
+        # Allow explicit version override only when manifest cannot be read
+        # (e.g. unit tests with a stub file). GUI always uses a real APK.
+        if version_code is None or not version_name:
+            raise ValueError(f"Не удалось прочитать манифест APK: {exc}") from exc
+        info = None
+
+    if info is not None:
+        if version_code is None:
+            version_code = info.versionCode
+        if not version_name:
+            version_name = info.versionName
+    if int(version_code or 0) <= 0:
+        raise ValueError("versionCode должен быть > 0")
+    if not str(version_name or "").strip():
+        raise ValueError("versionName пустой")
+
     folder = apps_dir / app_id
     folder.mkdir(parents=True, exist_ok=True)
-    existing = parse_release(folder / VERSION_NAME)
-
-    if version_code is None:
-        version_code = (existing.versionCode + 1) if existing else 1
-    if not version_name:
-        version_name = existing.versionName if existing else "0.1.0"
 
     dest_name = apk_source.name
     dest = folder / dest_name
@@ -474,11 +497,22 @@ def set_apk(
     )
     write_version_json(folder, release)
 
-    # Ensure meta exists
+    # Ensure meta exists; keep packageName in sync with the APK when asked.
     metas = load_meta_map(apps_dir)
-    if app_id not in metas:
-        metas[app_id] = AppMeta(id=app_id, packageName="", title=app_id)
-        save_meta_map(apps_dir, metas)
+    meta = metas.get(app_id) or AppMeta(id=app_id, packageName="", title=app_id)
+    if sync_package_from_apk and info is not None and info.packageName:
+        existing_pkg = meta.packageName.strip()
+        if existing_pkg and existing_pkg != info.packageName:
+            raise ValueError(
+                f"packageName в каталоге ({existing_pkg}) не совпадает с APK "
+                f"({info.packageName})",
+            )
+        if not existing_pkg:
+            meta.packageName = info.packageName
+        if (not meta.title.strip() or meta.title == app_id) and info.label:
+            meta.title = info.label
+    metas[app_id] = meta
+    save_meta_map(apps_dir, metas)
 
     write_catalog(apps_dir)
     return release
