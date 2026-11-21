@@ -12,6 +12,7 @@
 #include "tusb_cdc_acm.h"
 
 #include "ble_btn.h"
+#include "ble_phone.h"
 #include "gnss_detect.h"
 #include "gpio_io.h"
 #include "mag.h"
@@ -302,6 +303,18 @@ void app_main(void)
     uint32_t last_gpio_ms = 0;
     bool sent_hello = false;
 
+    /*
+     * The relay boards are BLE centrals that need the "TBox" advert to reconnect.
+     * Advertising can die silently while heartbeats keep flowing, so the HU never
+     * notices (observed after HU reboots: no relayDev for hours until a crash
+     * restarted the board). Re-try the advert first, restart the ESP when the
+     * host itself looks wedged.
+     */
+    uint32_t last_ble_ok_ms = 0;
+    uint32_t last_adv_retry_ms = 0;
+    /* 90 s window starts at boot; every healthy tick extends it. */
+    bool ble_seen_ok = true;
+
     while (1) {
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
@@ -364,6 +377,31 @@ void app_main(void)
                 last_gpio_ms = now_ms;
             }
             ble_btn_poll(now_ms);
+
+            if (ble_btn_is_on()) {
+                if (!ble_phone_adv_dead()) {
+                    if (!ble_seen_ok) {
+                        ESP_LOGI(TAG, "BLE advertising ok");
+                        ble_seen_ok = true;
+                    }
+                    last_ble_ok_ms = now_ms;
+                } else {
+                    /* The sync callback or GAP events normally re-arm the advert. */
+                    if (now_ms - last_adv_retry_ms >= 2000) {
+                        last_adv_retry_ms = now_ms;
+                        ESP_LOGW(TAG, "BLE advert dead — retry start_adv");
+                        ble_phone_start_adv();
+                        ble_btn_kick_scan();
+                    }
+                }
+            } else {
+                last_ble_ok_ms = now_ms;
+                ble_seen_ok = true;
+            }
+            if (ble_seen_ok && now_ms - last_ble_ok_ms > 90000) {
+                ESP_LOGE(TAG, "BLE dead >90s — restart");
+                esp_restart();
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(protocol_can_light_active() ? 5 : 20));

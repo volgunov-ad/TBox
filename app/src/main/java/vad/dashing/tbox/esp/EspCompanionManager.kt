@@ -88,6 +88,10 @@ class EspCompanionManager(
         private const val HELLO_RETRY_MS = 3_000L
         /** Firmware closes the window itself; this covers a lost closing bleStatus. */
         private const val PHONE_LEARN_GRACE_MS = 5_000L
+        /** All paired BLE relays quiet this long while the link is healthy → reboot companion. */
+        private const val BLE_RELAY_STALE_MS = 5 * 60_000L
+        /** Min interval between relay-driven companion reboots. */
+        private const val BLE_RELAY_REBOOT_COOLDOWN_MS = 15 * 60_000L
     }
 
     private var session: EspUsbSerialSession? = null
@@ -114,6 +118,9 @@ class EspCompanionManager(
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
     private var lastHelloRetryMs = 0L
+    /** Last companion reboot we ordered because paired BLE relays went quiet. */
+    private var lastBleRelayRebootMs = 0L
+    private var lastBleRelayRebootLogMs = 0L
     private val phoneLearnDeadlineMs = AtomicLong(0L)
 
     private fun currentReopenIntervalMs(): Long {
@@ -213,6 +220,7 @@ class EspCompanionManager(
                         requestHello()
                     }
                 }
+                maybeRebootStaleBleRelays(now)
                 // Periodic restore when option is on (manager only runs if enabled).
                 val reconnectGap = currentReopenIntervalMs()
                 if (!EspCompanionRepository.connected.value &&
@@ -311,6 +319,45 @@ class EspCompanionManager(
 
     fun requestHello() {
         writeLine(EspCompanionProtocol.encodeHello())
+    }
+
+    /**
+     * Companion BLE advertising can die silently while USB heartbeats keep flowing
+     * (observed after HU reboots: no relayDev for hours). The firmware self-heal is
+     * the primary fix; this is the safety net for boards still on older firmware.
+     */
+    private fun maybeRebootStaleBleRelays(now: Long) {
+        if (EspCompanionRepository.otaBusy.value) return
+        val info = EspCompanionRepository.deviceInfo.value
+        if (!info.ble || !EspCompanionRepository.bleOn.value) return
+        val relays = EspCompanionRepository.bleRelays.value
+        if (relays.isEmpty()) return
+        val online = EspCompanionRepository.bleRelayOnline.value
+        val stale = relays.all { relay ->
+            val key = relay.id.trim().lowercase(java.util.Locale.US)
+            val last = online[key] ?: 0L
+            last <= 0L || now - last > BLE_RELAY_STALE_MS
+        }
+        if (!stale) {
+            lastBleRelayRebootMs = 0L
+            return
+        }
+        if (lastBleRelayRebootMs != 0L && now - lastBleRelayRebootMs < BLE_RELAY_REBOOT_COOLDOWN_MS) {
+            return
+        }
+        val sinceConnect = now - EspCompanionRepository.connectedAtMs.value
+        if (sinceConnect < BLE_RELAY_STALE_MS) return
+        lastBleRelayRebootMs = now
+        if (now - lastBleRelayRebootLogMs >= 60_000L) {
+            lastBleRelayRebootLogMs = now
+            Log.w(TAG, "paired BLE relays quiet >${BLE_RELAY_STALE_MS / 1000}s — rebooting companion")
+            TboxRepository.addLog(
+                "WARN",
+                "Companion",
+                "BLE relays quiet — rebooting companion",
+            )
+        }
+        writeLine(EspCompanionProtocol.encodeReboot())
     }
 
     private fun writeLine(payload: String) {

@@ -35,6 +35,8 @@ struct ble_gap_event;
 void ble_phone_gatts_register(void);
 /** Connectable advertising so a phone can connect. Keeps going while a slot is free. */
 void ble_phone_start_adv(void);
+/** True when advertising should run (BLE on, slot free) but is not active. */
+bool ble_phone_adv_dead(void);
 /** Drop every phone link and stop advertising. */
 void ble_phone_stop_link(void);
 /**

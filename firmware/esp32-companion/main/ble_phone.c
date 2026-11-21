@@ -1147,6 +1147,15 @@ void ble_phone_set_snapshot(int gen, uint32_t mask, const int vals[PHONE_SNAP_VA
     ble_radio_unlock();
 }
 
+bool ble_phone_adv_dead(void)
+{
+    ble_radio_lock();
+    bool dead = ble_btn_is_on() && link_count() < PHONE_LINK_MAX &&
+                !ble_gap_adv_active();
+    ble_radio_unlock();
+    return dead;
+}
+
 void ble_phone_poll(uint32_t t)
 {
     bool send_pair = false;
