@@ -109,8 +109,15 @@ OTA Monitor по-прежнему на своих public key (`version.json` в 
 | `RoadMapRemoteUrl` (`yandex-disk:`) | карты | Пути к APK/иконкам в catalog |
 
 DCLInstall (`tools/dcl_install/`) **не** становится магазином: там hardcoded
-пакет лаунчера, root `pm install`, hide SystemUI, dealer mode. Магазин ставит
-свежий DCLInstall; пользователь запускает его для окружения.
+пакет лаунчера, root `pm install`, hide SystemUI, dealer mode. В магазине две
+отдельные карточки:
+
+1. **DCL Launcher** (`dcl-launcher`) — обычная установка/обновление лаунчера
+   без DCLInstall (Intent + FileProvider, как у остальных приложений).
+2. **DCL Install** (`dclinstall`) — ставит сам установщик окружения; поле
+   `copyApkToDownloadsAppId: "dcl-launcher"` заставляет Store после скачивания
+   ещё положить APK лаунчера в публичные **Загрузки**, чтобы пользователь
+   выбрал его внутри DCLInstall.
 
 ---
 
@@ -191,6 +198,7 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `category` | `app` \| `tool` \| `oneshot` (утилиты вроде dataresize — фаза 2) |
 | `signingCertSha256` | Белый список отпечатков; несовпадение → отказ / явное предупреждение |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
+| `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
 
 Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
 `versionCode`, `versionName`, `flavor` при необходимости, `apkFileName`,
@@ -209,16 +217,23 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
   только через удаление (данные пользователя предупредить).
 - Не цель MVP: произвольная загрузка APK пользователем «с URL».
 
-### 4.3. Лаунчер DCL и доступ разработчику
+### 4.3. Лаунчер DCL, DCLInstall и доступ разработчику
 
-- Пакет: `ras.dashing.tbox.launcher`.
-- Публикация: папка `apps/dcl-launcher/` на обоих каналах (или только
+- Пакет лаунчера: `ras.dashing.tbox.launcher` (`id`: `dcl-launcher`) — в
+  витрине как обычное приложение: скачать / обновить без DCLInstall.
+- Пакет установщика: `vad.dashing.dclinstall` (`id`: `dclinstall`,
+  `category: tool`) — при «Скачать» магазин:
+  1. готовит APK DCLInstall к установке;
+  2. скачивает актуальный APK `dcl-launcher` и кладёт его в
+     `/sdcard/Download` (имя вида `dcl-launcher-<version>.apk`);
+  3. пользователь запускает DCLInstall и выбирает этот APK из Загрузок.
+- Публикация лаунчера: папка `apps/dcl-launcher/` на обоих каналах (или только
   `release/`, если dev ведёт сам разработчик в `dev/apps/dcl-launcher/`).
 - Разработчику лаунчера выдаётся доступ к соответствующим папкам Яндекс.Диска
   (и при зеркале — к Mail.ru), чтобы он сам выкладывал APK + обновлял
   `version.json` по согласованному шаблону.
 - Куратор каталога добавляет/правит запись в `apps/catalog.json` (или
-  доверяет скрипту, который подхватывает наличие `version.json`).
+  доверяет скрипту / GUI `tools/appstore_manager/`).
 - Совместимость подписи с уже установленным лаунчером на машинах пользователей
   — ответственность публикатора; в `signingCertSha256` фиксируем ожидаемые
   отпечатки (в т.ч. смена en/ru ключей, известная из [HU_PERF_TESTS_RU.md](HU_PERF_TESTS_RU.md)).

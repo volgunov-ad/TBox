@@ -34,27 +34,28 @@
       "verified": true
     },
     {
-      "id": "dclinstall",
-      "packageName": "vad.dashing.dclinstall",
-      "title": "DCL Install",
-      "summary": "Установка и настройка окружения DCL на A9",
-      "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9"],
-      "category": "tool",
-      "verified": true
-    },
-    {
       "id": "dcl-launcher",
       "packageName": "ras.dashing.tbox.launcher",
       "title": "DCL Launcher",
-      "summary": "Лаунчер DCL",
+      "summary": "Лаунчер DCL — установка и обновление без DCLInstall",
       "publisher": "DCL",
       "origin": "third-party",
       "hu": ["a9"],
       "category": "app",
       "verified": true,
       "reviewNotes": "Публикует разработчик лаунчера"
+    },
+    {
+      "id": "dclinstall",
+      "packageName": "vad.dashing.dclinstall",
+      "title": "DCL Install",
+      "summary": "Окружение DCL на A9. При скачивании APK лаунчера кладётся в Загрузки для выбора в установщике",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9"],
+      "category": "tool",
+      "verified": true,
+      "copyApkToDownloadsAppId": "dcl-launcher"
     }
   ]
 }

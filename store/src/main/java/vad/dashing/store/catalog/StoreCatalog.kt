@@ -48,6 +48,12 @@ data class StoreCatalogEntry(
     val signingCertSha256: List<String> = emptyList(),
     val minStoreVersionCode: Long = 0L,
     val reviewNotes: String = "",
+    /**
+     * When set (e.g. `dcl-launcher` on the DCLInstall card), after downloading this app
+     * the store also fetches that companion app's APK into public Downloads — for tools
+     * like DCLInstall that pick an APK from storage, without installing the companion.
+     */
+    val copyApkToDownloadsAppId: String = "",
 ) {
     fun supportsHu(huTag: String?): Boolean {
         if (huTag.isNullOrBlank() || huTag == "unknown") return true
@@ -115,6 +121,9 @@ data class StoreCatalog(
                             signingCertSha256 = certs,
                             minStoreVersionCode = item.optLong("minStoreVersionCode", 0L),
                             reviewNotes = item.optString("reviewNotes"),
+                            copyApkToDownloadsAppId = item.optString("copyApkToDownloadsAppId")
+                                .ifBlank { item.optString("downloadsSidecarAppId") }
+                                .trim(),
                         ),
                     )
                 }

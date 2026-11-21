@@ -133,6 +133,7 @@ class AppStoreManagerApp:
             ("category", "category (app|tool|oneshot)"),
             ("verified", "verified (true|false)"),
             ("reviewNotes", "Заметки проверки"),
+            ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
             ("signingCertSha256", "cert sha256 (через запятую)"),
             ("versionCode", "versionCode"),
             ("versionName", "versionName"),
@@ -146,7 +147,7 @@ class AppStoreManagerApp:
             ttk.Label(row, text=label, width=32).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
-                    state = DISABLED if key in ("id", "apkInfo", "iconInfo") else NORMAL
+            state = DISABLED if key in ("id", "apkInfo", "iconInfo") else NORMAL
             entry = ttk.Entry(row, textvariable=var, state=state)
             entry.pack(side=LEFT, fill=X, expand=True)
             setattr(self, f"_entry_{key}", entry)
@@ -173,6 +174,7 @@ class AppStoreManagerApp:
             ("category", "_entry_category"),
             ("verified", "_entry_verified"),
             ("reviewNotes", "_entry_reviewNotes"),
+            ("copyApkToDownloadsAppId", "_entry_copyApkToDownloadsAppId"),
             ("signingCertSha256", "_entry_signingCertSha256"),
             ("versionCode", "_entry_versionCode"),
             ("versionName", "_entry_versionName"),
@@ -272,6 +274,7 @@ class AppStoreManagerApp:
         self.fields["category"].set(m.category)
         self.fields["verified"].set("true" if m.verified else "false")
         self.fields["reviewNotes"].set(m.reviewNotes)
+        self.fields["copyApkToDownloadsAppId"].set(m.copyApkToDownloadsAppId)
         self.fields["signingCertSha256"].set(",".join(m.signingCertSha256))
         if record.release:
             self.fields["versionCode"].set(str(record.release.versionCode))
@@ -315,6 +318,7 @@ class AppStoreManagerApp:
             category=self.fields["category"].get().strip() or "app",
             verified=verified,
             reviewNotes=self.fields["reviewNotes"].get().strip(),
+            copyApkToDownloadsAppId=self.fields["copyApkToDownloadsAppId"].get().strip(),
             signingCertSha256=certs,
         )
 

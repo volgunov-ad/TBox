@@ -26,6 +26,7 @@ import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.disk.isReleaseNewer
 import vad.dashing.store.install.ApkInstaller
 import vad.dashing.store.install.ApkVerifier
+import vad.dashing.store.install.DownloadsApkSaver
 import vad.dashing.store.install.InstallPermissionHelper
 
 data class InstalledAppInfo(
@@ -76,6 +77,10 @@ sealed interface StoreActionState {
         val apkFile: File,
         val release: AppReleaseInfo,
         val entry: StoreCatalogEntry,
+        /** Public Downloads path of a companion APK (e.g. DCL launcher for DCLInstall). */
+        val downloadsSidecarPath: String? = null,
+        /** Soft failure while saving the companion APK; main APK is still ready. */
+        val downloadsSidecarError: String? = null,
     ) : StoreActionState
 
     data class Error(val appId: String?, val message: String) : StoreActionState
@@ -210,6 +215,9 @@ class StoreRepository(
             withContext(Dispatchers.IO) {
                 verifyDownloadedApk(destination, row.entry, release)
             }
+            val sidecar = withContext(Dispatchers.IO) {
+                downloadSidecarToDownloads(channel, row.entry)
+            }
             val withSize = release.copy(
                 apkSizeBytes = release.apkSizeBytes
                     ?: destination.length().takeIf { it > 0L },
@@ -219,6 +227,8 @@ class StoreRepository(
                 apkFile = destination,
                 release = withSize,
                 entry = row.entry,
+                downloadsSidecarPath = sidecar.path,
+                downloadsSidecarError = sidecar.error,
             )
         } catch (error: CancellationException) {
             withContext(NonCancellable + Dispatchers.IO) {
@@ -289,6 +299,46 @@ class StoreRepository(
             cloud.fetchPublicResourceSize(apkPath)
         }.getOrNull()
         return if (size != null) release.copy(apkSizeBytes = size) else release
+    }
+
+    private data class SidecarResult(
+        val path: String? = null,
+        val error: String? = null,
+    )
+
+    /**
+     * For tools like DCLInstall: also fetch companion app APK into public Downloads
+     * so the user can pick it inside that tool. Does not install the companion.
+     */
+    private suspend fun downloadSidecarToDownloads(
+        channel: UpdateChannel,
+        entry: StoreCatalogEntry,
+    ): SidecarResult {
+        val sidecarId = entry.copyApkToDownloadsAppId.trim()
+        if (sidecarId.isBlank()) return SidecarResult()
+        return try {
+            val sidecarEntry = lastRows.firstOrNull { it.entry.id == sidecarId }?.entry
+                ?: throw IOException("Catalog entry not found: $sidecarId")
+            val release = loadRelease(channel, sidecarEntry)
+            val cacheFile = apkDestinationFile(sidecarEntry.id, release)
+            cloud.downloadToFile(
+                diskPath = YandexDiskPath.appApkPath(channel, sidecarEntry.id, release.apkFileName),
+                destination = cacheFile,
+            )
+            verifyDownloadedApk(cacheFile, sidecarEntry, release)
+            val displayName = buildString {
+                append(sidecarEntry.id)
+                if (release.versionName.isNotBlank()) {
+                    append('-')
+                    append(release.versionName.replace(Regex("""[^\w.\-]+"""), "_"))
+                }
+                append(".apk")
+            }
+            val saved = DownloadsApkSaver.save(context, cacheFile, displayName)
+            SidecarResult(path = saved.absolutePath)
+        } catch (error: Exception) {
+            SidecarResult(error = error.message ?: error.javaClass.simpleName)
+        }
     }
 
     private fun verifyDownloadedApk(

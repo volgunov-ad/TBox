@@ -37,4 +37,6 @@
     <string name="store_changelog">Изменения</string>
     <string name="store_publisher">Издатель: %1$s</string>
     <string name="store_back">Назад к списку</string>
+    <string name="store_sidecar_saved">APK для выбора сохранён в Загрузки:\n%1$s</string>
+    <string name="store_sidecar_error">Не удалось сохранить companion APK в Загрузки: %1$s</string>
 </resources>

@@ -116,6 +116,33 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.assertEqual([], scan_apps(apps))
             self.assertFalse((apps / "demo").exists())
 
+    def test_copy_apk_to_downloads_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            apk = Path(tmp) / "install.apk"
+            apk.write_bytes(b"dclinstall")
+            meta = AppMeta(
+                id="dclinstall",
+                packageName="vad.dashing.dclinstall",
+                title="DCL Install",
+                hu=["a9"],
+                category="tool",
+                copyApkToDownloadsAppId="dcl-launcher",
+            )
+            add_app(
+                apps,
+                meta,
+                apk_source=apk,
+                version_code=1,
+                version_name="1.0.0",
+            )
+            catalog = build_catalog(apps)
+            self.assertEqual(
+                "dcl-launcher",
+                catalog["apps"][0]["copyApkToDownloadsAppId"],
+            )
+
     def test_missing_package_excluded_from_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             apps = Path(tmp) / "apps"

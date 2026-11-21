@@ -1,6 +1,9 @@
 package vad.dashing.store.ui
 
+import android.Manifest
 import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,6 +46,7 @@ import vad.dashing.store.StoreListState
 import vad.dashing.store.catalog.StoreAppOrigin
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
+import vad.dashing.store.install.DownloadsApkSaver
 import vad.dashing.store.install.InstallPermissionHelper
 import vad.dashing.store.install.formatApkSizeMegabytes
 import vad.dashing.store.ui.theme.tboxBody
@@ -62,6 +66,31 @@ fun StoreHomeScreen(
     val icons by viewModel.icons.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
+    var pendingDownloadAppId by remember { mutableStateOf<String?>(null) }
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        val appId = pendingDownloadAppId
+        pendingDownloadAppId = null
+        if (appId != null) {
+            // Proceed even if denied: main APK still installs; sidecar soft-fails.
+            viewModel.download(appId)
+        }
+    }
+
+    fun startDownload(row: StoreAppRow) {
+        val appId = row.entry.id
+        val needsSidecar = row.entry.copyApkToDownloadsAppId.isNotBlank()
+        if (needsSidecar &&
+            DownloadsApkSaver.needsWritePermission() &&
+            !DownloadsApkSaver.hasWritePermission(context)
+        ) {
+            pendingDownloadAppId = appId
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        viewModel.download(appId)
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -194,7 +223,7 @@ fun StoreHomeScreen(
                 actionState = actionState,
                 canInstall = canInstall,
                 onBack = { viewModel.selectApp(null) },
-                onDownload = { viewModel.download(selectedRow.entry.id) },
+                onDownload = { startDownload(selectedRow) },
                 onCancel = { viewModel.cancelDownload() },
                 onInstall = { viewModel.install() },
                 onOpen = { viewModel.openApp(selectedRow.entry.packageName) },
@@ -436,6 +465,20 @@ private fun AppDetail(
             }
             actionState is StoreActionState.ReadyToInstall &&
                 actionState.appId == row.entry.id -> {
+                actionState.downloadsSidecarPath?.let { path ->
+                    Text(
+                        stringResource(R.string.store_sidecar_saved, path),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                actionState.downloadsSidecarError?.let { err ->
+                    Text(
+                        stringResource(R.string.store_sidecar_error, err),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 Button(onClick = onInstall, enabled = canInstall) {
                     Text(
                         stringResource(R.string.store_install),

@@ -148,5 +148,28 @@ class StoreCatalogTest {
         assertTrue(catalog.apps.any { it.id == "dcl-launcher" && it.origin == StoreAppOrigin.THIRD_PARTY })
         assertTrue(catalog.apps.first { it.id == "camd" }.supportsHu("a9"))
         assertFalse(catalog.apps.first { it.id == "camd" }.supportsHu("a10"))
+        val dclInstall = catalog.apps.first { it.id == "dclinstall" }
+        assertEquals("dcl-launcher", dclInstall.copyApkToDownloadsAppId)
+        assertEquals(StoreAppCategory.TOOL, dclInstall.category)
+    }
+
+    @Test
+    fun parse_copyApkToDownloadsAppId() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "apps": [
+                {
+                  "id": "dclinstall",
+                  "packageName": "vad.dashing.dclinstall",
+                  "title": "DCL Install",
+                  "verified": true,
+                  "copyApkToDownloadsAppId": "dcl-launcher"
+                }
+              ]
+            }
+        """.trimIndent()
+        val entry = StoreCatalog.parse(json).apps.single()
+        assertEquals("dcl-launcher", entry.copyApkToDownloadsAppId)
     }
 }

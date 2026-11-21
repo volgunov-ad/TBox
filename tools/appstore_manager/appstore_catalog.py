@@ -44,6 +44,9 @@ class AppMeta:
     signingCertSha256: list[str] = field(default_factory=list)
     minStoreVersionCode: int | None = None
     reviewNotes: str = ""
+    # When set (e.g. dclinstall → dcl-launcher), Store also saves that app's APK
+    # into public Downloads after download (for tools that pick an APK from storage).
+    copyApkToDownloadsAppId: str = ""
 
     def to_meta_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -65,6 +68,8 @@ class AppMeta:
             data["minStoreVersionCode"] = int(self.minStoreVersionCode)
         if self.reviewNotes:
             data["reviewNotes"] = self.reviewNotes
+        if self.copyApkToDownloadsAppId:
+            data["copyApkToDownloadsAppId"] = self.copyApkToDownloadsAppId
         return data
 
     def to_catalog_entry(self, icon_file_name: str | None = None) -> dict[str, Any]:
@@ -197,6 +202,9 @@ def _meta_from_dict(raw: dict[str, Any], fallback_id: str) -> AppMeta:
         signingCertSha256=[str(c).lower() for c in certs if str(c).strip()],
         minStoreVersionCode=int(min_code) if min_code is not None and str(min_code) != "" else None,
         reviewNotes=str(raw.get("reviewNotes", "")),
+        copyApkToDownloadsAppId=str(
+            raw.get("copyApkToDownloadsAppId") or raw.get("downloadsSidecarAppId") or "",
+        ).strip(),
     )
 
 
