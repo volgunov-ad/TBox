@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "appstore_manager"))
 
+from apk_manifest import read_apk_info  # noqa: E402
 from appstore_catalog import (  # noqa: E402
     AppMeta,
     add_app,
@@ -24,6 +25,8 @@ from appstore_catalog import (  # noqa: E402
     upsert_meta,
     write_catalog,
 )
+
+DCL_APK = ROOT / "tools" / "dcl_install" / "DclInstall.apk"
 
 
 class AppStoreCatalogTest(unittest.TestCase):
@@ -115,6 +118,52 @@ class AppStoreCatalogTest(unittest.TestCase):
             delete_app(apps, "demo")
             self.assertEqual([], scan_apps(apps))
             self.assertFalse((apps / "demo").exists())
+
+    def test_read_apk_info_from_manifest(self) -> None:
+        if not DCL_APK.is_file():
+            self.skipTest("DclInstall.apk missing")
+        info = read_apk_info(DCL_APK)
+        self.assertEqual("vad.dashing.dclinstall", info.packageName)
+        self.assertEqual(21, info.versionCode)
+        self.assertEqual("1.20", info.versionName)
+        self.assertTrue(info.source in ("aapt", "axml"))
+
+    def test_set_apk_reads_version_from_apk(self) -> None:
+        if not DCL_APK.is_file():
+            self.skipTest("DclInstall.apk missing")
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            meta = AppMeta(
+                id="dclinstall",
+                packageName="vad.dashing.dclinstall",
+                title="DCL Install",
+                hu=["a9"],
+                category="tool",
+            )
+            upsert_meta(apps, meta)
+            release = set_apk(apps, "dclinstall", DCL_APK)
+            self.assertEqual(21, release.versionCode)
+            self.assertEqual("1.20", release.versionName)
+            self.assertTrue((apps / "dclinstall" / DCL_APK.name).is_file())
+
+    def test_set_apk_rejects_package_mismatch(self) -> None:
+        if not DCL_APK.is_file():
+            self.skipTest("DclInstall.apk missing")
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            upsert_meta(
+                apps,
+                AppMeta(
+                    id="dclinstall",
+                    packageName="com.example.other",
+                    title="Wrong",
+                    hu=["a9"],
+                ),
+            )
+            with self.assertRaises(ValueError):
+                set_apk(apps, "dclinstall", DCL_APK)
 
     def test_copy_apk_to_downloads_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
