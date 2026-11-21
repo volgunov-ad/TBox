@@ -13,16 +13,16 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.catalog.YandexDiskPath
+import vad.dashing.store.disk.StoreCloudFacade
 import vad.dashing.store.disk.UpdateChannel
-import vad.dashing.store.disk.YandexDiskClient
 
 /**
- * Loads catalog icons from Yandex Disk into [cacheDir]/store/icons], with a fallback to the
- * installed application icon when the package is present on the device.
+ * Loads catalog icons from cloud (Yandex → Mail.ru) into [cacheDir]/store/icons],
+ * with a fallback to the installed application icon when the package is present.
  */
 class StoreIconLoader(
     private val context: Context,
-    private val yandexDiskClient: YandexDiskClient = YandexDiskClient(),
+    private val cloud: StoreCloudFacade,
 ) {
     private val memory = LinkedHashMap<String, Bitmap>(32, 0.75f, true)
     private val mutex = Mutex()
@@ -30,7 +30,6 @@ class StoreIconLoader(
     suspend fun load(
         entry: StoreCatalogEntry,
         channel: UpdateChannel,
-        publicKey: String,
     ): Bitmap? {
         val cacheKey = "${channel.storageValue}:${entry.id}:${entry.iconUrl}"
         mutex.withLock {
@@ -38,7 +37,7 @@ class StoreIconLoader(
         }
         val remote = if (entry.hasExplicitIcon()) {
             withContext(Dispatchers.IO) {
-                runCatching { downloadRemote(entry, channel, publicKey) }.getOrNull()
+                runCatching { downloadRemote(entry, channel) }.getOrNull()
             }
         } else {
             null
@@ -66,7 +65,6 @@ class StoreIconLoader(
     private suspend fun downloadRemote(
         entry: StoreCatalogEntry,
         channel: UpdateChannel,
-        publicKey: String,
     ): Bitmap? {
         val logical = entry.resolveIconLogicalPath() ?: return null
         val path = YandexDiskPath.physicalPath(channel, logical)
@@ -74,7 +72,7 @@ class StoreIconLoader(
         val dest = iconCacheFile(channel, entry.id, fileName)
         if (!dest.exists() || dest.length() <= 0L) {
             try {
-                yandexDiskClient.downloadToFile(publicKey, path, dest)
+                cloud.downloadToFile(path, dest)
             } catch (_: Exception) {
                 dest.delete()
                 return null

@@ -41,6 +41,7 @@ import vad.dashing.store.StoreActionState
 import vad.dashing.store.StoreAppRow
 import vad.dashing.store.StoreListState
 import vad.dashing.store.catalog.StoreAppOrigin
+import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.install.InstallPermissionHelper
 import vad.dashing.store.install.formatApkSizeMegabytes
@@ -56,6 +57,7 @@ fun StoreHomeScreen(
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val actionState by viewModel.actionState.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
+    val cloudSource by viewModel.cloudSource.collectAsStateWithLifecycle()
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
     val icons by viewModel.icons.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -111,12 +113,44 @@ fun StoreHomeScreen(
             }
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ChannelButton(
+                label = stringResource(R.string.store_cloud_auto),
+                selected = cloudSource == CloudSource.AUTO,
+                onClick = { viewModel.setCloudSource(CloudSource.AUTO) },
+            )
+            ChannelButton(
+                label = stringResource(R.string.store_cloud_yandex),
+                selected = cloudSource == CloudSource.YANDEX,
+                onClick = { viewModel.setCloudSource(CloudSource.YANDEX) },
+            )
+            ChannelButton(
+                label = stringResource(R.string.store_cloud_mailru),
+                selected = cloudSource == CloudSource.MAILRU,
+                onClick = { viewModel.setCloudSource(CloudSource.MAILRU) },
+            )
+        }
+
         Text(
             text = stringResource(
                 R.string.store_channel_label,
                 when (channel) {
                     UpdateChannel.RELEASE -> stringResource(R.string.store_channel_release)
                     UpdateChannel.DEVELOPMENT -> stringResource(R.string.store_channel_development)
+                },
+            ),
+            style = MaterialTheme.typography.tboxBody,
+        )
+        Text(
+            text = stringResource(
+                R.string.store_cloud_label,
+                when (cloudSource) {
+                    CloudSource.AUTO -> stringResource(R.string.store_cloud_auto)
+                    CloudSource.YANDEX -> stringResource(R.string.store_cloud_yandex)
+                    CloudSource.MAILRU -> stringResource(R.string.store_cloud_mailru)
                 },
             ),
             style = MaterialTheme.typography.tboxBody,

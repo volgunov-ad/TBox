@@ -92,8 +92,9 @@ Mail.ru Cloud ── https://cloud.mail.ru/public/voi3/4Lx1RhqV9
 OTA Monitor по-прежнему на своих public key (`version.json` в корне `release/` /
 `dev/` синхронизации TBM). Магазин их не читает.
 
-Клиентский fallback на Mail.ru (если Яндекс недоступен) — этап 7; константы
-`STORE_MAILRU_*` уже в `:store` BuildConfig.
+Клиентский fallback: `StoreCloudFacade` + `MailRuCloudClient` (weblink
+`voi3/4Lx1RhqV9`). В UI магазина источник: Авто (Яндекс→Mail.ru) / только Яндекс /
+только Mail.ru.
 
 Переиспользовать из Monitor (вынести в общую библиотеку или скопировать тонкий
 слой в `:store` на первом шаге, рефакторинг — следом):
@@ -314,7 +315,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
 | 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
 | 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
-| 7 | Зеркало Mail.ru | Share + `release/apps`/`dev/apps` — **есть** (`voi3/4Lx1RhqV9`); осталось sync контента + клиентский fallback |
+| 7 | Зеркало Mail.ru | Share + клиентский fallback — **сделано** (`StoreCloudFacade`: Авто / Яндекс / Mail.ru); контент на зеркале нужно синхронизировать вручную |
 | 8 | Фаза 2 | voice, A10 oneshot, dexopt/root install, свертка OTA Monitor |
 
 ---

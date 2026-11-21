@@ -6,6 +6,10 @@
     <string name="store_channel_release">Релиз</string>
     <string name="store_channel_development">Разработка</string>
     <string name="store_channel_label">Ветка: %1$s</string>
+    <string name="store_cloud_auto">Авто (Яндекс→Mail.ru)</string>
+    <string name="store_cloud_yandex">Только Яндекс</string>
+    <string name="store_cloud_mailru">Только Mail.ru</string>
+    <string name="store_cloud_label">Источник: %1$s</string>
     <string name="store_hu_label">ГУ: %1$s</string>
     <string name="store_hu_a9">Android 9 (mbCAN)</string>
     <string name="store_hu_a10">Android 10 (VHAL)</string>

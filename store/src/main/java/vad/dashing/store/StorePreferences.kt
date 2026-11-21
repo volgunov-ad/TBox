@@ -1,6 +1,7 @@
 package vad.dashing.store
 
 import android.content.Context
+import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 
 class StorePreferences(context: Context) {
@@ -12,8 +13,15 @@ class StorePreferences(context: Context) {
             prefs.edit().putString(KEY_CHANNEL, value.storageValue).apply()
         }
 
+    var cloudSource: CloudSource
+        get() = CloudSource.fromStorageValue(prefs.getString(KEY_CLOUD, null))
+        set(value) {
+            prefs.edit().putString(KEY_CLOUD, value.storageValue).apply()
+        }
+
     companion object {
         private const val PREFS_NAME = "tbox_store"
         private const val KEY_CHANNEL = "channel"
+        private const val KEY_CLOUD = "cloud_source"
     }
 }
