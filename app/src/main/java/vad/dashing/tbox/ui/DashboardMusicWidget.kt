@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -66,6 +67,7 @@ import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.radio.RadioPlayer
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -237,7 +239,15 @@ fun DashboardMusicWidgetItem(
         mutableLongStateOf(0L)
     }
     val playerStates by SharedMediaControlService.playerStates.collectAsStateWithLifecycle()
-    val mediaState = remember(selectedPlayers, playerStates, selectedPackage) {
+    val isRadioSelected = remember(selectedPackage) { RadioPlayer.isRadioPackage(selectedPackage) }
+    val radioState by RadioPlayer.state.collectAsStateWithLifecycle()
+    DisposableEffect(isRadioSelected) {
+        if (isRadioSelected) RadioPlayer.beginWatch()
+        onDispose {
+            if (isRadioSelected) RadioPlayer.endWatch()
+        }
+    }
+    val mediaState = remember(selectedPlayers, playerStates, selectedPackage, radioState) {
         SharedMediaControlService.resolveWidgetState(
             selectedPackages = selectedPlayers,
             currentStates = playerStates,
@@ -298,7 +308,7 @@ fun DashboardMusicWidgetItem(
     val basePlayerLabel = selectedPlayer?.let { stringResource(it.titleRes) }
         ?: unknownAppLabel
         ?: stringResource(R.string.widget_music_player_none)
-    val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true
+    val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true || (isRadioSelected && radioState?.backendAvailable == true)
     val playerLabel = if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
         stringResource(R.string.widget_music_player_with_state_off, basePlayerLabel)
     } else {
@@ -307,26 +317,39 @@ fun DashboardMusicWidgetItem(
     val musicHeaderLabel = titleOverride.trim().ifBlank { playerLabel }
     val line2Text = if (!mediaState.notificationAccessGranted) {
         stringResource(R.string.widget_music_access_required)
+    } else if (isRadioSelected) {
+        radioState?.bandLabel ?: stringResource(R.string.widget_music_no_artist)
     } else {
         selectedPlayerState?.artist?.ifBlank { stringResource(R.string.widget_music_no_artist) }
             ?: stringResource(R.string.widget_music_no_artist)
     }
     val line3Text = if (!mediaState.notificationAccessGranted) {
         stringResource(R.string.widget_music_open_access_settings)
+    } else if (isRadioSelected) {
+        radioState?.trackLabel ?: stringResource(R.string.widget_music_no_track)
     } else {
         selectedPlayerState?.track?.ifBlank { stringResource(R.string.widget_music_no_track) }
             ?: stringResource(R.string.widget_music_no_track)
     }
-    val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
+    val playPauseIcon = if (isRadioSelected) {
+        if (radioState?.isPlaying == true) R.drawable.pause else R.drawable.play
+    } else if (selectedPlayerState?.isPlaying == true) {
+        R.drawable.pause
+    } else {
+        R.drawable.play
+    }
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
-    val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
+    val canSendSkip = mediaState.notificationAccessGranted &&
+        (isSelectedPlayerRunning || isRadioSelected)
     val showLikeButton = shouldShowMusicLikeButton(
         optionEnabled = widgetConfig.mediaShowLikeButton,
         supportsHeartRating = selectedPlayerState?.supportsHeartRating == true,
     )
     val isLiked = selectedPlayerState?.isLiked == true
-    val canSendLike = showLikeButton && mediaState.notificationAccessGranted && isSelectedPlayerRunning
-    val isPlaying = selectedPlayerState?.isPlaying ?: mediaState.isPlaying
+    val canSendLike = showLikeButton && mediaState.notificationAccessGranted && isSelectedPlayerRunning && !isRadioSelected
+    val isPlaying = if (isRadioSelected) radioState?.isPlaying == true else {
+        selectedPlayerState?.isPlaying ?: mediaState.isPlaying
+    }
     val durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs
     val positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
     val playbackSpeed = selectedPlayerState?.playbackSpeed ?: mediaState.playbackSpeed
@@ -1623,6 +1646,7 @@ internal fun shouldShowMusicPlayerIconBesideArtist(
 
 internal fun resolvePlayerLaunchPackage(packageName: String): String {
     return when (SupportedMediaPlayer.fromPackage(packageName)) {
+        SupportedMediaPlayer.HEAD_UNIT_RADIO -> ""
         SupportedMediaPlayer.BLUETOOTH_PHONE -> "com.wt.multimedia.local"
         else -> packageName
     }

@@ -161,6 +161,13 @@ class DashboardMusicWidgetGestureLogicTest {
     }
 
     @Test
+    fun resolvePlayerLaunchPackage_radioHasNoLaunchableApp() {
+        val result = resolvePlayerLaunchPackage("vad.dashing.tbox.radio")
+
+        assertEquals("", result)
+    }
+
+    @Test
     fun isInResizeHandleArea_returnsTrueForBottomRightCorner() {
         val result = isInResizeHandleArea(
             offset = Offset(95f, 95f),

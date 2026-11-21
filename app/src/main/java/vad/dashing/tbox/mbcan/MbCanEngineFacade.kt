@@ -61,6 +61,7 @@ object MbCanEngineFacade {
     private var windowStatusConstructor: Constructor<*>? = null
     private var canGetAudioParamMethod: Method? = null
     private var canSetAudioParamMethod: Method? = null
+    private var canRadioSetMethod: Method? = null
     private var subscribeMethod: Method? = null
     private var unSubscribeMethod: Method? = null
     private var registerCarSettingsListenerMethod: Method? = null
@@ -150,6 +151,9 @@ object MbCanEngineFacade {
                 engineClass.getMethod("canGetAudioParam", Int::class.javaPrimitiveType)
             canSetAudioParamMethod =
                 engineClass.getMethod("canSetAudioParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            canRadioSetMethod = runCatching {
+                engineClass.getMethod("canRadioSet", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            }.getOrNull()
             subscribeMethod = engineClass.getMethod("subscribeCanDataWithList", ArrayList::class.java)
             unSubscribeMethod = engineClass.getMethod("unSubscribeCanDataWithList", ArrayList::class.java)
             registerCarSettingsListenerMethod =
@@ -227,6 +231,68 @@ object MbCanEngineFacade {
     fun canSetVehicleParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         return invokeNativeSet(canSetVehicleParamMethod, propertyId, value)
+    }
+
+    /**
+     * [com.mengbo.mbCan.MBCanEngine.canRadioSet] with [com.mengbo.mbCan.defines.MBRadioCmdType]
+     * commands (1 BAND, 2/3 SEEK, 7/8 STEP). Present in factory radios only via a
+     * modular==3 sender; missing on some engine builds — callers must tolerate null.
+     */
+    fun canRadioSet(cmdType: Int, value: Int): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val engine = engineInstance ?: return null
+        val method = canRadioSetMethod ?: return null
+        warnIfNativeCallOnMain("radioSet", cmdType)
+        return nativeCallLock.withLock {
+            try {
+                method.invoke(engine, cmdType, value) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Poll-only radio RX: [getMbCanData] type **19** (`eMBCAN_RADIO_FREQUENCYINFO`)
+     * and type **30** (`eMBCAN_RADIO_PROGRAMSTATE`). OEM push dispatch branches for both
+     * are empty, so there is nothing to subscribe to.
+     */
+    data class RadioFrequencySnapshot(
+        val frequency: Int,
+        val valid: Int,
+        val status: Int,
+        val level: Int,
+    )
+
+    fun readRadioFrequencySnapshot(): RadioFrequencySnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val cls = Class.forName("com.mengbo.mbCan.entity.MBCanRadioFrequencyInfo")
+            val obj = nativeGetMbCanData(getMbCanData, inst, 19, cls) ?: return null
+            RadioFrequencySnapshot(
+                frequency = (cls.getMethod("getFrequency").invoke(obj) as? Number)?.toInt() ?: return null,
+                valid = (cls.getMethod("getValid").invoke(obj) as? Number)?.toInt() ?: 0,
+                status = (cls.getMethod("getStatus").invoke(obj) as? Number)?.toInt() ?: 0,
+                level = (cls.getMethod("getLevel").invoke(obj) as? Number)?.toInt() ?: 0,
+            )
+        }.getOrNull()
+    }
+
+    fun readRadioProgramStateSnapshot(): Pair<Int, Int>? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val cls = Class.forName("com.mengbo.mbCan.entity.MBRadioProgramState")
+            val obj = nativeGetMbCanData(getMbCanData, inst, 30, cls) ?: return null
+            val level = (cls.getMethod("getLevel").invoke(obj) as? Number)?.toInt() ?: return null
+            val radioType = (cls.getMethod("getRadioType").invoke(obj) as? Number)?.toInt() ?: 0
+            level to radioType
+        }.getOrNull()
     }
 
     /**

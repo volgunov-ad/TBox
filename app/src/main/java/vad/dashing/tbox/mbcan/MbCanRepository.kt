@@ -264,6 +264,41 @@ data class MbCanCommandResult(
     val message: String
 )
 
+/**
+ * A9 radio ids/values ([com.mengbo.mbCan.defines.MBVehicleProperty] 154..161 and
+ * [com.mengbo.mbCan.defines.MBRadioCmdType]). Semantics of [PLAY_STATE] and the
+ * `canRadioSet` value argument are low-confidence — see docs/RADIO_CONTROL_STOCK_APPS_RU.md §5.
+ */
+object MbCanRadioProperties {
+    /** eVEHICLE_SET_RADIO_FREQUANCE_MODE: 1 FM_Mode, 2 AM_Mode. */
+    const val FREQUENCY_MODE = 154
+    /** eVEHICLE_SET_RADIO_SOURCE_STATION_MODE: 1 Radio, 5 Bluetooth. */
+    const val SOURCE_STATION_MODE = 156
+    /** eVEHICLE_FMRADIO_FREQUANCE_VALUE. */
+    const val FM_FREQUENCY = 158
+    /** eVEHICLE_AMRADIO_FREQUANCE_VALUE. */
+    const val AM_FREQUENCY = 159
+    /** eVEHICLE_SET_FREQUENCY_STS «PlayOn / PlayOff» — low-confidence semantics. */
+    const val PLAY_STATE = 161
+
+    const val MODE_FM = 1
+    const val MODE_AM = 2
+
+    const val PLAY_ON = 1
+    const val PLAY_OFF = 0
+
+    /** MBRadioCmdType: 1 BAND, 2/3 SEEK_UP/DOWN, 7/8 STEP_UP/DOWN. */
+    const val CMD_BAND = 1
+    const val CMD_SEEK_UP = 2
+    const val CMD_SEEK_DOWN = 3
+    const val CMD_STEP_UP = 7
+    const val CMD_STEP_DOWN = 8
+
+    /** getMbCanData types with no OEM push dispatch (poll-only). */
+    const val RADIO_FREQUENCY_INFO_TYPE = 19
+    const val RADIO_PROGRAM_STATE_TYPE = 30
+}
+
 sealed class MbCanCommand {
     data class ToggleProperty(val propertyId: Int) : MbCanCommand()
     data class SetProperty(val propertyId: Int, val value: Int) : MbCanCommand()
@@ -4310,6 +4345,56 @@ object MbCanRepository {
         }
         MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
+
+    /** Frequency/band/level snapshot for the music-widget radio player (poll on demand). */
+    data class RadioSnapshot(
+        val frequency: Int?,
+        val modeValue: Int?,
+        val valid: Int?,
+        val level: Int,
+        val error: String?,
+    )
+
+    suspend fun getRadioSnapshot(): RadioSnapshot = withContext(stateApplyDispatcher) {
+        ensureMbCanReadyIfNeeded()
+        if (availability.value !is MbCanAvailability.Available) {
+            return@withContext RadioSnapshot(null, null, null, -1, "mbCAN unavailable")
+        }
+        val freqInfo = MbCanEngineFacade.readRadioFrequencySnapshot()
+        val mode = runCatching {
+            MbCanEngineFacade.canGetVehicleParam(MbCanRadioProperties.FREQUENCY_MODE)
+        }.getOrNull()
+        RadioSnapshot(
+            frequency = freqInfo?.frequency,
+            modeValue = mode,
+            valid = freqInfo?.valid,
+            level = freqInfo?.level ?: -1,
+            error = if (freqInfo == null && mode == null) "radio data unavailable" else null,
+        )
+    }
+
+    /** Fire-and-report radio command via [MbCanEngineFacade.canRadioSet]; null on success. */
+    suspend fun sendRadioCmd(cmdType: Int, value: Int): String? = withContext(stateApplyDispatcher) {
+        ensureMbCanReadyIfNeeded()
+        if (availability.value !is MbCanAvailability.Available) {
+            return@withContext "mbCAN unavailable"
+        }
+        val result = runCatching { MbCanEngineFacade.canRadioSet(cmdType, value) }.getOrNull()
+            ?: return@withContext "canRadioSet unavailable"
+        if (result < 0) "canRadioSet result: $result" else null
+    }
+
+    /** Vehicle-property radio write (band 154, play 161); null on success. */
+    suspend fun sendRadioVehicleSet(propertyId: Int, value: Int): String? =
+        withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            if (availability.value !is MbCanAvailability.Available) {
+                return@withContext "mbCAN unavailable"
+            }
+            val result = runCatching { MbCanEngineFacade.canSetVehicleParam(propertyId, value) }.getOrNull()
+                ?: return@withContext "canSetVehicleParam failed"
+            if (result < 0) "canSetVehicleParam result: $result" else null
+        }
 
     private suspend fun refreshSeatSlot(slot: MbCanSeatSlot) {
         withContext(stateApplyDispatcher) {

@@ -28,6 +28,8 @@ import kotlinx.coroutines.withContext
 import java.util.LinkedHashSet
 import java.net.HttpURLConnection
 import java.net.URL
+import vad.dashing.tbox.radio.RadioPlayer
+import vad.dashing.tbox.radio.RADIO_PLAYER_PACKAGE
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 const val MUSIC_COVER_WIDGET_DATA_KEY = "musicCoverWidget"
@@ -89,6 +91,11 @@ enum class SupportedMediaPlayer(
     val titleRes: Int,
     val iconRes: Int
 ) {
+    HEAD_UNIT_RADIO(
+        packageName = RADIO_PLAYER_PACKAGE,
+        titleRes = R.string.media_player_head_unit_radio,
+        iconRes = R.drawable.player_fmplay
+    ),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
@@ -400,6 +407,24 @@ object SharedMediaControlService {
         val fallbackPlayer = selectedState?.player
             ?: SupportedMediaPlayer.fromPackage(prioritizedPackages.firstOrNull().orEmpty())
 
+        val radioState = if (RadioPlayer.isRadioPackage(normalizedPreferred) &&
+            RadioPlayer.isRadioPackage(prioritizedPackages.firstOrNull())
+        ) {
+            RadioPlayer.state.value
+        } else {
+            null
+        }
+        if (radioState != null) {
+            return MediaWidgetState(
+                player = SupportedMediaPlayer.HEAD_UNIT_RADIO,
+                artist = radioState.bandLabel,
+                track = radioState.trackLabel,
+                isPlaying = radioState.isPlaying,
+                controlsAvailable = radioState.backendAvailable,
+                notificationAccessGranted = isNotificationAccessGranted()
+            )
+        }
+
         return MediaWidgetState(
             player = fallbackPlayer,
             artist = selectedState?.artist.orEmpty(),
@@ -415,6 +440,12 @@ object SharedMediaControlService {
     }
 
     fun skipToPrevious(selectedPackages: Set<String>, preferredPackage: String = "") {
+        if (RadioPlayer.isRadioPackage(preferredPackage) ||
+            (preferredPackage.isBlank() && preferredTargetsRadio(selectedPackages))
+        ) {
+            RadioPlayer.commandSeekPrevious()
+            return
+        }
         synchronized(this) {
             syncControllersLocked()
             resolveControllerLocked(
@@ -434,6 +465,10 @@ object SharedMediaControlService {
         keepPlayerForeground: Boolean = false, // anymani: опция независима от автозапуска
         launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
     ) {
+        if (preferredPackage.isNotBlank() && RadioPlayer.isRadioPackage(preferredPackage)) {
+            RadioPlayer.commandPlayPause()
+            return
+        }
         var controllerHandled = false
         synchronized(this) {
             syncControllersLocked()
@@ -476,6 +511,10 @@ object SharedMediaControlService {
         keepPlayerForeground: Boolean = false, // anymani: опция для отключения возврата лаунчера
         launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
     ) {
+        if (preferredPackage.isNotBlank() && RadioPlayer.isRadioPackage(preferredPackage)) {
+            RadioPlayer.commandPlayPause()
+            return
+        }
         var controllerHandled = false
         synchronized(this) {
             syncControllersLocked()
@@ -509,6 +548,12 @@ object SharedMediaControlService {
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
+        if (RadioPlayer.isRadioPackage(preferredPackage) ||
+            (preferredPackage.isBlank() && preferredTargetsRadio(selectedPackages))
+        ) {
+            RadioPlayer.commandSeekNext()
+            return
+        }
         synchronized(this) {
             syncControllersLocked()
             resolveControllerLocked(
@@ -519,6 +564,12 @@ object SharedMediaControlService {
                 ?.transportControls
                 ?.skipToNext()
         }
+    }
+
+    /** Only the radio is selected in the widget (no MediaSession player picked). */
+    private fun preferredTargetsRadio(selectedPackages: Set<String>): Boolean {
+        val active = selectedPackages.filterNot { RadioPlayer.isRadioPackage(it) }
+        return RadioPlayer.isRadioPackage(selectedPackages.firstOrNull()) && active.isEmpty()
     }
 
     fun toggleHeartRating(selectedPackages: Set<String>, preferredPackage: String = "") {
