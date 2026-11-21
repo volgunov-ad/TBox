@@ -60,6 +60,20 @@ data class StoreCatalogEntry(
         if (!fromUrl.isNullOrBlank()) return fromUrl
         return "/apps/$id/version.json"
     }
+
+    /**
+     * Logical icon path from catalog `icon` field only.
+     * When absent, the UI uses the installed app icon or a letter placeholder
+     * (avoids a Disk round-trip / 404 per app).
+     */
+    fun resolveIconLogicalPath(): String? {
+        if (iconUrl.isBlank()) return null
+        val fromUrl = YandexDiskPath.toLogicalPath(iconUrl)
+        if (!fromUrl.isNullOrBlank()) return fromUrl
+        return if (iconUrl.startsWith("/")) iconUrl else "/$iconUrl"
+    }
+
+    fun hasExplicitIcon(): Boolean = iconUrl.isNotBlank()
 }
 
 data class StoreCatalog(

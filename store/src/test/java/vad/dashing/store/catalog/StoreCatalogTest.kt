@@ -81,6 +81,26 @@ class StoreCatalogTest {
     }
 
     @Test
+    fun iconPath_onlyWhenExplicit() {
+        val withIcon = StoreCatalogEntry(
+            id = "mqtt",
+            packageName = "vad.dashing.mqtt",
+            title = "MQTT",
+            iconUrl = "yandex-disk:/apps/mqtt/icon.png",
+        )
+        assertEquals("/apps/mqtt/icon.png", withIcon.resolveIconLogicalPath())
+        assertTrue(withIcon.hasExplicitIcon())
+
+        val without = StoreCatalogEntry(
+            id = "mqtt",
+            packageName = "vad.dashing.mqtt",
+            title = "MQTT",
+        )
+        assertEquals(null, without.resolveIconLogicalPath())
+        assertFalse(without.hasExplicitIcon())
+    }
+
+    @Test
     fun yandexDiskPath_prefixesChannelRoot() {
         assertEquals(
             "/release/apps/catalog.json",

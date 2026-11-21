@@ -1,5 +1,6 @@
 package vad.dashing.store.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -55,6 +57,7 @@ fun StoreHomeScreen(
     val actionState by viewModel.actionState.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
+    val icons by viewModel.icons.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
 
@@ -153,6 +156,7 @@ fun StoreHomeScreen(
         if (selectedRow != null) {
             AppDetail(
                 row = selectedRow,
+                icon = icons[selectedRow.entry.id],
                 actionState = actionState,
                 canInstall = canInstall,
                 onBack = { viewModel.selectApp(null) },
@@ -164,6 +168,7 @@ fun StoreHomeScreen(
         } else {
             CatalogList(
                 listState = listState,
+                icons = icons,
                 onSelect = { viewModel.selectApp(it) },
             )
         }
@@ -190,6 +195,7 @@ private fun ChannelButton(
 @Composable
 private fun CatalogList(
     listState: StoreListState,
+    icons: Map<String, Bitmap>,
     onSelect: (String) -> Unit,
 ) {
     when (listState) {
@@ -230,7 +236,11 @@ private fun CatalogList(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(listState.rows, key = { it.entry.id }) { row ->
-                        AppListItem(row = row, onClick = { onSelect(row.entry.id) })
+                        AppListItem(
+                            row = row,
+                            icon = icons[row.entry.id],
+                            onClick = { onSelect(row.entry.id) },
+                        )
                         HorizontalDivider()
                     }
                 }
@@ -242,49 +252,63 @@ private fun CatalogList(
 @Composable
 private fun AppListItem(
     row: StoreAppRow,
+    icon: Bitmap?,
     onClick: () -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = row.entry.title,
-                style = MaterialTheme.typography.tboxTitle,
-            )
-            if (row.entry.origin == StoreAppOrigin.THIRD_PARTY) {
-                Text(
-                    text = stringResource(R.string.store_badge_third_party),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        if (row.entry.summary.isNotBlank()) {
-            Text(row.entry.summary, style = MaterialTheme.typography.tboxBody)
-        }
-        Text(
-            text = statusText(row),
-            style = MaterialTheme.typography.tboxBody,
-            color = if (row.unsupportedOnHu || row.manifestError != null) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+        StoreAppIcon(
+            bitmap = icon,
+            title = row.entry.title,
+            contentDescription = row.entry.title,
+            size = 56.dp,
         )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = row.entry.title,
+                    style = MaterialTheme.typography.tboxTitle,
+                )
+                if (row.entry.origin == StoreAppOrigin.THIRD_PARTY) {
+                    Text(
+                        text = stringResource(R.string.store_badge_third_party),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            if (row.entry.summary.isNotBlank()) {
+                Text(row.entry.summary, style = MaterialTheme.typography.tboxBody)
+            }
+            Text(
+                text = statusText(row),
+                style = MaterialTheme.typography.tboxBody,
+                color = if (row.unsupportedOnHu || row.manifestError != null) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 
 @Composable
 private fun AppDetail(
     row: StoreAppRow,
+    icon: Bitmap?,
     actionState: StoreActionState,
     canInstall: Boolean,
     onBack: () -> Unit,
@@ -302,7 +326,18 @@ private fun AppDetail(
         TextButton(onClick = onBack) {
             Text(stringResource(R.string.store_back), style = MaterialTheme.typography.tboxButton)
         }
-        Text(row.entry.title, style = MaterialTheme.typography.tboxHeadline)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StoreAppIcon(
+                bitmap = icon,
+                title = row.entry.title,
+                contentDescription = row.entry.title,
+                size = 72.dp,
+            )
+            Text(row.entry.title, style = MaterialTheme.typography.tboxHeadline)
+        }
         if (row.entry.publisher.isNotBlank()) {
             Text(
                 stringResource(R.string.store_publisher, row.entry.publisher),

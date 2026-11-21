@@ -323,6 +323,8 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 - Финальные `applicationId` / название на экране («TBox Store» vs «Магазин TBox»).
 - ~~Отдельный public key vs подпапка OTA~~ — решено: **отдельный** AppStore share.
+- Иконки: файл `apps/<id>/icon.png` (+ webp/jpg), в catalog поле `icon`;
+  Store качает только явный `icon`, иначе иконка установленного пакета / буква.
 - Формат иконки (PNG в папке приложения vs URL).
 - Кто куратор `catalog.json` при одновременной публикации лаунчера разработчиком
   (merge вручную vs скрипт «собрать catalog из всех `apps/*/version.json` + overlay метаданных»).

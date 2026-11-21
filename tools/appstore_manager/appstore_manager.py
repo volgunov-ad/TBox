@@ -41,10 +41,12 @@ from appstore_catalog import (  # noqa: E402
     add_app,
     delete_app,
     ensure_seed_meta,
+    find_icon_file,
     list_channel_apps_dirs,
     resolve_apps_dir,
     scan_apps,
     set_apk,
+    set_icon,
     upsert_meta,
     write_catalog,
 )
@@ -136,6 +138,7 @@ class AppStoreManagerApp:
             ("versionName", "versionName"),
             ("changelog", "Changelog APK"),
             ("apkInfo", "Текущий APK"),
+            ("iconInfo", "Иконка"),
         ]
         for key, label in rows:
             row = ttk.Frame(form)
@@ -143,7 +146,7 @@ class AppStoreManagerApp:
             ttk.Label(row, text=label, width=32).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
-            state = DISABLED if key in ("id", "apkInfo") else NORMAL
+                    state = DISABLED if key in ("id", "apkInfo", "iconInfo") else NORMAL
             entry = ttk.Entry(row, textvariable=var, state=state)
             entry.pack(side=LEFT, fill=X, expand=True)
             setattr(self, f"_entry_{key}", entry)
@@ -152,6 +155,7 @@ class AppStoreManagerApp:
         btns.pack(fill=X, pady=10)
         ttk.Button(btns, text="Сохранить описание", command=self.save_meta).pack(side=LEFT)
         ttk.Button(btns, text="Заменить APK…", command=self.replace_apk).pack(side=LEFT, padx=8)
+        ttk.Button(btns, text="Иконка…", command=self.replace_icon).pack(side=LEFT, padx=8)
         ttk.Button(btns, text="Удалить приложение…", command=self.delete_selected).pack(side=LEFT)
 
         status = ttk.Label(self.root, textvariable=self.status, relief="sunken", anchor=W, padding=6)
@@ -283,6 +287,13 @@ class AppStoreManagerApp:
             self.fields["versionName"].set("0.1.0")
             self.fields["changelog"].set("")
             self.fields["apkInfo"].set("нет APK / version.json")
+        icon = find_icon_file(record.folder)
+        if icon is not None:
+            self.fields["iconInfo"].set(str(icon.name))
+        elif record.meta.icon:
+            self.fields["iconInfo"].set(record.meta.icon)
+        else:
+            self.fields["iconInfo"].set("нет (будет буква / иконка установленного APK)")
 
     def _meta_from_form(self) -> AppMeta:
         hu = [x.strip() for x in self.fields["hu"].get().split(",") if x.strip()]
@@ -350,6 +361,25 @@ class AppStoreManagerApp:
             self.status.set(
                 f"APK обновлён: {release.apkFileName} ({release.versionName})",
             )
+            self.reload()
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
+    def replace_icon(self) -> None:
+        if not self.selected_id:
+            return
+        path = filedialog.askopenfilename(
+            title="Иконка (PNG / WebP / JPEG)",
+            filetypes=[
+                ("Images", "*.png *.webp *.jpg *.jpeg"),
+                ("Все файлы", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        try:
+            dest = set_icon(self._current_apps_dir(), self.selected_id, Path(path))
+            self.status.set(f"Иконка: {dest.name}")
             self.reload()
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))

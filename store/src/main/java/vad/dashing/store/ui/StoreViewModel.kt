@@ -1,6 +1,7 @@
 package vad.dashing.store.ui
 
 import android.app.Application
+import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -9,11 +10,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import vad.dashing.store.StoreAppRow
+import vad.dashing.store.StoreIconLoader
+import vad.dashing.store.StoreListState
 import vad.dashing.store.StoreRepository
+import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.disk.UpdateChannel
 
 class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = StoreRepository(application)
+    private val iconLoader = StoreIconLoader(application)
 
     val listState = repository.listState
     val actionState = repository.actionState
@@ -23,14 +28,23 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedAppId = MutableStateFlow<String?>(null)
     val selectedAppId: StateFlow<String?> = _selectedAppId.asStateFlow()
 
+    private val _icons = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
+    val icons: StateFlow<Map<String, Bitmap>> = _icons.asStateFlow()
+
     private var downloadJob: Job? = null
+    private var iconsJob: Job? = null
 
     fun refresh() {
-        viewModelScope.launch { repository.refreshCatalog() }
+        viewModelScope.launch {
+            repository.refreshCatalog()
+            prefetchIcons()
+        }
     }
 
     fun setChannel(channel: UpdateChannel) {
         repository.setChannel(channel)
+        iconLoader.clearMemory()
+        _icons.value = emptyMap()
         refresh()
     }
 
@@ -40,7 +54,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectedRow(): StoreAppRow? {
         val id = _selectedAppId.value ?: return null
-        val ready = listState.value as? vad.dashing.store.StoreListState.Ready ?: return null
+        val ready = listState.value as? StoreListState.Ready ?: return null
         return ready.rows.firstOrNull { it.entry.id == id }
     }
 
@@ -66,5 +80,34 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onResume() {
         repository.refreshInstalledStatuses()
+    }
+
+    private fun prefetchIcons() {
+        iconsJob?.cancel()
+        val ready = listState.value as? StoreListState.Ready ?: return
+        val publicKey = runCatching { repository.publicKey() }.getOrNull() ?: return
+        val channel = channel.value
+        iconsJob = viewModelScope.launch {
+            val next = _icons.value.toMutableMap()
+            for (row in ready.rows) {
+                val entry = row.entry
+                if (next.containsKey(entry.id)) continue
+                val bitmap = runCatching {
+                    iconLoader.load(entry, channel, publicKey)
+                }.getOrNull()
+                if (bitmap != null) {
+                    next[entry.id] = bitmap
+                    _icons.value = next.toMap()
+                }
+            }
+        }
+    }
+
+    suspend fun ensureIcon(entry: StoreCatalogEntry): Bitmap? {
+        _icons.value[entry.id]?.let { return it }
+        val publicKey = runCatching { repository.publicKey() }.getOrNull() ?: return null
+        val bitmap = iconLoader.load(entry, channel.value, publicKey) ?: return null
+        _icons.value = _icons.value + (entry.id to bitmap)
+        return bitmap
     }
 }

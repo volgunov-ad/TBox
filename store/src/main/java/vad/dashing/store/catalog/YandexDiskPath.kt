@@ -41,6 +41,9 @@ object YandexDiskPath {
     fun appApkPath(channel: UpdateChannel, appId: String, apkFileName: String): String =
         "${channelRoot(channel)}/apps/$appId/$apkFileName"
 
+    fun appIconPath(channel: UpdateChannel, appId: String, fileName: String = "icon.png"): String =
+        "${channelRoot(channel)}/apps/$appId/$fileName"
+
     /**
      * Maps a logical catalog path (`/apps/…` or already `/release|dev/…`)
      * to a physical path on the AppStore share.

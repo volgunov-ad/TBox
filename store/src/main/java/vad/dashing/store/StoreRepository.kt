@@ -315,6 +315,8 @@ class StoreRepository(
         File(file.parentFile, "${file.name}.part").delete()
     }
 
+    fun publicKey(): String = storePublicKey()
+
     private fun storePublicKey(): String {
         val key = BuildConfig.STORE_PUBLIC_KEY
         if (key.isBlank() || key.contains("REPLACE_WITH", ignoreCase = true)) {

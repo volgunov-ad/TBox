@@ -67,9 +67,13 @@ class AppMeta:
             data["reviewNotes"] = self.reviewNotes
         return data
 
-    def to_catalog_entry(self) -> dict[str, Any]:
+    def to_catalog_entry(self, icon_file_name: str | None = None) -> dict[str, Any]:
         entry = self.to_meta_dict()
         entry["manifest"] = f"yandex-disk:/apps/{self.id}/version.json"
+        if self.icon:
+            entry["icon"] = self.icon
+        elif icon_file_name:
+            entry["icon"] = f"yandex-disk:/apps/{self.id}/{icon_file_name}"
         return entry
 
 
@@ -286,6 +290,19 @@ def list_apks(folder: Path) -> list[Path]:
     return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ".apk")
 
 
+ICON_NAMES = ("icon.png", "icon.webp", "icon.jpg", "icon.jpeg")
+
+
+def find_icon_file(folder: Path) -> Path | None:
+    if not folder.is_dir():
+        return None
+    for name in ICON_NAMES:
+        candidate = folder / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def scan_apps(apps_dir: Path) -> list[AppRecord]:
     apps_dir = apps_dir.resolve()
     meta_map = load_meta_map(apps_dir)
@@ -335,7 +352,12 @@ def build_catalog(apps_dir: Path) -> dict[str, Any]:
             continue
         if not record.meta.verified:
             continue
-        apps.append(record.meta.to_catalog_entry())
+        icon = find_icon_file(record.folder)
+        apps.append(
+            record.meta.to_catalog_entry(
+                icon_file_name=icon.name if icon is not None else None,
+            ),
+        )
     return {
         "schemaVersion": 1,
         "publishedAt": utc_now(),
@@ -452,6 +474,35 @@ def set_apk(
 
     write_catalog(apps_dir)
     return release
+
+
+def set_icon(apps_dir: Path, app_id: str, icon_source: Path) -> Path:
+    """Copy image as apps/<id>/icon.<ext> and refresh catalog / meta.icon."""
+    app_id = validate_app_id(app_id)
+    icon_source = icon_source.expanduser().resolve()
+    if not icon_source.is_file():
+        raise FileNotFoundError(f"Иконка не найдена: {icon_source}")
+    ext = icon_source.suffix.lower()
+    if ext not in (".png", ".webp", ".jpg", ".jpeg"):
+        raise ValueError("Иконка: PNG / WebP / JPEG")
+    folder = apps_dir / app_id
+    folder.mkdir(parents=True, exist_ok=True)
+    # Normalize to icon.png / icon.webp / icon.jpg
+    dest_name = "icon.jpg" if ext == ".jpeg" else f"icon{ext}"
+    dest = folder / dest_name
+    if dest.resolve() != icon_source:
+        shutil.copy2(icon_source, dest)
+    for old in ICON_NAMES:
+        old_path = folder / old
+        if old_path.resolve() != dest.resolve() and old_path.is_file():
+            old_path.unlink(missing_ok=True)
+    metas = load_meta_map(apps_dir)
+    meta = metas.get(app_id) or AppMeta(id=app_id, packageName="", title=app_id)
+    meta.icon = f"yandex-disk:/apps/{app_id}/{dest_name}"
+    metas[app_id] = meta
+    save_meta_map(apps_dir, metas)
+    write_catalog(apps_dir)
+    return dest
 
 
 def delete_app(apps_dir: Path, app_id: str, remove_files: bool = True) -> None:

@@ -20,6 +20,7 @@ from appstore_catalog import (  # noqa: E402
     resolve_apps_dir,
     scan_apps,
     set_apk,
+    set_icon,
     upsert_meta,
     write_catalog,
 )
@@ -100,6 +101,16 @@ class AppStoreCatalogTest(unittest.TestCase):
                 "Demo Renamed",
                 json.loads((apps / "catalog.json").read_text(encoding="utf-8"))["apps"][0]["title"],
             )
+
+            icon = Path(tmp) / "logo.png"
+            icon.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+            set_icon(apps, "demo", icon)
+            catalog2 = json.loads((apps / "catalog.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                "yandex-disk:/apps/demo/icon.png",
+                catalog2["apps"][0]["icon"],
+            )
+            self.assertTrue((apps / "demo" / "icon.png").is_file())
 
             delete_app(apps, "demo")
             self.assertEqual([], scan_apps(apps))
