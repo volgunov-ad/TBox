@@ -5,7 +5,7 @@
 Источник: локальная выгрузка `D:\Dashing\Android10-VHAL\firmware_analysis\extracted\system\` — каталоги `app` и `priv-app`.  
 Package name и label сняты через `aapt dump badging`.
 
-Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_PUSH_SUBSCRIPTIONS_RU.md](STOCK_PUSH_SUBSCRIPTIONS_RU.md), [STOCK_APPS_ANDROID9_MBCAN_RU.md](STOCK_APPS_ANDROID9_MBCAN_RU.md).
+Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_PUSH_SUBSCRIPTIONS_RU.md](STOCK_PUSH_SUBSCRIPTIONS_RU.md), [STOCK_APPS_ANDROID9_MBCAN_RU.md](STOCK_APPS_ANDROID9_MBCAN_RU.md). Управление радио из TBox (binder `IAdayoDAB` + broadcast) — [RADIO_CONTROL_STOCK_APPS_RU.md](RADIO_CONTROL_STOCK_APPS_RU.md).
 
 ISO в той же папке (для ориентира версии образа): `QR_8015_T1K_MY1_IHU_ADAYO_V00.05.09.iso`, `QR_8015_T1K_MY1_IHU_ADAYO_V00.07.12.iso`.
 

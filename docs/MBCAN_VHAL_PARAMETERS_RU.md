@@ -11,7 +11,7 @@
 - Общий API: `UniversalCanRepository.kt`
 - ACC/CCS step-loop: `AccCruiseController.kt`
 
-См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
+См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md). Радио ГУ (FM/AM) в виджете музыки: исследование и механизмы — [RADIO_CONTROL_STOCK_APPS_RU.md](RADIO_CONTROL_STOCK_APPS_RU.md), параметры — таблица «Аудио» ниже; реализация — `radio/RadioPlayer.kt` + `MbCanEngineFacade.canRadioSet` / `readRadioFrequencySnapshot` (A9), binder `IAdayoDAB` (A10).
 
 ---
 
@@ -469,6 +469,8 @@ UI ограничителя (раздел автонастроек «Огран�
 | **Android 10** — ICM manual brightness | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` (T-эхо; как штатный `MeterLightFragment`) | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
 | **Android 9** — ICM brightness mode | Vehicle **208** `eVEHICLE_SET_ICM_BRIGHTNESS_MODE` | **0** auto / **1** manual | **208** | 0 auto / 1 manual | cfg_vehicle push + pull `IcmBrightnessMode` |
 | **Android 10** — ICM brightness mode | VHAL **289415088** `T_0901_IHU_SET_ICMBrightnessMode` | **0** auto / **1** manual | VHAL **289415088** | 0 auto / 1 manual | onChange + pull |
+| **Android 9** — Радио ГУ FM/AM (виджет музыки) | getMbCanData **19** `eMBCAN_RADIO_FREQUENCYINFO` (`nFrequency`/`nValid`/`nLevel`) + Vehicle **154** `eVEHICLE_SET_RADIO_FREQUANCE_MODE` | частота — масштаб не проверен (целые МГц / 0,1 / 0,01 МГц; FM 65,9–108, AM 520–1710 кГц — эвристика в `RadioFrequencyFormat`); 154: **1** FM / **2** AM; RX-типы 19/30 без OEM push — только poll | Vehicle **154** (FM/AM), **161** `eVEHICLE_SET_FREQUENCY_STS` play/pause (низкая достоверность), `canRadioSet` **2/3** seek, **7/8** step | value-семантика команд не задокументирована (проверить на машине) | poll 3 с на `mbcan-state-apply` через `MbCanRepository.getRadioSnapshot`; команды `sendRadioCmd`/`sendRadioVehicleSet`; JNI не на main |
+| **Android 10** — Радио ГУ FM/AM (виджет музыки) | binder `com.adayo.service.AdayoDABService` `IAdayoDAB`: `getBand()` / `getCurFreq()` / `getPSName()` / `isPlaying()` (raw Parcel-транзакции 4/21/94/7) | band: **1** AM / **2** FM; частота в шкале сервиса (эвристика как у A9); PS-имя станции — RDS | `enterBand` (**1** AM / **2** FM) (txn 3), `play`/`pause` (txn 5/6), `prev`/`next` seek (txn 8/9) | — | poll 2 с из `RadioPlayer` (Dispatchers.Default); колбэк `IProjectCallBack` mode=1002 не используется; broadcast `action.adayo.app.media.control` — fallback вне виджета |
 
 ---
 
