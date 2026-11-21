@@ -423,6 +423,19 @@ def add_app(
     return next(r for r in scan_apps(apps_dir) if r.meta.id == meta.id)
 
 
+class CertPinMismatchError(ValueError):
+    """Raised when APK signer differs from catalog signingCertSha256 pin."""
+
+    def __init__(self, existing: list[str], actual: str) -> None:
+        self.existing = list(existing)
+        self.actual = actual
+        pinned = ", ".join(x[:16] + "…" for x in existing) or "(пусто)"
+        super().__init__(
+            f"Подпись APK ({actual[:16]}…) не совпадает с pin в каталоге ({pinned}). "
+            f"Смена ключа — только осознанно (allow_cert_change).",
+        )
+
+
 def set_apk(
     apps_dir: Path,
     app_id: str,
@@ -434,14 +447,20 @@ def set_apk(
     remove_other_apks: bool = True,
     min_supported_version_code: int = 0,
     sync_package_from_apk: bool = True,
+    sync_cert_from_apk: bool = True,
+    allow_cert_change: bool = False,
+    extract_icon_from_apk: bool = True,
 ) -> AppRelease:
     """
     Copy APK into apps/<id>/ and write version.json.
 
     versionCode / versionName default to values from the APK manifest
     (aapt or binary AndroidManifest.xml). Pass them explicitly only to override.
+
+    Also (by default): pin signingCertSha256 from the APK signer and extract a
+    launcher icon into apps/<id>/icon.png when a raster icon exists.
     """
-    from apk_manifest import ApkInfo, read_apk_info
+    from apk_manifest import ApkInfo, extract_apk_icon, read_apk_info
 
     app_id = validate_app_id(app_id)
     apk_source = apk_source.expanduser().resolve()
@@ -497,7 +516,7 @@ def set_apk(
     )
     write_version_json(folder, release)
 
-    # Ensure meta exists; keep packageName in sync with the APK when asked.
+    # Ensure meta exists; keep packageName / cert pin in sync with the APK when asked.
     metas = load_meta_map(apps_dir)
     meta = metas.get(app_id) or AppMeta(id=app_id, packageName="", title=app_id)
     if sync_package_from_apk and info is not None and info.packageName:
@@ -511,6 +530,26 @@ def set_apk(
             meta.packageName = info.packageName
         if (not meta.title.strip() or meta.title == app_id) and info.label:
             meta.title = info.label
+
+    if sync_cert_from_apk and info is not None and info.signingCertSha256:
+        cert = info.signingCertSha256.lower()
+        existing_certs = [c.lower() for c in meta.signingCertSha256 if c.strip()]
+        if not existing_certs:
+            meta.signingCertSha256 = [cert]
+        elif cert not in existing_certs:
+            if not allow_cert_change:
+                raise CertPinMismatchError(existing_certs, cert)
+            meta.signingCertSha256 = [cert]
+        # else: already pinned — keep the list (may include historical alts)
+
+    if extract_icon_from_apk:
+        try:
+            icon_path = extract_apk_icon(dest, folder)
+        except Exception:
+            icon_path = None
+        if icon_path is not None:
+            meta.icon = f"yandex-disk:/apps/{app_id}/{icon_path.name}"
+
     metas[app_id] = meta
     save_meta_map(apps_dir, metas)
 

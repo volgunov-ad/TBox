@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Read package / version / label from an APK (stdlib only).
+Read package / version / label / signing cert / launcher icon from an APK.
 
-Strategy:
-1. Prefer `aapt dump badging` when Android build-tools are available
-   (ANDROID_HOME / ANDROID_SDK_ROOT / common Windows SDK paths).
+Strategy (stdlib; optional Android build-tools when present):
+1. Prefer `aapt dump badging` for package/version/label.
 2. Fallback: parse binary AndroidManifest.xml inside the APK zip.
+3. Signing cert SHA-256: `apksigner verify --print-certs`, else `keytool -printcert -jarfile`.
+4. Launcher icon: densest PNG/WebP under res/mipmap* (adaptive XML alone is skipped).
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ class ApkInfo:
     label: str = ""
     minSdkVersion: int | None = None
     targetSdkVersion: int | None = None
+    signingCertSha256: str = ""  # lowercase hex, no colons
     source: str = ""  # "aapt" | "axml"
 
     def summary(self) -> str:
@@ -38,6 +40,8 @@ class ApkInfo:
         ]
         if self.label:
             parts.append(f'«{self.label}»')
+        if self.signingCertSha256:
+            parts.append(f"cert {self.signingCertSha256[:12]}…")
         return " · ".join(parts)
 
 
@@ -48,18 +52,153 @@ def read_apk_info(apk_path: Path | str) -> ApkInfo:
     if path.suffix.lower() != ".apk":
         raise ValueError("Нужен файл .apk")
 
-    aapt = _find_aapt()
+    aapt = _find_build_tool("aapt")
+    info: ApkInfo | None = None
     if aapt is not None:
         try:
-            return _read_via_aapt(aapt, path)
+            info = _read_via_aapt(aapt, path)
+        except Exception:
+            info = None
+    if info is None:
+        info = _read_via_axml(path)
+    info.signingCertSha256 = read_signing_cert_sha256(path) or ""
+    return info
+
+
+def read_signing_cert_sha256(apk_path: Path | str) -> str | None:
+    """SHA-256 of signer #1 certificate (lowercase hex, no colons)."""
+    path = Path(apk_path).expanduser().resolve()
+    apksigner = _find_build_tool("apksigner")
+    if apksigner is not None:
+        try:
+            return _cert_via_apksigner(apksigner, path)
         except Exception:
             pass
-    return _read_via_axml(path)
+    keytool = shutil.which("keytool") or shutil.which("keytool.exe")
+    if keytool:
+        try:
+            return _cert_via_keytool(Path(keytool), path)
+        except Exception:
+            pass
+    return None
 
 
-def _find_aapt() -> Path | None:
-    for name in ("aapt", "aapt.exe"):
-        found = shutil.which(name)
+def extract_apk_icon(apk_path: Path | str, dest_dir: Path | str) -> Path | None:
+    """
+    Copy the densest launcher PNG/WebP from the APK into dest_dir as icon.png/.webp.
+    Returns the written path, or None when the APK has no raster launcher icon
+    (e.g. adaptive-only XML or no icon).
+    """
+    apk = Path(apk_path).expanduser().resolve()
+    dest_dir = Path(dest_dir).expanduser().resolve()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    member = _pick_launcher_icon_member(apk)
+    if member is None:
+        return None
+    ext = Path(member).suffix.lower()
+    if ext not in (".png", ".webp", ".jpg", ".jpeg"):
+        return None
+    dest_name = "icon.jpg" if ext == ".jpeg" else f"icon{ext}"
+    dest = dest_dir / dest_name
+    with zipfile.ZipFile(apk) as archive:
+        dest.write_bytes(archive.read(member))
+    # Drop other icon.* variants so catalog points at one file.
+    for name in ("icon.png", "icon.webp", "icon.jpg", "icon.jpeg"):
+        other = dest_dir / name
+        if other.resolve() != dest.resolve() and other.is_file():
+            other.unlink(missing_ok=True)
+    return dest
+
+
+def _pick_launcher_icon_member(apk: Path) -> str | None:
+    # Prefer paths advertised by aapt when they are raster files.
+    aapt = _find_build_tool("aapt")
+    if aapt is not None:
+        try:
+            proc = subprocess.run(
+                [str(aapt), "dump", "badging", str(apk)],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if proc.returncode == 0:
+                best_dpi = -1
+                best_path = ""
+                for line in proc.stdout.splitlines():
+                    m = re.match(
+                        r"application-icon-(\d+):'([^']+\.(?:png|webp|jpg|jpeg))'",
+                        line,
+                        re.IGNORECASE,
+                    )
+                    if not m:
+                        continue
+                    dpi = int(m.group(1))
+                    if dpi > best_dpi:
+                        best_dpi = dpi
+                        best_path = m.group(2)
+                if best_path:
+                    return best_path
+        except Exception:
+            pass
+
+    density_rank = {
+        "xxxhdpi": 6,
+        "xxhdpi": 5,
+        "xhdpi": 4,
+        "hdpi": 3,
+        "mdpi": 2,
+        "ldpi": 1,
+    }
+    name_bonus = {
+        "ic_launcher.png": 30,
+        "ic_launcher.webp": 29,
+        "icon_launcher.png": 28,
+        "ic_launcher_foreground.png": 20,
+        "ic_launcher_foreground.webp": 19,
+    }
+    candidates: list[tuple[int, str]] = []
+    with zipfile.ZipFile(apk) as archive:
+        names = archive.namelist()
+    for name in names:
+        lower = name.lower()
+        if not lower.startswith("res/"):
+            continue
+        if not lower.endswith((".png", ".webp", ".jpg", ".jpeg")):
+            continue
+        if "mipmap" not in lower and "drawable" not in lower:
+            continue
+        base = Path(lower).name
+        # Skip round / background / notification noise when better options exist.
+        if any(x in base for x in ("_round", "_background", "_monochrome", "notify")):
+            score_base = 0
+        else:
+            score_base = 10
+        for key, bonus in name_bonus.items():
+            if base == key or base.endswith(key):
+                score_base = max(score_base, bonus)
+                break
+        else:
+            if "launcher" not in base and "icon" not in base:
+                continue
+        dens = 0
+        for token, rank in density_rank.items():
+            if token in lower:
+                dens = rank
+                break
+        candidates.append((score_base * 10 + dens, name))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _find_build_tool(name: str) -> Path | None:
+    """Find aapt / apksigner (with or without .exe) on PATH or under Android SDK."""
+    for candidate in (name, f"{name}.exe", f"{name}.bat"):
+        found = shutil.which(candidate)
         if found:
             return Path(found)
 
@@ -68,7 +207,6 @@ def _find_aapt() -> Path | None:
         raw = os.environ.get(env)
         if raw:
             roots.append(Path(raw))
-    # Common Windows / Linux defaults
     local = os.environ.get("LOCALAPPDATA")
     if local:
         roots.append(Path(local) / "Android" / "Sdk")
@@ -85,19 +223,59 @@ def _find_aapt() -> Path | None:
         for child in bt.iterdir():
             if not child.is_dir():
                 continue
-            for name in ("aapt.exe", "aapt"):
-                exe = child / name
+            for fname in (name, f"{name}.exe", f"{name}.bat"):
+                exe = child / fname
                 if exe.is_file():
                     candidates.append(exe)
     if not candidates:
         return None
 
     def sort_key(p: Path) -> tuple:
-        # Prefer higher build-tools version folder name
         return tuple(int(x) if x.isdigit() else 0 for x in p.parent.name.split("."))
 
     candidates.sort(key=sort_key, reverse=True)
     return candidates[0]
+
+
+def _find_aapt() -> Path | None:
+    return _find_build_tool("aapt")
+
+
+def _cert_via_apksigner(apksigner: Path, apk: Path) -> str:
+    proc = subprocess.run(
+        [str(apksigner), "verify", "--print-certs", str(apk)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    # apksigner often returns 0 even with warnings; parse stdout either way.
+    text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    match = re.search(
+        r"Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]{64})",
+        text,
+    )
+    if not match:
+        raise RuntimeError("apksigner: no SHA-256 digest")
+    return match.group(1).lower()
+
+
+def _cert_via_keytool(keytool: Path, apk: Path) -> str:
+    proc = subprocess.run(
+        [str(keytool), "-printcert", "-jarfile", str(apk)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "keytool failed")
+    match = re.search(r"SHA256:\s*([0-9A-Fa-f:]+)", proc.stdout)
+    if not match:
+        raise RuntimeError("keytool: no SHA256 fingerprint")
+    return match.group(1).replace(":", "").lower()
 
 
 def _read_via_aapt(aapt: Path, apk: Path) -> ApkInfo:

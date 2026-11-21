@@ -38,6 +38,7 @@ if str(_HERE) not in sys.path:
 from appstore_catalog import (  # noqa: E402
     AppMeta,
     AppRecord,
+    CertPinMismatchError,
     add_app,
     delete_app,
     ensure_seed_meta,
@@ -134,7 +135,7 @@ class AppStoreManagerApp:
             ("verified", "verified (true|false)"),
             ("reviewNotes", "Заметки проверки"),
             ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
-            ("signingCertSha256", "cert sha256 (через запятую)"),
+            ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
             ("changelog", "Changelog APK"),
@@ -361,16 +362,28 @@ class AppStoreManagerApp:
             if not form_meta.packageName:
                 form_meta.packageName = info.packageName
             upsert_meta(self._current_apps_dir(), form_meta)
-            release = set_apk(
-                self._current_apps_dir(),
-                self.selected_id,
-                Path(path),
-                # versionCode / versionName берутся из манифеста APK
-                version_code=None,
-                version_name=None,
-                changelog=self.fields["changelog"].get().strip(),
-                remove_other_apks=True,
-            )
+            allow_cert_change = False
+            while True:
+                try:
+                    release = set_apk(
+                        self._current_apps_dir(),
+                        self.selected_id,
+                        Path(path),
+                        # versionCode / versionName / cert / icon — из APK
+                        version_code=None,
+                        version_name=None,
+                        changelog=self.fields["changelog"].get().strip(),
+                        remove_other_apks=True,
+                        allow_cert_change=allow_cert_change,
+                    )
+                    break
+                except CertPinMismatchError as exc:
+                    if not messagebox.askyesno(
+                        "Смена подписи",
+                        f"{exc}\n\nЗаменить pin на сертификат этого APK?",
+                    ):
+                        return
+                    allow_cert_change = True
             write_catalog(self._current_apps_dir())
             self.status.set(
                 f"APK обновлён: {release.apkFileName} — {info.summary()} [{info.source}]",

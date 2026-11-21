@@ -196,7 +196,7 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `verified` | В MVP в каталог попадают **только** `verified: true`; непроверянное не публикуем |
 | `hu` | Фильтр по типу ГУ (`a9` / `a10`) |
 | `category` | `app` \| `tool` \| `oneshot` (утилиты вроде dataresize — фаза 2) |
-| `signingCertSha256` | Белый список отпечатков; несовпадение → отказ / явное предупреждение |
+| `signingCertSha256` | Белый список отпечатков (lowercase hex); несовпадение → отказ. Менеджер каталога заполняет из APK (`apksigner` / `keytool`); пустой = проверка cert на клиенте выключена |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
 | `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
 

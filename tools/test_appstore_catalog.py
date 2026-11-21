@@ -12,9 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "appstore_manager"))
 
-from apk_manifest import read_apk_info  # noqa: E402
+from apk_manifest import extract_apk_icon, read_apk_info  # noqa: E402
 from appstore_catalog import (  # noqa: E402
     AppMeta,
+    CertPinMismatchError,
     add_app,
     build_catalog,
     delete_app,
@@ -146,6 +147,63 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.assertEqual(21, release.versionCode)
             self.assertEqual("1.20", release.versionName)
             self.assertTrue((apps / "dclinstall" / DCL_APK.name).is_file())
+
+    def test_extract_icon_and_cert_pin(self) -> None:
+        factory = ROOT / "mbcan" / "MB_FactoryMode.apk"
+        if not factory.is_file():
+            self.skipTest("MB_FactoryMode.apk missing")
+        info = read_apk_info(factory)
+        self.assertEqual(64, len(info.signingCertSha256))
+        with tempfile.TemporaryDirectory() as tmp:
+            icon = extract_apk_icon(factory, tmp)
+            self.assertIsNotNone(icon)
+            assert icon is not None
+            self.assertTrue(icon.is_file())
+            self.assertGreater(icon.stat().st_size, 0)
+
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            upsert_meta(
+                apps,
+                AppMeta(
+                    id="factory",
+                    packageName="com.mengbo.factory",
+                    title="Factory",
+                    hu=["a9"],
+                ),
+            )
+            set_apk(apps, "factory", factory)
+            meta = scan_apps(apps)[0].meta
+            self.assertEqual([info.signingCertSha256], meta.signingCertSha256)
+            self.assertTrue((apps / "factory" / "icon.png").is_file())
+
+    def test_cert_pin_mismatch_requires_allow(self) -> None:
+        if not DCL_APK.is_file():
+            self.skipTest("DclInstall.apk missing")
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            upsert_meta(
+                apps,
+                AppMeta(
+                    id="dclinstall",
+                    packageName="vad.dashing.dclinstall",
+                    title="DCL Install",
+                    hu=["a9"],
+                    signingCertSha256=["a" * 64],
+                ),
+            )
+            with self.assertRaises(CertPinMismatchError):
+                set_apk(apps, "dclinstall", DCL_APK)
+            release = set_apk(
+                apps,
+                "dclinstall",
+                DCL_APK,
+                allow_cert_change=True,
+            )
+            self.assertEqual(21, release.versionCode)
+            meta = scan_apps(apps)[0].meta
+            self.assertEqual(64, len(meta.signingCertSha256[0]))
 
     def test_set_apk_rejects_package_mismatch(self) -> None:
         if not DCL_APK.is_file():
