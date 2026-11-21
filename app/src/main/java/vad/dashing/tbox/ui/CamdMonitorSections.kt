@@ -90,6 +90,19 @@ fun CamdStatusInfoSection() {
                 value = windowsLabel(current.windows),
                 valueMaxLines = 3,
             )
+            StatusRow(
+                label = stringResource(R.string.info_camd_rec_enabled),
+                value = if (current.recorderEnabled == true) yes else no,
+                color = if (current.recorderEnabled == true) okColor else neutralColor,
+            )
+            StatusRow(
+                label = stringResource(R.string.info_camd_rec_active),
+                value = if (current.recordingActive == true) yes else no,
+                color = if (current.recordingActive == true) okColor else neutralColor,
+            )
+            if (current.recorderEnabled == false) {
+                TextLine(stringResource(R.string.info_camd_rec_not_recording))
+            }
         }
     }
 }
