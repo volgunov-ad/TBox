@@ -25,7 +25,9 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 |------|---------|
 | Форма | **Отдельный APK**, не вкладка внутри Monitor |
 | Имя / package | **TBox Store** / `vad.dashing.store` (модуль `:store`) |
-| Каналы | **Те же**, что OTA Monitor: `UPDATE_RELEASE_PUBLIC_KEY` → папка `release/`, `UPDATE_DEV_PUBLIC_KEY` → `dev/` |
+| Каналы | Имена **release / development** как у OTA Monitor; отдельный share AppStore |
+| Public key магазина | `https://disk.yandex.ru/d/KDaHLxbFtPAjYA` (`BuildConfig.STORE_PUBLIC_KEY`) — **не** ключи OTA Monitor |
+| Раскладка на share | `/release/apps/…`, `/dev/apps/…` (каталог: `/release/apps/catalog.json`) |
 | Хостинг | Яндекс.Диск primary; Mail.ru Cloud — **зеркало 1:1** той же раскладки |
 | Состав каталога | Приложения экосистемы **и сторонние проверенные** APK |
 | Лаунчер DCL | Пакет `ras.dashing.tbox.launcher` **не собирается** в этом репо; разработчику даём доступ к папке публикации на Диске |
@@ -71,17 +73,21 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 ## 3. Архитектура
 
 ```text
-Яндекс.Диск public share (release|dev)
-  apps/catalog.json ──► Store APK
-  apps/<id>/version.json + *.apk
+Яндекс.Диск AppStore share  https://disk.yandex.ru/d/KDaHLxbFtPAjYA
+  /release/apps/catalog.json ──► Store APK (канал Релиз)
+  /release/apps/<id>/version.json + *.apk
+  /dev/apps/…                 ──► канал Разработка
          │
          ├─ download (YandexDiskClient / public API)
          ├─ verify (sha256, packageName, signingCertSha256?)
          ├─ install (Intent + FileProvider; REQUEST_INSTALL_PACKAGES)
          └─ optional: dexopt speed (фаза 2 / root)
 
-Mail.ru Cloud ── зеркало той же дерева apps/ (fallback URL / второй public id)
+Mail.ru Cloud ── зеркало той же дерева (fallback URL / второй public id)
 ```
+
+OTA Monitor по-прежнему на своих public key (`version.json` в корне `release/` /
+`dev/` синхронизации TBM). Магазин их не читает.
 
 Переиспользовать из Monitor (вынести в общую библиотеку или скопировать тонкий
 слой в `:store` на первом шаге, рефакторинг — следом):
@@ -103,43 +109,32 @@ DCLInstall (`tools/dcl_install/`) **не** становится магазино
 
 ## 4. Раскладка на Диске
 
-Те же корни, что OTA / карты. Совместимость: текущие
-`release/version.json` и `tbox_monitor-*.apk` **не ломать** — Monitor OTA
-продолжает их читать. Новые артефакты — под `apps/`.
+Отдельный публичный корень **AppStore** (не папка OTA Monitor):
 
 ```text
-release/                          # UPDATE_RELEASE_PUBLIC_KEY
-  version.json                    # legacy OTA Monitor (оставить)
-  tbox_monitor-….apk
-  maps/
-    catalog.json
-    …
-  apps/
-    catalog.json                  # витрина магазина
-    tbox-monitor/
-      version.json                # можно зеркалить/генерировать из legacy
-      tbox_monitor-….apk          # или symlink/копия политики публикации
-    mqtt/
-      version.json
-      tbox_mqtt-….apk
-    camd/
-      version.json
-      …
-    dclinstall/
-      version.json
-      DclInstall.apk
-    dcl-launcher/                 # кладёт разработчик лаунчера
-      version.json
-      …
-    <third-party-id>/
-      version.json
-      ….apk
-dev/                              # UPDATE_DEV_PUBLIC_KEY — та же схема
-  apps/…
+AppStore/                         # https://disk.yandex.ru/d/KDaHLxbFtPAjYA
+  release/
+    apps/
+      catalog.json                # витрина
+      catalog.meta.json           # опционально для tools/build_apps_catalog.py
+      tbox-monitor/
+        version.json
+        tbox_monitor-….apk
+      mqtt/
+        version.json
+        tbox_mqtt-….apk
+      camd/
+      dclinstall/
+      dcl-launcher/               # кладёт разработчик лаунчера
+      <third-party-id>/
+  dev/
+    apps/…                        # та же схема
 ```
 
-Зеркало Mail.ru: та же относительная структура `apps/` (и при желании весь
-`release/` / `dev/`). Клиент не должен зависеть от разной нарезки папок.
+Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK + `maps/`)
+не трогаем. Зеркало Mail.ru: та же относительная структура. В `catalog.json`
+логические URL вида `yandex-disk:/apps/<id>/version.json`; клиент добавляет
+префикс `/release` или `/dev` по выбранному каналу.
 
 ### 4.1. `apps/catalog.json` (черновик схемы)
 
@@ -307,7 +302,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 | # | Этап | Результат |
 |---|------|-----------|
-| 1 | Спека на Диске | Папки `release/apps`, `dev/apps`; черновик `catalog.json`; legacy OTA не тронут — **нужно на Диске** |
+| 1 | Спека на Диске | Share AppStore + пустые `release/apps`, `dev/apps` — **есть** (`KDaHLxbFtPAjYA`); осталось наполнить APK + `catalog.json` |
 | 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` — **с вашей стороны** |
 | 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — скрипт `tools/build_apps_catalog.py` готов |
 | 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
@@ -321,8 +316,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 ## 10. Открытые мелочи (не блокируют старт спеки)
 
 - Финальные `applicationId` / название на экране («TBox Store» vs «Магазин TBox»).
-- Нужен ли отдельный public key только под `apps/`, или строго подпапка
-  существующих share (сейчас зафиксировано: **подпапка тех же каналов**).
+- ~~Отдельный public key vs подпапка OTA~~ — решено: **отдельный** AppStore share.
 - Формат иконки (PNG в папке приложения vs URL).
 - Кто куратор `catalog.json` при одновременной публикации лаунчера разработчиком
   (merge вручную vs скрипт «собрать catalog из всех `apps/*/version.json` + overlay метаданных»).

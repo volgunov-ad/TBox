@@ -54,10 +54,11 @@ data class StoreCatalogEntry(
         return hu.any { it.equals(huTag, ignoreCase = true) }
     }
 
-    fun resolveManifestPath(): String {
-        val fromUrl = YandexDiskPath.toDiskPath(manifestUrl)
+    /** Logical path (`/apps/<id>/version.json`); pass through [YandexDiskPath.physicalPath]. */
+    fun resolveManifestLogicalPath(): String {
+        val fromUrl = YandexDiskPath.toLogicalPath(manifestUrl)
         if (!fromUrl.isNullOrBlank()) return fromUrl
-        return YandexDiskPath.appManifestPath(id)
+        return "/apps/$id/version.json"
     }
 }
 

@@ -7,6 +7,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.store.disk.UpdateChannel
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -65,13 +66,13 @@ class StoreCatalogTest {
 
         val mqtt = catalog.apps.first { it.id == "mqtt" }
         assertEquals(StoreAppOrigin.FIRST_PARTY, mqtt.origin)
-        assertEquals("/apps/mqtt/version.json", mqtt.resolveManifestPath())
+        assertEquals("/apps/mqtt/version.json", mqtt.resolveManifestLogicalPath())
         assertTrue(mqtt.supportsHu("a10"))
 
         val camd = catalog.apps.first { it.id == "camd" }
         assertTrue(camd.supportsHu("a9"))
         assertFalse(camd.supportsHu("a10"))
-        assertEquals("/apps/camd/version.json", camd.resolveManifestPath())
+        assertEquals("/apps/camd/version.json", camd.resolveManifestLogicalPath())
 
         val nav = catalog.apps.first { it.id == "nav" }
         assertEquals(StoreAppOrigin.THIRD_PARTY, nav.origin)
@@ -80,12 +81,39 @@ class StoreCatalogTest {
     }
 
     @Test
-    fun yandexDiskPath_helpers() {
-        assertEquals("/apps/catalog.json", YandexDiskPath.CATALOG_PATH)
-        assertEquals("/apps/mqtt/app.apk", YandexDiskPath.appApkPath("mqtt", "app.apk"))
+    fun yandexDiskPath_prefixesChannelRoot() {
         assertEquals(
-            "/apps/mqtt/icon.png",
-            YandexDiskPath.toDiskPath("yandex-disk:/apps/mqtt/icon.png"),
+            "/release/apps/catalog.json",
+            YandexDiskPath.catalogPath(UpdateChannel.RELEASE),
+        )
+        assertEquals(
+            "/dev/apps/catalog.json",
+            YandexDiskPath.catalogPath(UpdateChannel.DEVELOPMENT),
+        )
+        assertEquals(
+            "/release/apps/mqtt/app.apk",
+            YandexDiskPath.appApkPath(UpdateChannel.RELEASE, "mqtt", "app.apk"),
+        )
+        assertEquals(
+            "/release/apps/mqtt/version.json",
+            YandexDiskPath.physicalPath(
+                UpdateChannel.RELEASE,
+                "yandex-disk:/apps/mqtt/version.json",
+            ),
+        )
+        assertEquals(
+            "/dev/apps/mqtt/version.json",
+            YandexDiskPath.physicalPath(
+                UpdateChannel.DEVELOPMENT,
+                "/apps/mqtt/version.json",
+            ),
+        )
+        assertEquals(
+            "/release/apps/mqtt/version.json",
+            YandexDiskPath.physicalPath(
+                UpdateChannel.DEVELOPMENT,
+                "/release/apps/mqtt/version.json",
+            ),
         )
     }
 
@@ -102,4 +130,3 @@ class StoreCatalogTest {
         assertFalse(catalog.apps.first { it.id == "camd" }.supportsHu("a10"))
     }
 }
-

@@ -17,15 +17,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Dedicated AppStore share (release/ + dev/ apps trees). Not the Monitor OTA keys.
         buildConfigField(
             "String",
-            "UPDATE_RELEASE_PUBLIC_KEY",
-            "\"https://disk.yandex.ru/d/v-6n17wSRbVQsw\"",
-        )
-        buildConfigField(
-            "String",
-            "UPDATE_DEV_PUBLIC_KEY",
-            "\"https://disk.yandex.ru/d/yuvH_9cdzyOoBg\"",
+            "STORE_PUBLIC_KEY",
+            "\"https://disk.yandex.ru/d/KDaHLxbFtPAjYA\"",
         )
     }
 

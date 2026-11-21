@@ -2,22 +2,23 @@
 """
 Собрать apps/catalog.json из папок apps/<id>/version.json + overlay метаданных.
 
-Ожидаемая раскладка (см. docs/APP_STORE_PLAN_RU.md):
+Ожидаемая раскладка AppStore share (см. docs/APP_STORE_PLAN_RU.md):
 
-  <channel-root>/
-    apps/
+  AppStore/release/apps/   или   AppStore/dev/apps/
       mqtt/version.json
       camd/version.json
       …
       catalog.meta.json   # опционально: id → title/summary/hu/…
+
+Public key: https://disk.yandex.ru/d/KDaHLxbFtPAjYA
 
 Без catalog.meta.json для каждой папки с version.json создаётся минимальная
 запись (id=имя папки, packageName/title нужно дописать в meta).
 
 Пример:
 
-  python tools/build_apps_catalog.py --apps-dir release/apps
-  python tools/build_apps_catalog.py --apps-dir release/apps --write
+  python tools/build_apps_catalog.py --apps-dir /path/to/AppStore/release/apps
+  python tools/build_apps_catalog.py --apps-dir /path/to/AppStore/release/apps --write
 """
 
 from __future__ import annotations

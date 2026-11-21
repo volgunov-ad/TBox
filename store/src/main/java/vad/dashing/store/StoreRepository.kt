@@ -114,9 +114,10 @@ class StoreRepository(
         }
         _listState.value = StoreListState.Loading
         try {
-            val publicKey = publicKeyForChannel(_channel.value)
+            val channel = _channel.value
+            val publicKey = storePublicKey()
             val catalogJson = withContext(Dispatchers.IO) {
-                yandexDiskClient.fetchText(publicKey, YandexDiskPath.CATALOG_PATH)
+                yandexDiskClient.fetchText(publicKey, YandexDiskPath.catalogPath(channel))
             }
             val catalog = StoreCatalog.parse(catalogJson)
             val storeVersion = currentVersionCode(context.packageName) ?: 0L
@@ -132,7 +133,7 @@ class StoreRepository(
                     )
                 }
                 val loaded = withContext(Dispatchers.IO) {
-                    runCatching { loadRelease(publicKey, entry) }
+                    runCatching { loadRelease(publicKey, channel, entry) }
                 }
                 loaded.fold(
                     onSuccess = { release ->
@@ -173,12 +174,13 @@ class StoreRepository(
         downloadInProgress = true
         _actionState.value = StoreActionState.Downloading(appId)
         try {
-            val publicKey = publicKeyForChannel(_channel.value)
+            val channel = _channel.value
+            val publicKey = storePublicKey()
             val destination = apkDestinationFile(row.entry.id, release)
             withContext(Dispatchers.IO) {
                 yandexDiskClient.downloadToFile(
                     publicKey = publicKey,
-                    path = YandexDiskPath.appApkPath(row.entry.id, release.apkFileName),
+                    path = YandexDiskPath.appApkPath(channel, row.entry.id, release.apkFileName),
                     destination = destination,
                     onProgress = { downloaded, total ->
                         if (!isActive) return@downloadToFile
@@ -258,14 +260,18 @@ class StoreRepository(
         _listState.value = ready.copy(rows = updated)
     }
 
-    private fun loadRelease(publicKey: String, entry: StoreCatalogEntry): AppReleaseInfo {
-        val path = entry.resolveManifestPath()
+    private fun loadRelease(
+        publicKey: String,
+        channel: UpdateChannel,
+        entry: StoreCatalogEntry,
+    ): AppReleaseInfo {
+        val path = YandexDiskPath.physicalPath(channel, entry.resolveManifestLogicalPath())
         val json = yandexDiskClient.fetchText(publicKey, path)
         val manifest = AppReleaseManifest.parse(json)
         val release = manifest.preferredRelease()
             ?: throw IOException("No releases in $path")
         if (release.apkSizeBytes != null && release.apkSizeBytes > 0L) return release
-        val apkPath = YandexDiskPath.appApkPath(entry.id, release.apkFileName)
+        val apkPath = YandexDiskPath.appApkPath(channel, entry.id, release.apkFileName)
         val size = runCatching {
             yandexDiskClient.fetchPublicResourceSize(publicKey, apkPath)
         }.getOrNull()
@@ -309,13 +315,10 @@ class StoreRepository(
         File(file.parentFile, "${file.name}.part").delete()
     }
 
-    private fun publicKeyForChannel(channel: UpdateChannel): String {
-        val key = when (channel) {
-            UpdateChannel.RELEASE -> BuildConfig.UPDATE_RELEASE_PUBLIC_KEY
-            UpdateChannel.DEVELOPMENT -> BuildConfig.UPDATE_DEV_PUBLIC_KEY
-        }
+    private fun storePublicKey(): String {
+        val key = BuildConfig.STORE_PUBLIC_KEY
         if (key.isBlank() || key.contains("REPLACE_WITH", ignoreCase = true)) {
-            throw IOException("Update source URL is not configured")
+            throw IOException("Store source URL is not configured")
         }
         return key
     }
