@@ -1,0 +1,61 @@
+{
+  "apps": [
+    {
+      "id": "tbox-monitor",
+      "packageName": "vad.dashing.tbox",
+      "title": "TBox Monitor",
+      "summary": "Телеметрия, поездки, панели, CAN",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true
+    },
+    {
+      "id": "mqtt",
+      "packageName": "vad.dashing.mqtt",
+      "title": "TBox MQTT",
+      "summary": "Мост External API → MQTT / Home Assistant",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true
+    },
+    {
+      "id": "camd",
+      "packageName": "vad.dashing.camd",
+      "title": "Камеры ГУ",
+      "summary": "Окна камер A9",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9"],
+      "category": "app",
+      "verified": true
+    },
+    {
+      "id": "dcl-launcher",
+      "packageName": "ras.dashing.tbox.launcher",
+      "title": "DCL Launcher",
+      "summary": "Лаунчер DCL — установка и обновление без DCLInstall",
+      "publisher": "DCL",
+      "origin": "third-party",
+      "hu": ["a9"],
+      "category": "app",
+      "verified": true,
+      "reviewNotes": "Публикует разработчик лаунчера"
+    },
+    {
+      "id": "dclinstall",
+      "packageName": "vad.dashing.dclinstall",
+      "title": "DCL Install",
+      "summary": "Окружение DCL на A9. При скачивании APK лаунчера кладётся в Загрузки для выбора в установщике",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9"],
+      "category": "tool",
+      "verified": true,
+      "copyApkToDownloadsAppId": "dcl-launcher"
+    }
+  ]
+}

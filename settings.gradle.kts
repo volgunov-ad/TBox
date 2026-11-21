@@ -32,4 +32,4 @@ include(":fwunlock")
 include(":winpatch")
 include(":camview")
 include(":camd")
- 
+include(":store")

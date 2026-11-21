@@ -1,0 +1,545 @@
+#!/usr/bin/env python3
+"""
+Логика каталога TBox Store (без GUI).
+
+Работает с локальной sync-папкой канала:
+  <AppStore>/release/apps/  или  <AppStore>/dev/apps/
+
+Файлы:
+  catalog.meta.json  — описания для витрины (редактирует менеджер)
+  catalog.json       — отдаёт Store APK (собирается из meta + version.json)
+  <id>/version.json  — манифест релиза APK
+  <id>/*.apk
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import shutil
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+APP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+META_NAME = "catalog.meta.json"
+CATALOG_NAME = "catalog.json"
+VERSION_NAME = "version.json"
+
+
+@dataclass
+class AppMeta:
+    id: str
+    packageName: str
+    title: str
+    summary: str = ""
+    publisher: str = "TBox"
+    origin: str = "first-party"
+    hu: list[str] = field(default_factory=lambda: ["a9", "a10"])
+    category: str = "app"
+    verified: bool = True
+    icon: str = ""
+    signingCertSha256: list[str] = field(default_factory=list)
+    minStoreVersionCode: int | None = None
+    reviewNotes: str = ""
+    # When set (e.g. dclinstall → dcl-launcher), Store also saves that app's APK
+    # into public Downloads after download (for tools that pick an APK from storage).
+    copyApkToDownloadsAppId: str = ""
+
+    def to_meta_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "id": self.id,
+            "packageName": self.packageName,
+            "title": self.title,
+            "summary": self.summary,
+            "publisher": self.publisher,
+            "origin": self.origin,
+            "hu": list(self.hu),
+            "category": self.category,
+            "verified": bool(self.verified),
+        }
+        if self.icon:
+            data["icon"] = self.icon
+        if self.signingCertSha256:
+            data["signingCertSha256"] = list(self.signingCertSha256)
+        if self.minStoreVersionCode is not None:
+            data["minStoreVersionCode"] = int(self.minStoreVersionCode)
+        if self.reviewNotes:
+            data["reviewNotes"] = self.reviewNotes
+        if self.copyApkToDownloadsAppId:
+            data["copyApkToDownloadsAppId"] = self.copyApkToDownloadsAppId
+        return data
+
+    def to_catalog_entry(self, icon_file_name: str | None = None) -> dict[str, Any]:
+        entry = self.to_meta_dict()
+        entry["manifest"] = f"yandex-disk:/apps/{self.id}/version.json"
+        if self.icon:
+            entry["icon"] = self.icon
+        elif icon_file_name:
+            entry["icon"] = f"yandex-disk:/apps/{self.id}/{icon_file_name}"
+        return entry
+
+
+@dataclass
+class AppRelease:
+    versionCode: int
+    versionName: str
+    apkFileName: str
+    sha256: str
+    flavor: str = "default"
+    apkSizeBytes: int | None = None
+    changelog: str = ""
+    publishedAt: str = ""
+    minSupportedVersionCode: int = 0
+
+
+@dataclass
+class AppRecord:
+    meta: AppMeta
+    release: AppRelease | None
+    apk_path: Path | None
+    folder: Path
+    has_version_json: bool
+    missing_package: bool = False
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_app_id(app_id: str) -> str:
+    value = app_id.strip().lower()
+    if not APP_ID_RE.match(value):
+        raise ValueError(
+            "id: латиница/цифры/._-, начинается с буквы или цифры, до 64 символов",
+        )
+    return value
+
+
+def resolve_apps_dir(path: Path) -> Path:
+    """
+    Принимает путь к apps/, к release|dev/, или к корню AppStore.
+    Если корень AppStore — предпочитает release/apps (создаёт при необходимости).
+    """
+    path = path.expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Путь не найден: {path}")
+    if not path.is_dir():
+        raise NotADirectoryError(str(path))
+    if path.name == "apps":
+        return path
+    if path.name in ("release", "dev"):
+        apps = path / "apps"
+        apps.mkdir(parents=True, exist_ok=True)
+        return apps
+    # AppStore root or arbitrary folder with release/dev
+    release_apps = path / "release" / "apps"
+    if release_apps.is_dir() or (path / "release").is_dir() or (path / "dev").is_dir():
+        release_apps.mkdir(parents=True, exist_ok=True)
+        (path / "dev" / "apps").mkdir(parents=True, exist_ok=True)
+        return release_apps
+    # Treat as apps dir itself
+    return path
+
+
+def list_channel_apps_dirs(appstore_root: Path) -> dict[str, Path]:
+    root = appstore_root.expanduser().resolve()
+    out: dict[str, Path] = {}
+    for channel in ("release", "dev"):
+        apps = root / channel / "apps"
+        if apps.is_dir() or (root / channel).exists():
+            apps.mkdir(parents=True, exist_ok=True)
+            out[channel] = apps
+    return out
+
+
+def _meta_from_dict(raw: dict[str, Any], fallback_id: str) -> AppMeta:
+    app_id = str(raw.get("id", fallback_id)).strip() or fallback_id
+    hu_raw = raw.get("hu", ["a9", "a10"])
+    if isinstance(hu_raw, str):
+        hu = [hu_raw]
+    else:
+        hu = [str(x) for x in (hu_raw or ["a9", "a10"])]
+    certs = raw.get("signingCertSha256") or []
+    if isinstance(certs, str):
+        certs = [certs]
+    min_code = raw.get("minStoreVersionCode")
+    return AppMeta(
+        id=app_id,
+        packageName=str(raw.get("packageName", "")).strip(),
+        title=str(raw.get("title", "")).strip() or app_id,
+        summary=str(raw.get("summary", "")),
+        publisher=str(raw.get("publisher", "TBox")),
+        origin=str(raw.get("origin", "first-party")),
+        hu=hu,
+        category=str(raw.get("category", "app")),
+        verified=bool(raw.get("verified", True)),
+        icon=str(raw.get("icon", "")),
+        signingCertSha256=[str(c).lower() for c in certs if str(c).strip()],
+        minStoreVersionCode=int(min_code) if min_code is not None and str(min_code) != "" else None,
+        reviewNotes=str(raw.get("reviewNotes", "")),
+        copyApkToDownloadsAppId=str(
+            raw.get("copyApkToDownloadsAppId") or raw.get("downloadsSidecarAppId") or "",
+        ).strip(),
+    )
+
+
+def load_meta_map(apps_dir: Path) -> dict[str, AppMeta]:
+    path = apps_dir / META_NAME
+    if not path.is_file():
+        return {}
+    raw = load_json(path)
+    apps = raw.get("apps", []) if isinstance(raw, dict) else []
+    result: dict[str, AppMeta] = {}
+    for item in apps:
+        if not isinstance(item, dict):
+            continue
+        app_id = str(item.get("id", "")).strip()
+        if not app_id:
+            continue
+        result[app_id] = _meta_from_dict(item, app_id)
+    return result
+
+
+def save_meta_map(apps_dir: Path, metas: dict[str, AppMeta]) -> None:
+    ordered = [metas[key].to_meta_dict() for key in sorted(metas)]
+    save_json(apps_dir / META_NAME, {"apps": ordered})
+
+
+def parse_release(version_path: Path) -> AppRelease | None:
+    if not version_path.is_file():
+        return None
+    raw = load_json(version_path)
+    releases = raw.get("releases") if isinstance(raw, dict) else None
+    if not isinstance(releases, list) or not releases:
+        return None
+    preferred = None
+    for item in releases:
+        if not isinstance(item, dict):
+            continue
+        flavor = str(item.get("flavor", "default"))
+        if flavor.lower() in ("default", "all"):
+            preferred = item
+            break
+    item = preferred or next((x for x in releases if isinstance(x, dict)), None)
+    if item is None:
+        return None
+    version_code = int(item.get("versionCode", -1))
+    version_name = str(item.get("versionName", "")).strip()
+    apk_name = str(item.get("apkFileName", "")).strip()
+    sha256 = str(item.get("sha256", "")).strip().lower()
+    if version_code < 0 or not version_name or not apk_name or not sha256:
+        return None
+    size = item.get("apkSizeBytes")
+    return AppRelease(
+        versionCode=version_code,
+        versionName=version_name,
+        apkFileName=apk_name,
+        sha256=sha256,
+        flavor=str(item.get("flavor", "default") or "default"),
+        apkSizeBytes=int(size) if size else None,
+        changelog=str(item.get("changelog", "")),
+        publishedAt=str(item.get("publishedAt", "")),
+        minSupportedVersionCode=int(item.get("minSupportedVersionCode", 0) or 0),
+    )
+
+
+def write_version_json(folder: Path, release: AppRelease) -> None:
+    payload = {
+        "schemaVersion": 1,
+        "releases": [
+            {
+                "versionCode": int(release.versionCode),
+                "versionName": release.versionName,
+                "flavor": release.flavor or "default",
+                "apkFileName": release.apkFileName,
+                "sha256": release.sha256.lower(),
+                "apkSizeBytes": int(release.apkSizeBytes or 0) or None,
+                "changelog": release.changelog,
+                "publishedAt": release.publishedAt or utc_now(),
+                "minSupportedVersionCode": int(release.minSupportedVersionCode or 0),
+            }
+        ],
+    }
+    # Drop null apkSizeBytes for cleaner JSON
+    rel = payload["releases"][0]
+    if rel["apkSizeBytes"] is None:
+        del rel["apkSizeBytes"]
+    save_json(folder / VERSION_NAME, payload)
+
+
+def list_apks(folder: Path) -> list[Path]:
+    if not folder.is_dir():
+        return []
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ".apk")
+
+
+ICON_NAMES = ("icon.png", "icon.webp", "icon.jpg", "icon.jpeg")
+
+
+def find_icon_file(folder: Path) -> Path | None:
+    if not folder.is_dir():
+        return None
+    for name in ICON_NAMES:
+        candidate = folder / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def scan_apps(apps_dir: Path) -> list[AppRecord]:
+    apps_dir = apps_dir.resolve()
+    meta_map = load_meta_map(apps_dir)
+    ids: set[str] = set(meta_map)
+    if apps_dir.is_dir():
+        for child in apps_dir.iterdir():
+            if child.is_dir() and not child.name.startswith("."):
+                ids.add(child.name)
+    records: list[AppRecord] = []
+    for app_id in sorted(ids):
+        folder = apps_dir / app_id
+        folder.mkdir(parents=True, exist_ok=True)
+        meta = meta_map.get(app_id) or AppMeta(
+            id=app_id,
+            packageName="",
+            title=app_id,
+        )
+        release = parse_release(folder / VERSION_NAME)
+        apk_path = None
+        if release is not None:
+            candidate = folder / release.apkFileName
+            if candidate.is_file():
+                apk_path = candidate
+        if apk_path is None:
+            apks = list_apks(folder)
+            apk_path = apks[0] if apks else None
+        records.append(
+            AppRecord(
+                meta=meta,
+                release=release,
+                apk_path=apk_path,
+                folder=folder,
+                has_version_json=(folder / VERSION_NAME).is_file(),
+                missing_package=not bool(meta.packageName.strip()),
+            ),
+        )
+    return records
+
+
+def build_catalog(apps_dir: Path) -> dict[str, Any]:
+    records = scan_apps(apps_dir)
+    apps: list[dict[str, Any]] = []
+    for record in records:
+        if record.missing_package:
+            continue
+        if not record.has_version_json:
+            continue
+        if not record.meta.verified:
+            continue
+        icon = find_icon_file(record.folder)
+        apps.append(
+            record.meta.to_catalog_entry(
+                icon_file_name=icon.name if icon is not None else None,
+            ),
+        )
+    return {
+        "schemaVersion": 1,
+        "publishedAt": utc_now(),
+        "apps": apps,
+    }
+
+
+def write_catalog(apps_dir: Path) -> Path:
+    out = apps_dir / CATALOG_NAME
+    save_json(out, build_catalog(apps_dir))
+    return out
+
+
+def upsert_meta(apps_dir: Path, meta: AppMeta) -> None:
+    meta.id = validate_app_id(meta.id)
+    if not meta.packageName.strip():
+        raise ValueError("packageName обязателен")
+    if not meta.title.strip():
+        meta.title = meta.id
+    metas = load_meta_map(apps_dir)
+    metas[meta.id] = meta
+    (apps_dir / meta.id).mkdir(parents=True, exist_ok=True)
+    save_meta_map(apps_dir, metas)
+
+
+def add_app(
+    apps_dir: Path,
+    meta: AppMeta,
+    apk_source: Path | None = None,
+    version_code: int | None = None,
+    version_name: str | None = None,
+    changelog: str = "",
+    flavor: str = "default",
+    remove_other_apks: bool = True,
+) -> AppRecord:
+    meta.id = validate_app_id(meta.id)
+    folder = apps_dir / meta.id
+    if folder.exists() and any(folder.iterdir()):
+        # Allow re-add only if empty-ish; otherwise require explicit update
+        if (folder / VERSION_NAME).exists() or list_apks(folder):
+            raise FileExistsError(f"Приложение уже есть: {meta.id}")
+    upsert_meta(apps_dir, meta)
+    if apk_source is not None:
+        set_apk(
+            apps_dir,
+            meta.id,
+            apk_source,
+            version_code=version_code,
+            version_name=version_name,
+            changelog=changelog,
+            flavor=flavor,
+            remove_other_apks=remove_other_apks,
+        )
+    write_catalog(apps_dir)
+    return next(r for r in scan_apps(apps_dir) if r.meta.id == meta.id)
+
+
+def set_apk(
+    apps_dir: Path,
+    app_id: str,
+    apk_source: Path,
+    version_code: int | None = None,
+    version_name: str | None = None,
+    changelog: str = "",
+    flavor: str = "default",
+    remove_other_apks: bool = True,
+    min_supported_version_code: int = 0,
+) -> AppRelease:
+    app_id = validate_app_id(app_id)
+    apk_source = apk_source.expanduser().resolve()
+    if not apk_source.is_file():
+        raise FileNotFoundError(f"APK не найден: {apk_source}")
+    if apk_source.suffix.lower() != ".apk":
+        raise ValueError("Нужен файл .apk")
+
+    folder = apps_dir / app_id
+    folder.mkdir(parents=True, exist_ok=True)
+    existing = parse_release(folder / VERSION_NAME)
+
+    if version_code is None:
+        version_code = (existing.versionCode + 1) if existing else 1
+    if not version_name:
+        version_name = existing.versionName if existing else "0.1.0"
+
+    dest_name = apk_source.name
+    dest = folder / dest_name
+    if dest.resolve() != apk_source:
+        shutil.copy2(apk_source, dest)
+
+    if remove_other_apks:
+        for old in list_apks(folder):
+            if old.resolve() != dest.resolve():
+                old.unlink(missing_ok=True)
+
+    digest = sha256_file(dest)
+    release = AppRelease(
+        versionCode=int(version_code),
+        versionName=str(version_name),
+        apkFileName=dest_name,
+        sha256=digest,
+        flavor=flavor or "default",
+        apkSizeBytes=dest.stat().st_size,
+        changelog=changelog,
+        publishedAt=utc_now(),
+        minSupportedVersionCode=int(min_supported_version_code or 0),
+    )
+    write_version_json(folder, release)
+
+    # Ensure meta exists
+    metas = load_meta_map(apps_dir)
+    if app_id not in metas:
+        metas[app_id] = AppMeta(id=app_id, packageName="", title=app_id)
+        save_meta_map(apps_dir, metas)
+
+    write_catalog(apps_dir)
+    return release
+
+
+def set_icon(apps_dir: Path, app_id: str, icon_source: Path) -> Path:
+    """Copy image as apps/<id>/icon.<ext> and refresh catalog / meta.icon."""
+    app_id = validate_app_id(app_id)
+    icon_source = icon_source.expanduser().resolve()
+    if not icon_source.is_file():
+        raise FileNotFoundError(f"Иконка не найдена: {icon_source}")
+    ext = icon_source.suffix.lower()
+    if ext not in (".png", ".webp", ".jpg", ".jpeg"):
+        raise ValueError("Иконка: PNG / WebP / JPEG")
+    folder = apps_dir / app_id
+    folder.mkdir(parents=True, exist_ok=True)
+    # Normalize to icon.png / icon.webp / icon.jpg
+    dest_name = "icon.jpg" if ext == ".jpeg" else f"icon{ext}"
+    dest = folder / dest_name
+    if dest.resolve() != icon_source:
+        shutil.copy2(icon_source, dest)
+    for old in ICON_NAMES:
+        old_path = folder / old
+        if old_path.resolve() != dest.resolve() and old_path.is_file():
+            old_path.unlink(missing_ok=True)
+    metas = load_meta_map(apps_dir)
+    meta = metas.get(app_id) or AppMeta(id=app_id, packageName="", title=app_id)
+    meta.icon = f"yandex-disk:/apps/{app_id}/{dest_name}"
+    metas[app_id] = meta
+    save_meta_map(apps_dir, metas)
+    write_catalog(apps_dir)
+    return dest
+
+
+def delete_app(apps_dir: Path, app_id: str, remove_files: bool = True) -> None:
+    app_id = validate_app_id(app_id)
+    metas = load_meta_map(apps_dir)
+    metas.pop(app_id, None)
+    save_meta_map(apps_dir, metas)
+    folder = apps_dir / app_id
+    if remove_files and folder.is_dir():
+        shutil.rmtree(folder)
+    write_catalog(apps_dir)
+
+
+def ensure_seed_meta(apps_dir: Path, seed_path: Path | None = None) -> bool:
+    """Copy sample meta if catalog.meta.json missing. Returns True if created."""
+    target = apps_dir / META_NAME
+    if target.is_file():
+        return False
+    if seed_path is None:
+        seed_path = (
+            Path(__file__).resolve().parents[2]
+            / "store"
+            / "src"
+            / "test"
+            / "resources"
+            / "sample_catalog.meta.json"
+        )
+    if seed_path.is_file():
+        shutil.copy2(seed_path, target)
+        return True
+    save_meta_map(apps_dir, {})
+    return True
