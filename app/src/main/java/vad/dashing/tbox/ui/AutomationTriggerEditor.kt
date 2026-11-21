@@ -247,23 +247,15 @@ private fun HardKeyTriggerFields(
         },
         onValueChange = { onChange(trigger.copy(keyStatus = it)) },
     )
-    val canMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
-    val available = canMode != HeadUnitCanMode.Android10Vhal
-    val hint = stringResource(
-        R.string.automation_hard_key_event_hint,
-        AUTOMATION_HARD_KEY_DOUBLE_TAP_MS,
-        AUTOMATION_HARD_KEY_LONG_PRESS_MS,
-        AUTOMATION_HARD_KEY_DEBOUNCE_MS,
-    )
-    val unavailableSuffix = stringResource(R.string.automation_hard_key_unavailable_a10)
     Text(
-        text = if (available) hint else hint + unavailableSuffix,
+        text = stringResource(
+            R.string.automation_hard_key_event_hint,
+            AUTOMATION_HARD_KEY_DOUBLE_TAP_MS,
+            AUTOMATION_HARD_KEY_LONG_PRESS_MS,
+            AUTOMATION_HARD_KEY_DEBOUNCE_MS,
+        ),
         style = MaterialTheme.typography.tboxCaption,
-        color = if (available) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.error
-        },
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     )
 }
