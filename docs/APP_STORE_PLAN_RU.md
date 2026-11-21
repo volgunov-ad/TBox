@@ -265,19 +265,19 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ## 6. Публикация и инструменты
 
-1. Обобщить `tools/build_ota_release.py` → сборка/выкладка нескольких модулей
-   и обновление `apps/catalog.json` (например `tools/build_apps_release.py`),
-   не ломая текущий сценарий Monitor → `version.json` в корне канала.
-2. Для first-party Gradle-модулей: копировать APK в `apps/<id>/`, писать
-   per-app `version.json`, обновлять запись каталога.
-3. Для DCLInstall / blank wallpaper и т.п.: брать committed APK из `tools/…`
-   или артефакт сборки `build.ps1`.
-4. Для лаунчера и сторонних: только проверка схемы `version.json` + sha256
-   на уже положенные файлы; сборка вне этого репо.
-5. Зеркало Mail.ru: sync-скрипт или инструкция для клиента Диска; в MVP
-   достаточно ручной синхронизации после публикации на Яндекс.
-6. Bundled fallback: по желанию урезанный `assets/apps/catalog.json` без URL
-   (как у карт) — не обязателен в MVP, если магазин без сети бесполезен.
+1. **GUI наполнения (Windows):** `tools/appstore_manager/` — указывает на
+   sync-папку AppStore, список приложений, правка meta, замена/добавление APK,
+   запись `catalog.meta.json` + `version.json` + `catalog.json`. Инструкция:
+   `tools/appstore_manager/ИНСТРУКЦИЯ.md`.
+2. CLI: `tools/build_apps_catalog.py --apps-dir …/release/apps --write`
+   (та же библиотека `appstore_catalog.py`).
+3. Для first-party Gradle-модулей: копировать APK в `apps/<id>/` (GUI или
+   вручную), versionCode/versionName в диалоге замены APK.
+4. Для DCLInstall / blank wallpaper: committed APK из `tools/…` / `build.ps1`.
+5. Лаунчер и сторонние: кладут APK в свою папку (доступ на Диске) или через GUI.
+6. Зеркало Mail.ru: после правок в sync Яндекса скопировать то же дерево
+   `release/apps` / `dev/apps` (или второй sync-корень).
+7. Bundled fallback catalog в APK — не обязателен в MVP.
 
 ---
 
@@ -310,7 +310,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 |---|------|-----------|
 | 1 | Спека на Диске | Share AppStore + пустые `release/apps`, `dev/apps` — **есть** (`KDaHLxbFtPAjYA`); осталось наполнить APK + `catalog.json` |
 | 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` — **с вашей стороны** |
-| 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — скрипт `tools/build_apps_catalog.py` готов |
+| 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — CLI `tools/build_apps_catalog.py` + GUI `tools/appstore_manager/` (Windows) |
 | 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
 | 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
 | 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
