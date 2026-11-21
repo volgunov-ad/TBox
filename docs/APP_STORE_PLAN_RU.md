@@ -27,7 +27,8 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 | Имя / package | **TBox Store** / `vad.dashing.store` (модуль `:store`) |
 | Каналы | Имена **release / development** как у OTA Monitor; отдельный share AppStore |
 | Public key магазина | `https://disk.yandex.ru/d/KDaHLxbFtPAjYA` (`BuildConfig.STORE_PUBLIC_KEY`) — **не** ключи OTA Monitor |
-| Раскладка на share | `/release/apps/…`, `/dev/apps/…` (каталог: `/release/apps/catalog.json`) |
+| Зеркало Mail.ru | `https://cloud.mail.ru/public/voi3/4Lx1RhqV9` (`STORE_MAILRU_PUBLIC_URL`, weblink `voi3/4Lx1RhqV9`) |
+| Раскладка на share | `/release/apps/…`, `/dev/apps/…` (каталог: `/release/apps/catalog.json`) — **одинаково** на Яндексе и Mail.ru |
 | Хостинг | Яндекс.Диск primary; Mail.ru Cloud — **зеркало 1:1** той же раскладки |
 | Состав каталога | Приложения экосистемы **и сторонние проверенные** APK |
 | Лаунчер DCL | Пакет `ras.dashing.tbox.launcher` **не собирается** в этом репо; разработчику даём доступ к папке публикации на Диске |
@@ -83,11 +84,16 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
          ├─ install (Intent + FileProvider; REQUEST_INSTALL_PACKAGES)
          └─ optional: dexopt speed (фаза 2 / root)
 
-Mail.ru Cloud ── зеркало той же дерева (fallback URL / второй public id)
+Mail.ru Cloud ── https://cloud.mail.ru/public/voi3/4Lx1RhqV9
+               зеркало 1:1 (weblink `voi3/4Lx1RhqV9`; listing API
+               `GET https://cloud.mail.ru/api/v2/folder?weblink=…`)
 ```
 
 OTA Monitor по-прежнему на своих public key (`version.json` в корне `release/` /
 `dev/` синхронизации TBM). Магазин их не читает.
+
+Клиентский fallback на Mail.ru (если Яндекс недоступен) — этап 7; константы
+`STORE_MAILRU_*` уже в `:store` BuildConfig.
 
 Переиспользовать из Monitor (вынести в общую библиотеку или скопировать тонкий
 слой в `:store` на первом шаге, рефакторинг — следом):
@@ -308,7 +314,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
 | 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
 | 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
-| 7 | Зеркало Mail.ru | Sync + клиентский fallback |
+| 7 | Зеркало Mail.ru | Share + `release/apps`/`dev/apps` — **есть** (`voi3/4Lx1RhqV9`); осталось sync контента + клиентский fallback |
 | 8 | Фаза 2 | voice, A10 oneshot, dexopt/root install, свертка OTA Monitor |
 
 ---

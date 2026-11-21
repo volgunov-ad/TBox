@@ -17,11 +17,23 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Dedicated AppStore share (release/ + dev/ apps trees). Not the Monitor OTA keys.
+        // Dedicated AppStore shares (release/ + dev/ apps trees). Not the Monitor OTA keys.
         buildConfigField(
             "String",
             "STORE_PUBLIC_KEY",
             "\"https://disk.yandex.ru/d/KDaHLxbFtPAjYA\"",
+        )
+        // Mail.ru Cloud mirror weblink (folder listing: /api/v2/folder?weblink=…).
+        // Client download fallback — see docs/APP_STORE_PLAN_RU.md §9 этап 7.
+        buildConfigField(
+            "String",
+            "STORE_MAILRU_WEBLINK",
+            "\"voi3/4Lx1RhqV9\"",
+        )
+        buildConfigField(
+            "String",
+            "STORE_MAILRU_PUBLIC_URL",
+            "\"https://cloud.mail.ru/public/voi3/4Lx1RhqV9\"",
         )
     }
 

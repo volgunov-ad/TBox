@@ -103,7 +103,7 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 ### App Store APK (`:store`)
 
-Separate app **TBox Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs from the dedicated Yandex Disk AppStore share (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, paths `/release/apps/catalog.json` and `/dev/apps/…`). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Catalog builder: `tools/build_apps_catalog.py`.
+Separate app **TBox Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; client fallback TBD). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Catalog builder: `tools/build_apps_catalog.py`.
 
 ```
 ./gradlew :store:testDebugUnitTest
