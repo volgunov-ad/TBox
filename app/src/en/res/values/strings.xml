@@ -173,8 +173,7 @@
     <string name="automation_widget_press_kind_single">Single</string>
     <string name="automation_widget_press_kind_double">Double</string>
     <string name="automation_widget_press_kind_hint">Single and double are distinct triggers for the same tile. Double-tap window is %1$d ms (same as other dashboard widgets). Single fires after that pause if there was no second tap; a double suppresses the single.</string>
-    <string name="automation_hard_key_event_hint">Key codes are listed in the “Key diagnostics” window and in the MBCAN/VHAL docs. “Pressed” (immediately on press) / “Released” (immediately on release) are raw OEM edges. “Single” (short press after the pause) / “Double” / “Long” (hold) are timing-derived (double window %1$d ms, long ≥ %2$d ms hold). Single fires after the double-tap window so it can be distinguished from double. Repeated events for the same key are suppressed for %3$d ms.</string>
-    <string name="automation_hard_key_unavailable_a10"> On this head unit (Android 10 / VHAL) key events are not delivered: this trigger works only on Android 9 (mbCAN).</string>
+    <string name="automation_hard_key_event_hint">Key codes are listed in the “Key diagnostics” window and in the MBCAN/VHAL docs (Android 9 and Android 10 use different wheel codes; doors 210/211/212 are shared). “Pressed” (immediately on press) / “Released” (immediately on release) are raw OEM edges. “Single” (short press after the pause) / “Double” / “Long” (hold) are timing-derived (double window %1$d ms, long ≥ %2$d ms hold). Single fires after the double-tap window so it can be distinguished from double. Repeated events for the same key are suppressed for %3$d ms.</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_floating_panels_settings">Floating panels settings</string>
     <string name="tab_themes">Themes</string>
@@ -2946,7 +2945,7 @@
     <string name="widget_button_binding_title">Button binding</string>
     <string name="widget_button_binding_source_label">Source</string>
     <string name="widget_button_binding_source_none">None</string>
-    <string name="widget_button_binding_source_hard_key">Steering / door key (A9)</string>
+    <string name="widget_button_binding_source_hard_key">Steering / door key</string>
     <string name="widget_button_binding_source_esp_ble">Shelly Blu (companion)</string>
     <string name="widget_button_binding_source_esp_gpio">ESP input (companion)</string>
     <string name="widget_button_binding_key_picker_label">Button</string>
