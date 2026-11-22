@@ -660,22 +660,53 @@ def delete_app(apps_dir: Path, app_id: str, remove_files: bool = True) -> None:
     write_catalog(apps_dir)
 
 
+def _default_seed_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "store"
+        / "src"
+        / "test"
+        / "resources"
+        / "sample_catalog.meta.json"
+    )
+
+
 def ensure_seed_meta(apps_dir: Path, seed_path: Path | None = None) -> bool:
-    """Copy sample meta if catalog.meta.json missing. Returns True if created."""
+    """
+    Ensure catalog.meta.json exists and contains all seed apps.
+
+    - Missing file → copy full seed (or empty map).
+    - Existing file → merge in any seed ids that are absent (e.g. new tbox-store),
+      without overwriting curated fields.
+    Returns True if the meta file was created or changed.
+    """
     target = apps_dir / META_NAME
-    if target.is_file():
-        return False
     if seed_path is None:
-        seed_path = (
-            Path(__file__).resolve().parents[2]
-            / "store"
-            / "src"
-            / "test"
-            / "resources"
-            / "sample_catalog.meta.json"
-        )
-    if seed_path.is_file():
-        shutil.copy2(seed_path, target)
+        seed_path = _default_seed_path()
+
+    if not target.is_file():
+        if seed_path.is_file():
+            shutil.copy2(seed_path, target)
+            return True
+        save_meta_map(apps_dir, {})
         return True
-    save_meta_map(apps_dir, {})
-    return True
+
+    if not seed_path.is_file():
+        return False
+
+    seed_raw = load_json(seed_path)
+    seed_apps = seed_raw.get("apps", []) if isinstance(seed_raw, dict) else []
+    current = load_meta_map(apps_dir)
+    added = False
+    for item in seed_apps:
+        if not isinstance(item, dict):
+            continue
+        app_id = str(item.get("id", "")).strip()
+        if not app_id or app_id in current:
+            continue
+        current[app_id] = _meta_from_dict(item, app_id)
+        (apps_dir / app_id).mkdir(parents=True, exist_ok=True)
+        added = True
+    if added:
+        save_meta_map(apps_dir, current)
+    return added

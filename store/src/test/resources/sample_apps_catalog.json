@@ -3,6 +3,18 @@
   "publishedAt": "2026-11-21T12:00:00Z",
   "apps": [
     {
+      "id": "tbox-store",
+      "packageName": "vad.dashing.store",
+      "title": "TBox Store",
+      "summary": "Магазин приложений ГУ — обновляется сам из каталога (ru/en)",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true,
+      "manifest": "yandex-disk:/apps/tbox-store/version.json"
+    },
+    {
       "id": "tbox-monitor",
       "packageName": "vad.dashing.tbox",
       "title": "TBox Monitor",

@@ -133,6 +133,9 @@ fun StoreHomeScreen(
         ?.firstOrNull { it.entry.id == selectedAppId }
 
     val readyRows = (listState as? StoreListState.Ready)?.rows.orEmpty()
+    val selfRow = readyRows.firstOrNull {
+        it.entry.packageName == context.packageName
+    }
 
     Box(
         modifier = Modifier
@@ -172,12 +175,22 @@ fun StoreHomeScreen(
                 )
             }
 
+            if (selectedRow == null && selfRow != null && selfRow.updateAvailable) {
+                val downloading = actionState as? StoreActionState.Downloading
+                SelfUpdateBanner(
+                    row = selfRow,
+                    busy = downloading?.appId == selfRow.entry.id,
+                    onUpdate = { startDownload(selfRow) },
+                )
+            }
+
             if (selectedRow != null) {
                 AppDetail(
                     row = selectedRow,
                     icon = icons[selectedRow.entry.id],
                     actionState = actionState,
                     canInstall = canInstall,
+                    isSelf = selectedRow.entry.packageName == context.packageName,
                     onSelectFlavor = { viewModel.setAppApkFlavor(selectedRow.entry.id, it) },
                     onDownload = { startDownload(selectedRow) },
                     onCancel = { viewModel.cancelDownload() },
@@ -190,9 +203,13 @@ fun StoreHomeScreen(
                     listState = listState,
                     icons = icons,
                     actionState = actionState,
+                    storePackageName = context.packageName,
                     onSelect = { viewModel.selectApp(it) },
                     onQuickAction = { row ->
+                        val isSelf = row.entry.packageName == context.packageName
                         when {
+                            isSelf && row.updateAvailable -> startDownload(row)
+                            isSelf -> viewModel.selectApp(row.entry.id)
                             row.installed != null && !row.updateAvailable ->
                                 viewModel.openApp(row.entry.packageName)
                             else -> startDownload(row)
@@ -420,6 +437,53 @@ private fun StoreChip(
 }
 
 @Composable
+private fun SelfUpdateBanner(
+    row: StoreAppRow,
+    busy: Boolean,
+    onUpdate: () -> Unit,
+) {
+    val version = row.remote?.versionName.orEmpty()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.store_self_update_banner, version),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = onUpdate,
+                enabled = !busy,
+                shape = RoundedCornerShape(24.dp),
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.store_self_update_button),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun InstallPermissionBanner(onGrant: () -> Unit) {
     Surface(
         modifier = Modifier
@@ -459,6 +523,7 @@ private fun CatalogList(
     listState: StoreListState,
     icons: Map<String, Bitmap>,
     actionState: StoreActionState,
+    storePackageName: String,
     onSelect: (String) -> Unit,
     onQuickAction: (StoreAppRow) -> Unit,
 ) {
@@ -523,6 +588,7 @@ private fun CatalogList(
                         AppStoreCard(
                             row = row,
                             icon = icons[row.entry.id],
+                            isSelf = row.entry.packageName == storePackageName,
                             busy = actionState is StoreActionState.Downloading &&
                                 actionState.appId == row.entry.id,
                             onClick = { onSelect(row.entry.id) },
@@ -540,6 +606,7 @@ private fun CatalogList(
 private fun AppStoreCard(
     row: StoreAppRow,
     icon: Bitmap?,
+    isSelf: Boolean,
     busy: Boolean,
     onClick: () -> Unit,
     onAction: () -> Unit,
@@ -596,7 +663,7 @@ private fun AppStoreCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            val actionLabel = cardActionLabel(row)
+            val actionLabel = cardActionLabel(row, isSelf)
             if (actionLabel != null && !row.unsupportedOnHu) {
                 FilledTonalButton(
                     onClick = onAction,
@@ -634,11 +701,12 @@ private fun metaLine(row: StoreAppRow): String {
 }
 
 @Composable
-private fun cardActionLabel(row: StoreAppRow): String? {
+private fun cardActionLabel(row: StoreAppRow, isSelf: Boolean): String? {
     if (row.remote == null) return null
     return when {
         row.installed == null -> stringResource(R.string.store_get)
         row.updateAvailable -> stringResource(R.string.store_update)
+        isSelf -> null
         else -> stringResource(R.string.store_open)
     }
 }
@@ -650,6 +718,7 @@ private fun AppDetail(
     icon: Bitmap?,
     actionState: StoreActionState,
     canInstall: Boolean,
+    isSelf: Boolean,
     onSelectFlavor: (String) -> Unit,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
@@ -688,7 +757,7 @@ private fun AppDetail(
                     )
                 }
                 Text(
-                    statusText(row),
+                    if (isSelf) stringResource(R.string.store_this_app) else statusText(row),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -736,6 +805,7 @@ private fun AppDetail(
             row = row,
             actionState = actionState,
             canInstall = canInstall,
+            isSelf = isSelf,
             onDownload = onDownload,
             onCancel = onCancel,
             onInstall = onInstall,
@@ -801,6 +871,7 @@ private fun DetailActions(
     row: StoreAppRow,
     actionState: StoreActionState,
     canInstall: Boolean,
+    isSelf: Boolean,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onInstall: () -> Unit,
@@ -905,7 +976,9 @@ private fun DetailActions(
         ) {
             val label = when {
                 row.installed == null -> stringResource(R.string.store_get)
-                row.updateAvailable -> stringResource(R.string.store_update)
+                row.updateAvailable ->
+                    if (isSelf) stringResource(R.string.store_self_update_button)
+                    else stringResource(R.string.store_update)
                 else -> null
             }
             if (label != null) {
@@ -921,6 +994,7 @@ private fun DetailActions(
             }
         }
         if (row.installed != null &&
+            !isSelf &&
             actionState !is StoreActionState.Downloading &&
             (actionState as? StoreActionState.ReadyToInstall)?.appId != row.entry.id
         ) {

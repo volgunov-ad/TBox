@@ -114,7 +114,12 @@ python tools/test_appstore_catalog.py
 
 Product flavors `ru` / `en` (UI language). Catalog apps may publish both
 `flavor: "ru"` and `flavor: "en"` in `version.json`; the Store UI lets the user
-pick which APK language to download (global default + per-app).
+pick which APK language to download (global default + per-app). The Store itself
+is catalog entry `tbox-store` and self-updates from that card (banner + Get/Update;
+no Open/Uninstall for self). Windows manager seed merges `tbox-store` into
+existing `catalog.meta.json` — publish new Store APKs like any other app
+(`tools/appstore_manager/ИНСТРУКЦИЯ.md`).
+
 ### Data Resize APK (`:dataresize`) and `:adbcore`
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.

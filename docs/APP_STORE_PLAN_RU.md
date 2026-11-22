@@ -58,8 +58,9 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 2. Скачать APK с Яндекс.Диска → проверить sha256 (+ packageName, опционально cert) → установить.
 3. Показать «установлено» / «есть обновление» / «не для этой ГУ».
 4. Канал release / development — те же public key, что у Monitor.
-5. В каталоге: Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
-6. Bootstrap: первая установка магазина с USB / из инструкции; из Monitor — кнопка «Все приложения» (если магазин уже стоит).
+5. В каталоге: **TBox Store** (`tbox-store`), Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
+6. Bootstrap: первая установка магазина с USB / из инструкции; из Monitor — кнопка «Все приложения» (если магазин уже стоит). Дальше Store **обновляет сам себя** из той же карточки `tbox-store` (ru/en APK), без отдельного OTA-канала.
+7. Windows-менеджер каталога знает `tbox-store` в seed: при открытии sync-папки дописывает запись, если её ещё нет; публикация — «Заменить APK…» как у остальных.
 
 Вне MVP (фаза 2+):
 
@@ -333,7 +334,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | 1 | Спека на Диске | Share AppStore + пустые `release/apps`, `dev/apps` — **есть** (`KDaHLxbFtPAjYA`); осталось наполнить APK + `catalog.json` |
 | 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` — **с вашей стороны** |
 | 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — CLI `tools/build_apps_catalog.py` + GUI `tools/appstore_manager/` (Windows) |
-| 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
+| 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; самообновление `tbox-store` (баннер + карточка); unit-тесты парсера |
 | 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
 | 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
 | 7 | Зеркало Mail.ru | Share + клиентский fallback — **сделано** (`StoreCloudFacade`: Авто / Яндекс / Mail.ru); контент на зеркале нужно синхронизировать вручную |

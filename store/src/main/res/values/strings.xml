@@ -28,6 +28,9 @@
     <string name="store_uninstall_confirm_title">Удалить приложение?</string>
     <string name="store_uninstall_confirm_message">«%1$s» будет удалено с ГУ. Подтвердите в системном диалоге.</string>
     <string name="store_uninstall_self_blocked">Нельзя удалить сам магазин из этого экрана</string>
+    <string name="store_self_update_banner">Доступно обновление TBox Store %1$s</string>
+    <string name="store_self_update_button">Обновить магазин</string>
+    <string name="store_this_app">Это приложение</string>
     <string name="store_settings">Ещё</string>
     <string name="store_settings_hide">Скрыть</string>
     <string name="store_apps_count">%1$d приложений</string>
