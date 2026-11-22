@@ -34,6 +34,7 @@
     <string name="store_settings">More</string>
     <string name="store_settings_hide">Hide</string>
     <string name="store_apps_count">%1$d apps</string>
+    <string name="store_version_line">Version %1$s (%2$d)</string>
     <string name="store_section_about">About</string>
     <string name="store_category_app">App</string>
     <string name="store_category_tool">Tool</string>

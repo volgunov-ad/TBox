@@ -103,7 +103,7 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 ### App Store APK (`:store`)
 
-Separate app **Dashing Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
+Separate app **Dashing Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Versions: `store/build.gradle.kts` + [store/Changelog.dm](store/Changelog.dm) (bump `versionCode` on every Disk publish). Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
 
 ```
 ./gradlew :store:testRuDebugUnitTest

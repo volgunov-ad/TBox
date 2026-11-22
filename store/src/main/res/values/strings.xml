@@ -34,6 +34,7 @@
     <string name="store_settings">Ещё</string>
     <string name="store_settings_hide">Скрыть</string>
     <string name="store_apps_count">%1$d приложений</string>
+    <string name="store_version_line">Версия %1$s (%2$d)</string>
     <string name="store_section_about">О приложении</string>
     <string name="store_category_app">Приложение</string>
     <string name="store_category_tool">Инструмент</string>

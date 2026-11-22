@@ -355,7 +355,24 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ---
 
-## 11. Критерий готовности MVP
+## 11. Версии Dashing Store
+
+| Что | Где |
+|-----|-----|
+| `versionName` / `versionCode` | `store/build.gradle.kts` (`defaultConfig`) |
+| Журнал изменений | [`store/Changelog.dm`](../store/Changelog.dm) (формат как у корневого `Changelog.dm`) |
+| Id в каталоге | `tbox-store` → `apps/tbox-store/version.json` на AppStore share |
+| Имя APK | `tbox-store-<versionName>-<debug\|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`) |
+
+Правила:
+
+1. Перед публикацией на Диск: поднять **versionCode** (+1), обновить **versionName** (semver), дописать блок сверху в `store/Changelog.dm`.
+2. Собрать ru и en, в Windows-менеджере «Заменить APK…» для `tbox-store` оба flavor — Store на ГУ увидит обновление по `versionCode`.
+3. Первый учтённый выпуск: **0.1.0** (`versionCode` 1).
+
+---
+
+## 12. Критерий готовности MVP
 
 На A9 и A10 (где применимо): магазин ставится один раз с USB, открывает
 `apps/catalog.json` с канала release, ставит MQTT (или другое лёгкое

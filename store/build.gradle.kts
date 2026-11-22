@@ -14,6 +14,7 @@ android {
         applicationId = "vad.dashing.store"
         minSdk = 28
         targetSdk = 36
+        // Keep in sync with store/Changelog.dm (bump both on every Disk publish).
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

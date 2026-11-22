@@ -60,6 +60,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.store.BuildConfig
 import vad.dashing.store.HuKind
 import vad.dashing.store.R
 import vad.dashing.store.StoreActionState
@@ -309,9 +310,22 @@ private fun StoreTopBar(
                     style = MaterialTheme.typography.tboxHeadline,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (appCount != null && !showBack) {
+                if (!showBack) {
+                    val subtitle = buildString {
+                        append(
+                            stringResource(
+                                R.string.store_version_line,
+                                BuildConfig.VERSION_NAME,
+                                BuildConfig.VERSION_CODE,
+                            ),
+                        )
+                        if (appCount != null) {
+                            append(" · ")
+                            append(stringResource(R.string.store_apps_count, appCount))
+                        }
+                    }
                     Text(
-                        text = stringResource(R.string.store_apps_count, appCount),
+                        text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
