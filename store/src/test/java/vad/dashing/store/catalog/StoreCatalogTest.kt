@@ -200,6 +200,26 @@ class StoreCatalogTest {
     }
 
     @Test
+    fun resolveChangelogLogicalPath_defaultAndOverride() {
+        val entry = StoreCatalogEntry(
+            id = "mqtt",
+            packageName = "vad.dashing.mqtt",
+            title = "MQTT",
+        )
+        assertEquals("/apps/mqtt/changelog.ru.txt", entry.resolveChangelogLogicalPath("ru"))
+        assertEquals("/apps/mqtt/changelog.en.txt", entry.resolveChangelogLogicalPath("en"))
+        assertEquals(
+            "/release/apps/mqtt/changelog.ru.txt",
+            YandexDiskPath.appChangelogPath(UpdateChannel.RELEASE, "mqtt", "ru"),
+        )
+        val overridden = entry.copy(
+            changelogEnUrl = "yandex-disk:/apps/mqtt/notes-en.txt",
+        )
+        assertEquals("/apps/mqtt/notes-en.txt", overridden.resolveChangelogLogicalPath("en"))
+        assertEquals("/apps/mqtt/changelog.ru.txt", overridden.resolveChangelogLogicalPath("ru"))
+    }
+
+    @Test
     fun publicShareUrl_apkBrowseUrl() {
         val yandex = "https://disk.yandex.ru/d/KDaHLxbFtPAjYA"
         val mail = "https://cloud.mail.ru/public/voi3/4Lx1RhqV9"

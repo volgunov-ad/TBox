@@ -69,6 +69,7 @@ import vad.dashing.store.StoreListState
 import vad.dashing.store.catalog.StoreAppCategory
 import vad.dashing.store.catalog.StoreAppOrigin
 import vad.dashing.store.disk.ApkLanguage
+import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.install.DownloadsApkSaver
@@ -91,6 +92,7 @@ fun StoreHomeScreen(
     val apkLanguage by viewModel.apkLanguage.collectAsStateWithLifecycle()
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
     val icons by viewModel.icons.collectAsStateWithLifecycle()
+    val appChangelogs by viewModel.appChangelogs.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
     var showAdvanced by remember { mutableStateOf(false) }
@@ -196,6 +198,8 @@ fun StoreHomeScreen(
                     canInstall = canInstall,
                     isSelf = selectedRow.entry.packageName == context.packageName,
                     phoneQrUrl = viewModel.phoneApkBrowseUrl(selectedRow),
+                    changelogState = appChangelogs[selectedRow.entry.id]
+                        ?: AppChangelogState.Idle,
                     onSelectFlavor = { viewModel.setAppApkFlavor(selectedRow.entry.id, it) },
                     onDownload = { startDownload(selectedRow) },
                     onCancel = { viewModel.cancelDownload() },
@@ -742,6 +746,7 @@ private fun AppDetail(
     canInstall: Boolean,
     isSelf: Boolean,
     phoneQrUrl: String?,
+    changelogState: AppChangelogState,
     onSelectFlavor: (String) -> Unit,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
@@ -851,11 +856,10 @@ private fun AppDetail(
             }
         }
 
-        row.remote?.changelog?.takeIf { it.isNotBlank() }?.let { changelog ->
-            DetailSection(title = stringResource(R.string.store_changelog)) {
-                Text(changelog, style = MaterialTheme.typography.tboxBody)
-            }
-        }
+        ChangelogSection(
+            state = changelogState,
+            releaseFallback = row.remote?.changelog.orEmpty(),
+        )
 
         row.manifestError?.let { err ->
             Text(
@@ -895,6 +899,57 @@ private fun DetailSection(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Text(title, style = MaterialTheme.typography.titleMedium)
         content()
+    }
+}
+
+@Composable
+private fun ChangelogSection(
+    state: AppChangelogState,
+    releaseFallback: String,
+) {
+    when (state) {
+        is AppChangelogState.Idle, is AppChangelogState.Loading -> {
+            DetailSection(title = stringResource(R.string.store_changelog)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Text(
+                        stringResource(R.string.store_changelog_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        is AppChangelogState.Ready -> {
+            DetailSection(title = stringResource(R.string.store_changelog)) {
+                Text(state.text, style = MaterialTheme.typography.tboxBody)
+            }
+        }
+        is AppChangelogState.Absent -> {
+            val fallback = releaseFallback.trim()
+            if (fallback.isNotEmpty()) {
+                DetailSection(title = stringResource(R.string.store_changelog)) {
+                    Text(fallback, style = MaterialTheme.typography.tboxBody)
+                }
+            }
+        }
+        is AppChangelogState.Error -> {
+            val fallback = releaseFallback.trim()
+            DetailSection(title = stringResource(R.string.store_changelog)) {
+                if (fallback.isNotEmpty()) {
+                    Text(fallback, style = MaterialTheme.typography.tboxBody)
+                } else {
+                    Text(
+                        stringResource(R.string.store_error, state.message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
     }
 }
 

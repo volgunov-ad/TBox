@@ -20,6 +20,7 @@ import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.catalog.StorePublicShareUrl
 import vad.dashing.store.catalog.YandexDiskPath
 import vad.dashing.store.disk.ApkLanguage
+import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.AppReleaseInfo
 import vad.dashing.store.disk.AppReleaseManifest
 import vad.dashing.store.disk.CloudSource
@@ -142,22 +143,31 @@ class StoreRepository(
     private val _apkLanguage = MutableStateFlow(preferences.apkLanguage)
     val apkLanguage: StateFlow<ApkLanguage> = _apkLanguage.asStateFlow()
 
+    private val _appChangelogs = MutableStateFlow<Map<String, AppChangelogState>>(emptyMap())
+    val appChangelogs: StateFlow<Map<String, AppChangelogState>> = _appChangelogs.asStateFlow()
+
     private val huKind: HuKind = HuProfile.detect(context.packageManager)
     val hu: HuKind get() = huKind
 
     private var lastRows: List<StoreAppRow> = emptyList()
     private var downloadInProgress = false
 
+    /** UI language of this Store APK (`ru` / `en` product flavor). */
+    fun storeUiLang(): String =
+        if (BuildConfig.FLAVOR.equals("en", ignoreCase = true)) "en" else "ru"
+
     fun setChannel(channel: UpdateChannel) {
         preferences.channel = channel
         _channel.value = channel
         _actionState.value = StoreActionState.Idle
+        _appChangelogs.value = emptyMap()
     }
 
     fun setCloudSource(source: CloudSource) {
         preferences.cloudSource = source
         _cloudSource.value = source
         _actionState.value = StoreActionState.Idle
+        _appChangelogs.value = emptyMap()
     }
 
     fun setApkLanguage(language: ApkLanguage) {
@@ -364,6 +374,45 @@ class StoreRepository(
                 error.message ?: error.javaClass.simpleName,
             )
         }
+    }
+
+    /**
+     * Loads `changelog.<lang>.txt` for [appId] when the detail card opens.
+     * Prefers the Store UI language, then the other language; does not use
+     * `version.json` release notes (those remain a short fallback in the UI).
+     */
+    suspend fun loadAppChangelog(appId: String) {
+        val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
+        val current = _appChangelogs.value[appId]
+        if (current is AppChangelogState.Ready || current is AppChangelogState.Loading) return
+        _appChangelogs.value = _appChangelogs.value + (appId to AppChangelogState.Loading)
+        val preferred = storeUiLang()
+        val order = if (preferred == "en") listOf("en", "ru") else listOf("ru", "en")
+        val channel = _channel.value
+        try {
+            for (lang in order) {
+                val logical = row.entry.resolveChangelogLogicalPath(lang)
+                val path = YandexDiskPath.physicalPath(channel, logical)
+                val text = withContext(Dispatchers.IO) {
+                    runCatching { cloud.fetchText(path).trim() }.getOrNull()
+                }
+                if (!text.isNullOrBlank()) {
+                    _appChangelogs.value = _appChangelogs.value + (
+                        appId to AppChangelogState.Ready(text = text, lang = lang)
+                        )
+                    return
+                }
+            }
+            _appChangelogs.value = _appChangelogs.value + (appId to AppChangelogState.Absent)
+        } catch (error: Exception) {
+            _appChangelogs.value = _appChangelogs.value + (
+                appId to AppChangelogState.Error(error.message ?: error.javaClass.simpleName)
+                )
+        }
+    }
+
+    fun clearAppChangelog(appId: String) {
+        _appChangelogs.value = _appChangelogs.value - appId
     }
 
     /** Browser URL for the current remote APK (QR on phone-distribution cards). */

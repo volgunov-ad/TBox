@@ -15,6 +15,7 @@ import vad.dashing.store.StoreListState
 import vad.dashing.store.StoreRepository
 import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.disk.ApkLanguage
+import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 
@@ -27,6 +28,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val channel = repository.channel
     val cloudSource = repository.cloudSource
     val apkLanguage = repository.apkLanguage
+    val appChangelogs = repository.appChangelogs
     val hu = repository.hu
 
     private val _selectedAppId = MutableStateFlow<String?>(null)
@@ -37,6 +39,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     private var downloadJob: Job? = null
     private var iconsJob: Job? = null
+    private var changelogJob: Job? = null
 
     fun refresh() {
         viewModelScope.launch {
@@ -69,7 +72,16 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectApp(appId: String?) {
         _selectedAppId.value = appId
+        changelogJob?.cancel()
+        if (appId != null) {
+            changelogJob = viewModelScope.launch {
+                repository.loadAppChangelog(appId)
+            }
+        }
     }
+
+    fun changelogFor(appId: String): AppChangelogState =
+        appChangelogs.value[appId] ?: AppChangelogState.Idle
 
     fun selectedRow(): StoreAppRow? {
         val id = _selectedAppId.value ?: return null
