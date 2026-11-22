@@ -26,6 +26,7 @@ import vad.dashing.store.disk.StoreCloudFacade
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.disk.isReleaseNewer
 import vad.dashing.store.install.ApkInstaller
+import vad.dashing.store.install.ApkUninstaller
 import vad.dashing.store.install.ApkVerifier
 import vad.dashing.store.install.DownloadsApkSaver
 import vad.dashing.store.install.InstallPermissionHelper
@@ -338,6 +339,10 @@ class StoreRepository(
         context.startActivity(intent)
         return true
     }
+
+    /** Opens the system uninstall dialog. False if refused (e.g. Store itself). */
+    fun uninstallApp(packageName: String): Boolean =
+        ApkUninstaller.uninstall(context, packageName)
 
     fun canInstallPackages(): Boolean = InstallPermissionHelper.canInstallPackages(context)
 

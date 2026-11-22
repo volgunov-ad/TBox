@@ -24,6 +24,10 @@
     <string name="store_update">Обновить</string>
     <string name="store_install">Установить</string>
     <string name="store_open">Открыть</string>
+    <string name="store_uninstall">Удалить</string>
+    <string name="store_uninstall_confirm_title">Удалить приложение?</string>
+    <string name="store_uninstall_confirm_message">«%1$s» будет удалено с ГУ. Подтвердите в системном диалоге.</string>
+    <string name="store_uninstall_self_blocked">Нельзя удалить сам магазин из этого экрана</string>
     <string name="store_settings">Ещё</string>
     <string name="store_settings_hide">Скрыть</string>
     <string name="store_apps_count">%1$d приложений</string>

@@ -95,6 +95,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openApp(packageName: String): Boolean = repository.openInstalledApp(packageName)
 
+    fun uninstallApp(packageName: String): Boolean = repository.uninstallApp(packageName)
+
     fun canInstallPackages(): Boolean = repository.canInstallPackages()
 
     fun onResume() {

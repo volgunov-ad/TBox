@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -91,6 +92,8 @@ fun StoreHomeScreen(
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
     var showAdvanced by remember { mutableStateOf(false) }
     var pendingDownloadAppId by remember { mutableStateOf<String?>(null) }
+    var uninstallConfirmRow by remember { mutableStateOf<StoreAppRow?>(null) }
+    var uninstallBlocked by remember { mutableStateOf(false) }
     val writePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
@@ -180,6 +183,7 @@ fun StoreHomeScreen(
                     onCancel = { viewModel.cancelDownload() },
                     onInstall = { viewModel.install() },
                     onOpen = { viewModel.openApp(selectedRow.entry.packageName) },
+                    onUninstall = { uninstallConfirmRow = selectedRow },
                 )
             } else {
                 CatalogList(
@@ -196,6 +200,56 @@ fun StoreHomeScreen(
                     },
                 )
             }
+        }
+
+        uninstallConfirmRow?.let { row ->
+            AlertDialog(
+                onDismissRequest = { uninstallConfirmRow = null },
+                title = { Text(stringResource(R.string.store_uninstall_confirm_title)) },
+                text = {
+                    Text(
+                        stringResource(R.string.store_uninstall_confirm_message, row.entry.title),
+                        style = MaterialTheme.typography.tboxBody,
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            uninstallConfirmRow = null
+                            if (!viewModel.uninstallApp(row.entry.packageName)) {
+                                uninstallBlocked = true
+                            }
+                        },
+                    ) {
+                        Text(
+                            stringResource(R.string.store_uninstall),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { uninstallConfirmRow = null }) {
+                        Text(stringResource(R.string.store_cancel))
+                    }
+                },
+            )
+        }
+        if (uninstallBlocked) {
+            AlertDialog(
+                onDismissRequest = { uninstallBlocked = false },
+                title = { Text(stringResource(R.string.store_uninstall)) },
+                text = {
+                    Text(
+                        stringResource(R.string.store_uninstall_self_blocked),
+                        style = MaterialTheme.typography.tboxBody,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { uninstallBlocked = false }) {
+                        Text(stringResource(R.string.store_cancel))
+                    }
+                },
+            )
         }
     }
 }
@@ -601,6 +655,7 @@ private fun AppDetail(
     onCancel: () -> Unit,
     onInstall: () -> Unit,
     onOpen: () -> Unit,
+    onUninstall: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -685,6 +740,7 @@ private fun AppDetail(
             onCancel = onCancel,
             onInstall = onInstall,
             onOpen = onOpen,
+            onUninstall = onUninstall,
         )
 
         if (row.entry.summary.isNotBlank()) {
@@ -749,6 +805,7 @@ private fun DetailActions(
     onCancel: () -> Unit,
     onInstall: () -> Unit,
     onOpen: () -> Unit,
+    onUninstall: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         when {
@@ -875,6 +932,18 @@ private fun DetailActions(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Text(stringResource(R.string.store_open), style = MaterialTheme.typography.tboxButton)
+            }
+            TextButton(
+                onClick = onUninstall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+            ) {
+                Text(
+                    stringResource(R.string.store_uninstall),
+                    style = MaterialTheme.typography.tboxButton,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
