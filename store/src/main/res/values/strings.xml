@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TBox Store</string>
-    <string name="store_title">Магазин приложений</string>
+    <string name="app_name">Dashing Store</string>
+    <string name="store_title">Dashing Store</string>
     <string name="store_refresh">Обновить каталог</string>
     <string name="store_channel_release">Релиз</string>
     <string name="store_channel_development">Разработка</string>
@@ -20,9 +20,25 @@
     <string name="store_status_unsupported">Не для этой ГУ</string>
     <string name="store_badge_third_party">Стороннее</string>
     <string name="store_download">Скачать</string>
+    <string name="store_get">Получить</string>
     <string name="store_update">Обновить</string>
     <string name="store_install">Установить</string>
     <string name="store_open">Открыть</string>
+    <string name="store_uninstall">Удалить</string>
+    <string name="store_uninstall_confirm_title">Удалить приложение?</string>
+    <string name="store_uninstall_confirm_message">«%1$s» будет удалено с ГУ. Подтвердите в системном диалоге.</string>
+    <string name="store_uninstall_self_blocked">Нельзя удалить сам магазин из этого экрана</string>
+    <string name="store_self_update_banner">Доступно обновление Dashing Store %1$s</string>
+    <string name="store_self_update_button">Обновить магазин</string>
+    <string name="store_this_app">Это приложение</string>
+    <string name="store_settings">Ещё</string>
+    <string name="store_settings_hide">Скрыть</string>
+    <string name="store_apps_count">%1$d приложений</string>
+    <string name="store_version_line">Версия %1$s (%2$d)</string>
+    <string name="store_section_about">О приложении</string>
+    <string name="store_category_app">Приложение</string>
+    <string name="store_category_tool">Инструмент</string>
+    <string name="store_category_oneshot">Утилита</string>
     <string name="store_cancel">Отменить</string>
     <string name="store_downloading">Загрузка %1$d%%</string>
     <string name="store_downloading_unknown">Загрузка…</string>
@@ -32,11 +48,21 @@
     <string name="store_error">Ошибка: %1$s</string>
     <string name="store_error_network">Нет подключения к интернету</string>
     <string name="store_grant_install">Разрешить установку из других источников</string>
-    <string name="store_install_hint">Для установки APK разрешите установку из неизвестных источников для TBox Store.</string>
+    <string name="store_install_hint">Для установки APK разрешите установку из неизвестных источников для Dashing Store.</string>
     <string name="store_apk_size_mb">Размер: %1$s МБ</string>
     <string name="store_changelog">Изменения</string>
     <string name="store_publisher">Издатель: %1$s</string>
     <string name="store_back">Назад к списку</string>
     <string name="store_sidecar_saved">APK для выбора сохранён в Загрузки:\n%1$s</string>
     <string name="store_sidecar_error">Не удалось сохранить companion APK в Загрузки: %1$s</string>
+    <string name="store_phone_only">Только для телефона</string>
+    <string name="store_phone_qr_hint">Сканируйте QR на телефоне, чтобы открыть страницу скачивания APK</string>
+    <string name="store_phone_qr_button">QR</string>
+    <string name="store_save_to_downloads">Скачать в Загрузки</string>
+    <string name="store_saved_to_downloads">APK сохранён в Загрузки:\n%1$s</string>
+    <string name="store_error_phone_not_for_hu">Это приложение ставится на телефон, не на ГУ</string>
+    <string name="store_apk_lang_label">Язык APK: %1$s</string>
+    <string name="store_apk_lang_ru">RU</string>
+    <string name="store_apk_lang_en">EN</string>
+    <string name="store_apk_flavor_label">Язык APK</string>
 </resources>

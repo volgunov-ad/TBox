@@ -14,6 +14,7 @@ android {
         applicationId = "vad.dashing.store"
         minSdk = 28
         targetSdk = 36
+        // Keep in sync with store/Changelog.dm (bump both on every Disk publish).
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -43,6 +44,18 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+    }
+
+    flavorDimensions += "language"
+    productFlavors {
+        create("ru") {
+            dimension = "language"
+            versionNameSuffix = "-ru"
+        }
+        create("en") {
+            dimension = "language"
+            versionNameSuffix = "-en"
         }
     }
 
@@ -102,6 +115,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.okhttp)
+    implementation(libs.zxing)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

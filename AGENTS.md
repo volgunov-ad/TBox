@@ -103,13 +103,25 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 ### App Store APK (`:store`)
 
-Separate app **TBox Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
+Separate app **Dashing Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Versions: `store/build.gradle.kts` + [store/Changelog.dm](store/Changelog.dm) (bump `versionCode` on every Disk publish). Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
 
 ```
-./gradlew :store:testDebugUnitTest
-./gradlew :store:assembleDebug
+./gradlew :store:testRuDebugUnitTest
+./gradlew :store:assembleRuDebug
+./gradlew :store:assembleEnDebug
 python tools/test_appstore_catalog.py
 ```
+
+Product flavors `ru` / `en` (UI language). Catalog apps may publish both
+`flavor: "ru"` and `flavor: "en"` in `version.json`; the Store UI lets the user
+pick which APK language to download (global default + per-app). The Store itself
+is catalog entry `tbox-store` and self-updates from that card (banner + Get/Update;
+no Open/Uninstall for self). Catalog `installMode: phone` (e.g. `:phone` /
+`vad.dashing.tbox.phone`) shows a QR + «Save to Downloads» and never installs on
+the HU. Windows manager seed merges `tbox-store` / `phone` into existing
+`catalog.meta.json` — publish new Store APKs like any other app
+(`tools/appstore_manager/ИНСТРУКЦИЯ.md`).
+
 ### Data Resize APK (`:dataresize`) and `:adbcore`
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.

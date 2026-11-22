@@ -3,6 +3,18 @@
   "publishedAt": "2026-11-21T12:00:00Z",
   "apps": [
     {
+      "id": "tbox-store",
+      "packageName": "vad.dashing.store",
+      "title": "Dashing Store",
+      "summary": "Магазин приложений ГУ — обновляется сам из каталога (ru/en)",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true,
+      "manifest": "yandex-disk:/apps/tbox-store/version.json"
+    },
+    {
       "id": "tbox-monitor",
       "packageName": "vad.dashing.tbox",
       "title": "TBox Monitor",
@@ -63,6 +75,19 @@
       "verified": true,
       "manifest": "yandex-disk:/apps/dclinstall/version.json",
       "copyApkToDownloadsAppId": "dcl-launcher"
+    },
+    {
+      "id": "phone",
+      "packageName": "vad.dashing.tbox.phone",
+      "title": "TBox Phone",
+      "summary": "Связь телефона с ГУ — QR для установки на телефон, APK можно сохранить в Загрузки на ГУ",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true,
+      "manifest": "yandex-disk:/apps/phone/version.json",
+      "installMode": "phone"
     }
   ]
 }

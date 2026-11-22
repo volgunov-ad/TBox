@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TBox Store — менеджер каталога (Windows / любой Python с tkinter).
+Dashing Store — менеджер каталога (Windows / любой Python с tkinter).
 
 Открывает локальную sync-папку AppStore (Яндекс.Диск / Mail.ru),
 показывает приложения, правит описания, ставит/меняет APK, пишет
@@ -56,7 +56,7 @@ from appstore_catalog import (  # noqa: E402
 class AppStoreManagerApp:
     def __init__(self, root: Tk) -> None:
         self.root = root
-        self.root.title("TBox Store — менеджер каталога")
+        self.root.title("Dashing Store — менеджер каталога")
         self.root.geometry("1100x720")
         self.root.minsize(900, 560)
 
@@ -135,6 +135,7 @@ class AppStoreManagerApp:
             ("verified", "verified (true|false)"),
             ("reviewNotes", "Заметки проверки"),
             ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
+            ("installMode", "installMode (hu|phone)"),
             ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
@@ -177,6 +178,7 @@ class AppStoreManagerApp:
             ("verified", "_entry_verified"),
             ("reviewNotes", "_entry_reviewNotes"),
             ("copyApkToDownloadsAppId", "_entry_copyApkToDownloadsAppId"),
+            ("installMode", "_entry_installMode"),
             ("signingCertSha256", "_entry_signingCertSha256"),
             ("changelog", "_entry_changelog"),
         ):
@@ -231,7 +233,13 @@ class AppStoreManagerApp:
             self.tree.delete(*self.tree.get_children())
             for record in self.records:
                 version = "—"
-                if record.release:
+                if record.releases:
+                    parts = [
+                        f"{r.flavor}:{r.versionName}({r.versionCode})"
+                        for r in record.releases
+                    ]
+                    version = ", ".join(parts)
+                elif record.release:
                     version = f"{record.release.versionName} ({record.release.versionCode})"
                 apk = "да" if record.apk_path else "нет"
                 mark = " !" if record.missing_package or not record.has_version_json else ""
@@ -278,19 +286,25 @@ class AppStoreManagerApp:
         self.fields["verified"].set("true" if m.verified else "false")
         self.fields["reviewNotes"].set(m.reviewNotes)
         self.fields["copyApkToDownloadsAppId"].set(m.copyApkToDownloadsAppId)
+        self.fields["installMode"].set(m.installMode or "hu")
         self.fields["signingCertSha256"].set(",".join(m.signingCertSha256))
-        if record.release:
-            self.fields["versionCode"].set(str(record.release.versionCode))
-            self.fields["versionName"].set(record.release.versionName)
-            self.fields["changelog"].set(record.release.changelog)
-            apk = record.release.apkFileName
-            size = record.release.apkSizeBytes or 0
-            self.fields["apkInfo"].set(
-                f"{apk}  sha256={record.release.sha256[:12]}…  {size} bytes",
-            )
+        if record.releases:
+            primary = record.release or record.releases[0]
+            self.fields["versionCode"].set(str(primary.versionCode))
+            self.fields["versionName"].set(primary.versionName)
+            self.fields["changelog"].set(primary.changelog)
+            lines = []
+            for rel in record.releases:
+                size = rel.apkSizeBytes or 0
+                lines.append(
+                    f"{rel.flavor}: {rel.apkFileName}  "
+                    f"v{rel.versionName}({rel.versionCode})  "
+                    f"sha256={rel.sha256[:12]}…  {size} B",
+                )
+            self.fields["apkInfo"].set(" | ".join(lines))
         else:
-            self.fields["versionCode"].set("1")
-            self.fields["versionName"].set("0.1.0")
+            self.fields["versionCode"].set("")
+            self.fields["versionName"].set("")
             self.fields["changelog"].set("")
             self.fields["apkInfo"].set("нет APK / version.json")
         icon = find_icon_file(record.folder)
@@ -322,6 +336,7 @@ class AppStoreManagerApp:
             verified=verified,
             reviewNotes=self.fields["reviewNotes"].get().strip(),
             copyApkToDownloadsAppId=self.fields["copyApkToDownloadsAppId"].get().strip(),
+            installMode=self.fields["installMode"].get().strip().lower() or "hu",
             signingCertSha256=certs,
         )
 
@@ -350,8 +365,13 @@ class AppStoreManagerApp:
             return
         try:
             from apk_manifest import read_apk_info
+            from appstore_catalog import detect_flavor_from_filename
 
             info = read_apk_info(path)
+            guessed = detect_flavor_from_filename(Path(path).name) or "default"
+            flavor = self._ask_flavor(guessed)
+            if flavor is None:
+                return
             # Preserve catalog description edits; packageName must match APK.
             form_meta = self._meta_from_form()
             if form_meta.packageName and form_meta.packageName != info.packageName:
@@ -373,6 +393,7 @@ class AppStoreManagerApp:
                         version_code=None,
                         version_name=None,
                         changelog=self.fields["changelog"].get().strip(),
+                        flavor=flavor,
                         remove_other_apks=True,
                         allow_cert_change=allow_cert_change,
                     )
@@ -386,11 +407,51 @@ class AppStoreManagerApp:
                     allow_cert_change = True
             write_catalog(self._current_apps_dir())
             self.status.set(
-                f"APK обновлён: {release.apkFileName} — {info.summary()} [{info.source}]",
+                f"APK [{release.flavor}]: {release.apkFileName} — "
+                f"{info.summary()} [{info.source}]",
             )
             self.reload()
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))
+
+    def _ask_flavor(self, default: str = "default") -> str | None:
+        """Ask ru / en / default for the APK being added."""
+        dlg = Toplevel(self.root)
+        dlg.title("Язык APK (flavor)")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        choice = StringVar(value=default if default in ("ru", "en", "default") else "default")
+        ttk.Label(
+            dlg,
+            text="Какой flavor записать в version.json?\n"
+            "Для Monitor/Store обычно ru и en (два APK).",
+            padding=8,
+        ).pack(fill=X)
+        for value, label in (
+            ("ru", "ru — русская сборка"),
+            ("en", "en — English build"),
+            ("default", "default — один APK без языков"),
+        ):
+            ttk.Radiobutton(dlg, text=label, variable=choice, value=value).pack(
+                anchor=W,
+                padx=12,
+            )
+        result: dict[str, str | None] = {"value": None}
+
+        def ok() -> None:
+            result["value"] = choice.get().strip() or "default"
+            dlg.destroy()
+
+        def cancel() -> None:
+            result["value"] = None
+            dlg.destroy()
+
+        row = ttk.Frame(dlg, padding=8)
+        row.pack(fill=X)
+        ttk.Button(row, text="OK", command=ok).pack(side=LEFT, padx=4)
+        ttk.Button(row, text="Отмена", command=cancel).pack(side=LEFT)
+        dlg.wait_window()
+        return result["value"]
 
     def replace_icon(self) -> None:
         if not self.selected_id:
@@ -535,6 +596,14 @@ class AppStoreManagerApp:
                     category=vars_map["category"].get().strip() or "app",
                     verified=True,
                 )
+                flavor = None
+                if apk is not None:
+                    from appstore_catalog import detect_flavor_from_filename
+
+                    guessed = detect_flavor_from_filename(apk.name) or "default"
+                    flavor = self._ask_flavor(guessed)
+                    if flavor is None:
+                        return
                 add_app(
                     apps_dir,
                     meta,
@@ -543,6 +612,7 @@ class AppStoreManagerApp:
                     version_code=None,
                     version_name=None,
                     changelog=vars_map["changelog"].get().strip(),
+                    flavor=flavor,
                 )
                 dlg.destroy()
                 self.selected_id = meta.id

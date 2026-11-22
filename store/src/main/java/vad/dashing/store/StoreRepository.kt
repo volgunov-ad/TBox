@@ -17,7 +17,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import vad.dashing.store.catalog.StoreCatalog
 import vad.dashing.store.catalog.StoreCatalogEntry
+import vad.dashing.store.catalog.StorePublicShareUrl
 import vad.dashing.store.catalog.YandexDiskPath
+import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppReleaseInfo
 import vad.dashing.store.disk.AppReleaseManifest
 import vad.dashing.store.disk.CloudSource
@@ -25,6 +27,7 @@ import vad.dashing.store.disk.StoreCloudFacade
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.disk.isReleaseNewer
 import vad.dashing.store.install.ApkInstaller
+import vad.dashing.store.install.ApkUninstaller
 import vad.dashing.store.install.ApkVerifier
 import vad.dashing.store.install.DownloadsApkSaver
 import vad.dashing.store.install.InstallPermissionHelper
@@ -36,11 +39,31 @@ data class InstalledAppInfo(
 
 data class StoreAppRow(
     val entry: StoreCatalogEntry,
-    val remote: AppReleaseInfo? = null,
+    val remotes: List<AppReleaseInfo> = emptyList(),
+    val selectedFlavor: String? = null,
     val installed: InstalledAppInfo? = null,
     val unsupportedOnHu: Boolean = false,
     val manifestError: String? = null,
 ) {
+    val remote: AppReleaseInfo?
+        get() {
+            if (remotes.isEmpty()) return null
+            val preferred = selectedFlavor
+            if (!preferred.isNullOrBlank()) {
+                remotes.firstOrNull { it.flavor.equals(preferred, ignoreCase = true) }
+                    ?.let { return it }
+            }
+            return AppReleaseManifest(1, remotes).preferredRelease(preferred)
+        }
+
+    val languageFlavors: List<String>
+        get() = remotes
+            .map { it.flavor.lowercase() }
+            .filter { it == "ru" || it == "en" }
+            .distinct()
+
+    val hasLanguageChoice: Boolean get() = languageFlavors.size >= 2
+
     val updateAvailable: Boolean
         get() {
             val remoteCode = remote?.versionCode ?: return false
@@ -83,6 +106,14 @@ sealed interface StoreActionState {
         val downloadsSidecarError: String? = null,
     ) : StoreActionState
 
+    /** Phone-distribution APK saved to public Downloads (not installed on HU). */
+    data class SavedToDownloads(
+        val appId: String,
+        val downloadsPath: String,
+        val release: AppReleaseInfo,
+        val entry: StoreCatalogEntry,
+    ) : StoreActionState
+
     data class Error(val appId: String?, val message: String) : StoreActionState
 }
 
@@ -108,6 +139,9 @@ class StoreRepository(
     private val _cloudSource = MutableStateFlow(preferences.cloudSource)
     val cloudSource: StateFlow<CloudSource> = _cloudSource.asStateFlow()
 
+    private val _apkLanguage = MutableStateFlow(preferences.apkLanguage)
+    val apkLanguage: StateFlow<ApkLanguage> = _apkLanguage.asStateFlow()
+
     private val huKind: HuKind = HuProfile.detect(context.packageManager)
     val hu: HuKind get() = huKind
 
@@ -126,7 +160,42 @@ class StoreRepository(
         _actionState.value = StoreActionState.Idle
     }
 
+    fun setApkLanguage(language: ApkLanguage) {
+        preferences.apkLanguage = language
+        _apkLanguage.value = language
+        _actionState.value = StoreActionState.Idle
+        reselectFlavors(language.flavor)
+    }
+
+    /** Per-app override when the catalog entry publishes both `ru` and `en`. */
+    fun setAppApkFlavor(appId: String, flavor: String) {
+        val ready = _listState.value as? StoreListState.Ready ?: return
+        val updated = ready.rows.map { row ->
+            if (row.entry.id != appId) return@map row
+            if (row.remotes.none { it.flavor.equals(flavor, ignoreCase = true) }) return@map row
+            row.copy(selectedFlavor = flavor.lowercase())
+        }
+        lastRows = updated
+        _listState.value = ready.copy(rows = updated)
+        _actionState.value = StoreActionState.Idle
+    }
+
     fun cloud(): StoreCloudFacade = cloud
+
+    private fun reselectFlavors(preferred: String) {
+        val ready = _listState.value as? StoreListState.Ready ?: return
+        val updated = ready.rows.map { row ->
+            if (!row.hasLanguageChoice) return@map row
+            val flavor = if (row.remotes.any { it.flavor.equals(preferred, true) }) {
+                preferred
+            } else {
+                row.selectedFlavor
+            }
+            row.copy(selectedFlavor = flavor)
+        }
+        lastRows = updated
+        _listState.value = ready.copy(rows = updated)
+    }
 
     suspend fun refreshCatalog() {
         if (_listState.value is StoreListState.Loading) return
@@ -145,7 +214,12 @@ class StoreRepository(
             val rows = catalog.apps.mapNotNull { entry ->
                 if (entry.minStoreVersionCode > storeVersion) return@mapNotNull null
                 val unsupported = !entry.supportsHu(huKind.catalogTag)
-                val installed = installedInfo(entry.packageName)
+                // Phone APKs are not installed on the HU — skip PackageManager lookup.
+                val installed = if (entry.isPhoneDistribution) {
+                    null
+                } else {
+                    installedInfo(entry.packageName)
+                }
                 if (unsupported) {
                     return@mapNotNull StoreAppRow(
                         entry = entry,
@@ -154,13 +228,20 @@ class StoreRepository(
                     )
                 }
                 val loaded = withContext(Dispatchers.IO) {
-                    runCatching { loadRelease(channel, entry) }
+                    runCatching { loadReleases(channel, entry) }
                 }
                 loaded.fold(
-                    onSuccess = { release ->
+                    onSuccess = { releases ->
+                        val preferred = _apkLanguage.value.flavor
+                        val selected = when {
+                            releases.any { it.flavor.equals(preferred, true) } -> preferred
+                            else -> AppReleaseManifest(1, releases)
+                                .preferredRelease()?.flavor
+                        }
                         StoreAppRow(
                             entry = entry,
-                            remote = release,
+                            remotes = releases,
+                            selectedFlavor = selected,
                             installed = installed,
                         )
                     },
@@ -215,21 +296,33 @@ class StoreRepository(
             withContext(Dispatchers.IO) {
                 verifyDownloadedApk(destination, row.entry, release)
             }
-            val sidecar = withContext(Dispatchers.IO) {
-                downloadSidecarToDownloads(channel, row.entry)
-            }
             val withSize = release.copy(
                 apkSizeBytes = release.apkSizeBytes
                     ?: destination.length().takeIf { it > 0L },
             )
-            _actionState.value = StoreActionState.ReadyToInstall(
-                appId = appId,
-                apkFile = destination,
-                release = withSize,
-                entry = row.entry,
-                downloadsSidecarPath = sidecar.path,
-                downloadsSidecarError = sidecar.error,
-            )
+            if (row.entry.isPhoneDistribution) {
+                val saved = withContext(Dispatchers.IO) {
+                    saveApkToDownloads(row.entry, withSize, destination)
+                }
+                _actionState.value = StoreActionState.SavedToDownloads(
+                    appId = appId,
+                    downloadsPath = saved.absolutePath,
+                    release = withSize,
+                    entry = row.entry,
+                )
+            } else {
+                val sidecar = withContext(Dispatchers.IO) {
+                    downloadSidecarToDownloads(channel, row.entry)
+                }
+                _actionState.value = StoreActionState.ReadyToInstall(
+                    appId = appId,
+                    apkFile = destination,
+                    release = withSize,
+                    entry = row.entry,
+                    downloadsSidecarPath = sidecar.path,
+                    downloadsSidecarError = sidecar.error,
+                )
+            }
         } catch (error: CancellationException) {
             withContext(NonCancellable + Dispatchers.IO) {
                 clearPartialDownloads(row.entry.id, release)
@@ -256,6 +349,13 @@ class StoreRepository(
 
     fun installPreparedApk() {
         val state = _actionState.value as? StoreActionState.ReadyToInstall ?: return
+        if (state.entry.isPhoneDistribution) {
+            _actionState.value = StoreActionState.Error(
+                state.appId,
+                "phone_apk_not_for_hu",
+            )
+            return
+        }
         try {
             ApkInstaller.install(context, state.apkFile)
         } catch (error: Exception) {
@@ -266,6 +366,20 @@ class StoreRepository(
         }
     }
 
+    /** Browser URL for the current remote APK (QR on phone-distribution cards). */
+    fun phoneApkBrowseUrl(row: StoreAppRow): String? {
+        if (!row.entry.isPhoneDistribution) return null
+        val release = row.remote ?: return null
+        return StorePublicShareUrl.apkBrowseUrl(
+            yandexPublicKey = BuildConfig.STORE_PUBLIC_KEY,
+            mailRuPublicUrl = BuildConfig.STORE_MAILRU_PUBLIC_URL,
+            cloudSource = _cloudSource.value,
+            channel = _channel.value,
+            appId = row.entry.id,
+            apkFileName = release.apkFileName,
+        )
+    }
+
     fun openInstalledApp(packageName: String): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -273,37 +387,79 @@ class StoreRepository(
         return true
     }
 
+    /** Opens the system uninstall dialog. False if refused (e.g. Store itself). */
+    fun uninstallApp(packageName: String): Boolean =
+        ApkUninstaller.uninstall(context, packageName)
+
     fun canInstallPackages(): Boolean = InstallPermissionHelper.canInstallPackages(context)
 
     fun refreshInstalledStatuses() {
         val ready = _listState.value as? StoreListState.Ready ?: return
         val updated = ready.rows.map { row ->
-            row.copy(installed = installedInfo(row.entry.packageName))
+            if (row.entry.isPhoneDistribution) {
+                row.copy(installed = null)
+            } else {
+                row.copy(installed = installedInfo(row.entry.packageName))
+            }
         }
         lastRows = updated
         _listState.value = ready.copy(rows = updated)
     }
 
-    private fun loadRelease(
+    private fun loadReleases(
         channel: UpdateChannel,
         entry: StoreCatalogEntry,
-    ): AppReleaseInfo {
+    ): List<AppReleaseInfo> {
         val path = YandexDiskPath.physicalPath(channel, entry.resolveManifestLogicalPath())
         val json = cloud.fetchText(path)
         val manifest = AppReleaseManifest.parse(json)
-        val release = manifest.preferredRelease()
-            ?: throw IOException("No releases in $path")
-        if (release.apkSizeBytes != null && release.apkSizeBytes > 0L) return release
-        val apkPath = YandexDiskPath.appApkPath(channel, entry.id, release.apkFileName)
-        val size = runCatching {
-            cloud.fetchPublicResourceSize(apkPath)
-        }.getOrNull()
-        return if (size != null) release.copy(apkSizeBytes = size) else release
+        if (manifest.releases.isEmpty()) {
+            throw IOException("No releases in $path")
+        }
+        return manifest.releases.map { release ->
+            if (release.apkSizeBytes != null && release.apkSizeBytes > 0L) return@map release
+            val apkPath = YandexDiskPath.appApkPath(channel, entry.id, release.apkFileName)
+            val size = runCatching {
+                cloud.fetchPublicResourceSize(apkPath)
+            }.getOrNull()
+            if (size != null) release.copy(apkSizeBytes = size) else release
+        }
+    }
+
+    private fun loadRelease(
+        channel: UpdateChannel,
+        entry: StoreCatalogEntry,
+        preferredFlavor: String? = null,
+    ): AppReleaseInfo {
+        val releases = loadReleases(channel, entry)
+        return AppReleaseManifest(1, releases).preferredRelease(
+            preferredFlavor ?: _apkLanguage.value.flavor,
+        ) ?: throw IOException("No releases for ${entry.id}")
     }
 
     private data class SidecarResult(
         val path: String? = null,
         val error: String? = null,
+    )
+
+    private fun downloadsDisplayName(entry: StoreCatalogEntry, release: AppReleaseInfo): String =
+        buildString {
+            append(entry.id)
+            if (release.versionName.isNotBlank()) {
+                append('-')
+                append(release.versionName.replace(Regex("""[^\w.\-]+"""), "_"))
+            }
+            append(".apk")
+        }
+
+    private fun saveApkToDownloads(
+        entry: StoreCatalogEntry,
+        release: AppReleaseInfo,
+        cacheFile: File,
+    ): File = DownloadsApkSaver.save(
+        context,
+        cacheFile,
+        downloadsDisplayName(entry, release),
     )
 
     /**
@@ -317,24 +473,18 @@ class StoreRepository(
         val sidecarId = entry.copyApkToDownloadsAppId.trim()
         if (sidecarId.isBlank()) return SidecarResult()
         return try {
-            val sidecarEntry = lastRows.firstOrNull { it.entry.id == sidecarId }?.entry
+            val sidecarRow = lastRows.firstOrNull { it.entry.id == sidecarId }
+            val sidecarEntry = sidecarRow?.entry
                 ?: throw IOException("Catalog entry not found: $sidecarId")
-            val release = loadRelease(channel, sidecarEntry)
+            val release = sidecarRow.remote
+                ?: loadRelease(channel, sidecarEntry, _apkLanguage.value.flavor)
             val cacheFile = apkDestinationFile(sidecarEntry.id, release)
             cloud.downloadToFile(
                 diskPath = YandexDiskPath.appApkPath(channel, sidecarEntry.id, release.apkFileName),
                 destination = cacheFile,
             )
             verifyDownloadedApk(cacheFile, sidecarEntry, release)
-            val displayName = buildString {
-                append(sidecarEntry.id)
-                if (release.versionName.isNotBlank()) {
-                    append('-')
-                    append(release.versionName.replace(Regex("""[^\w.\-]+"""), "_"))
-                }
-                append(".apk")
-            }
-            val saved = DownloadsApkSaver.save(context, cacheFile, displayName)
+            val saved = saveApkToDownloads(sidecarEntry, release, cacheFile)
             SidecarResult(path = saved.absolutePath)
         } catch (error: Exception) {
             SidecarResult(error = error.message ?: error.javaClass.simpleName)

@@ -14,6 +14,7 @@ import vad.dashing.store.StoreIconLoader
 import vad.dashing.store.StoreListState
 import vad.dashing.store.StoreRepository
 import vad.dashing.store.catalog.StoreCatalogEntry
+import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 
@@ -25,6 +26,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val actionState = repository.actionState
     val channel = repository.channel
     val cloudSource = repository.cloudSource
+    val apkLanguage = repository.apkLanguage
     val hu = repository.hu
 
     private val _selectedAppId = MutableStateFlow<String?>(null)
@@ -57,6 +59,14 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
+    fun setApkLanguage(language: ApkLanguage) {
+        repository.setApkLanguage(language)
+    }
+
+    fun setAppApkFlavor(appId: String, flavor: String) {
+        repository.setAppApkFlavor(appId, flavor)
+    }
+
     fun selectApp(appId: String?) {
         _selectedAppId.value = appId
     }
@@ -84,6 +94,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openApp(packageName: String): Boolean = repository.openInstalledApp(packageName)
+
+    fun uninstallApp(packageName: String): Boolean = repository.uninstallApp(packageName)
+
+    fun phoneApkBrowseUrl(row: StoreAppRow): String? = repository.phoneApkBrowseUrl(row)
 
     fun canInstallPackages(): Boolean = repository.canInstallPackages()
 

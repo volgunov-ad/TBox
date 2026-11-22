@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 
 /**
- * Opens the companion [vad.dashing.store] APK (TBox Store).
+ * Opens the companion [vad.dashing.store] APK (Dashing Store).
  * Returns false when the store is not installed.
  */
 object TboxStoreLauncher {

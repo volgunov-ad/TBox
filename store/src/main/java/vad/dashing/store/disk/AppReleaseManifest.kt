@@ -19,6 +19,15 @@ data class AppReleaseManifest(
     val schemaVersion: Int,
     val releases: List<AppReleaseInfo>,
 ) {
+    /** Flavors that are language builds (`ru` / `en`), lowercased unique order. */
+    fun languageFlavors(): List<String> =
+        releases
+            .map { it.flavor.lowercase() }
+            .filter { it == "ru" || it == "en" }
+            .distinct()
+
+    fun hasLanguageChoice(): Boolean = languageFlavors().size >= 2
+
     /**
      * Prefers [preferredFlavor], then `default`/`all`, then the first release.
      * Companion apps usually publish a single `default` (or `ru`) entry.

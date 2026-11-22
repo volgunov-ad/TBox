@@ -24,7 +24,7 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 | Тема | Решение |
 |------|---------|
 | Форма | **Отдельный APK**, не вкладка внутри Monitor |
-| Имя / package | **TBox Store** / `vad.dashing.store` (модуль `:store`) |
+| Имя / package | **Dashing Store** / `vad.dashing.store` (модуль `:store`) |
 | Каналы | Имена **release / development** как у OTA Monitor; отдельный share AppStore |
 | Public key магазина | `https://disk.yandex.ru/d/KDaHLxbFtPAjYA` (`BuildConfig.STORE_PUBLIC_KEY`) — **не** ключи OTA Monitor |
 | Зеркало Mail.ru | `https://cloud.mail.ru/public/voi3/4Lx1RhqV9` (`STORE_MAILRU_PUBLIC_URL`, weblink `voi3/4Lx1RhqV9`) |
@@ -58,8 +58,9 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 2. Скачать APK с Яндекс.Диска → проверить sha256 (+ packageName, опционально cert) → установить.
 3. Показать «установлено» / «есть обновление» / «не для этой ГУ».
 4. Канал release / development — те же public key, что у Monitor.
-5. В каталоге: Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
-6. Bootstrap: первая установка магазина с USB / из инструкции; из Monitor — кнопка «Все приложения» (если магазин уже стоит).
+5. В каталоге: **Dashing Store** (`tbox-store`), Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
+6. Bootstrap: первая установка магазина с USB / из инструкции; из Monitor — кнопка «Все приложения» (если магазин уже стоит). Дальше Store **обновляет сам себя** из той же карточки `tbox-store` (ru/en APK), без отдельного OTA-канала.
+7. Windows-менеджер каталога знает `tbox-store` в seed: при открытии sync-папки дописывает запись, если её ещё нет; публикация — «Заменить APK…» как у остальных.
 
 Вне MVP (фаза 2+):
 
@@ -199,12 +200,19 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `signingCertSha256` | Белый список отпечатков (lowercase hex); несовпадение → отказ. Менеджер каталога заполняет из APK (`apksigner` / `keytool`); пустой = проверка cert на клиенте выключена |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
 | `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
+| `installMode` | `hu` (по умолчанию) — ставить на ГУ; `phone` — карточка на ГУ показывает QR (публичная страница APK) и кнопку «Скачать в Загрузки», без установки на ГУ. Для `:phone` / `vad.dashing.tbox.phone` |
 
 Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
-`versionCode`, `versionName`, `flavor` при необходимости, `apkFileName`,
+`versionCode`, `versionName`, `flavor`, `apkFileName`,
 `sha256`, `apkSizeBytes`, `changelog`, `publishedAt`,
-`minSupportedVersionCode`). Для приложений без ru/en flavor — одна запись
-`flavor: "default"` или ослабить требование flavor в общем парсере магазина.
+`minSupportedVersionCode`).
+
+- Приложения с ru/en сборками (Monitor, Store, …): две записи
+  `flavor: "ru"` и `flavor: "en"` (два APK в папке). Клиент Store даёт выбор
+  языка APK (глобально и на карточке).
+- Без языковых сборок: одна запись `flavor: "default"`.
+- Windows-менеджер при «Заменить APK…» спрашивает flavor и **не** удаляет APK
+  другого языка.
 
 ### 4.2. Сторонние проверенные приложения
 
@@ -275,7 +283,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | сторонние verified | по полю `hu` | по полю `hu` | да (схема + ≥0 записей) |
 | voice | ✓ | ✓ | фаза 2 |
 | dataresize / usbaudio / fwunlock / winpatch | ✗ | ✓ | фаза 2 (`oneshot`) |
-| phone | — | — | нет (не ГУ) |
+| phone | ✓ (QR + Загрузки) | ✓ (QR + Загрузки) | да (`installMode: phone`) |
 
 ---
 
@@ -301,8 +309,8 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 | Компонент | Изменение |
 |-----------|-----------|
-| Monitor | Кнопка/пункт «Магазин приложений» (implicit Intent / package); OTA вкладка пока жива |
-| MQTT / camd / voice docs | Дистрибуция: «через TBox Store» вместо «только USB» |
+| Monitor | Кнопка/пункт «Dashing Store» (implicit Intent / package); OTA вкладка пока жива |
+| MQTT / camd / voice docs | Дистрибуция: «через Dashing Store» вместо «только USB» |
 | DCLInstall | Без слияния; магазин отдаёт APK |
 | `:fwunlock` / iptables | Документировать, что магазину нужен исходящий HTTPS к API Яндекса/Mail.ru |
 | AGENTS.md / README | Упомянуть модуль `:store` после появления кода |
@@ -327,7 +335,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | 1 | Спека на Диске | Share AppStore + пустые `release/apps`, `dev/apps` — **есть** (`KDaHLxbFtPAjYA`); осталось наполнить APK + `catalog.json` |
 | 2 | Доступ разработчику DCL | Права на `apps/dcl-launcher/`; шаблон `version.json` — **с вашей стороны** |
 | 3 | Публикация first-party MVP | Monitor (копия/ссылка), MQTT, camd, DCLInstall в `apps/` + catalog — CLI `tools/build_apps_catalog.py` + GUI `tools/appstore_manager/` (Windows) |
-| 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; unit-тесты парсера |
+| 4 | Модуль `:store` | **сделано (MVP):** UI списка/карточки, download, verify, install Intent; самообновление `tbox-store` (баннер + карточка); unit-тесты парсера |
 | 5 | Связка с Monitor | **сделано:** кнопка на вкладке OTA + `TboxStoreLauncher` / action `vad.dashing.store.action.OPEN` |
 | 6 | Сторонние | Процесс рецензии + первая запись `third-party` в catalog (схема готова; DCL launcher как пример) |
 | 7 | Зеркало Mail.ru | Share + клиентский fallback — **сделано** (`StoreCloudFacade`: Авто / Яндекс / Mail.ru); контент на зеркале нужно синхронизировать вручную |
@@ -337,7 +345,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ## 10. Открытые мелочи (не блокируют старт спеки)
 
-- Финальные `applicationId` / название на экране («TBox Store» vs «Магазин TBox»).
+- ~~Финальные `applicationId` / название на экране~~ — решено: **Dashing Store** / `vad.dashing.store` (id каталога `tbox-store`).
 - ~~Отдельный public key vs подпапка OTA~~ — решено: **отдельный** AppStore share.
 - Иконки: файл `apps/<id>/icon.png` (+ webp/jpg), в catalog поле `icon`;
   Store качает только явный `icon`, иначе иконка установленного пакета / буква.
@@ -347,7 +355,24 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ---
 
-## 11. Критерий готовности MVP
+## 11. Версии Dashing Store
+
+| Что | Где |
+|-----|-----|
+| `versionName` / `versionCode` | `store/build.gradle.kts` (`defaultConfig`) |
+| Журнал изменений | [`store/Changelog.dm`](../store/Changelog.dm) (формат как у корневого `Changelog.dm`) |
+| Id в каталоге | `tbox-store` → `apps/tbox-store/version.json` на AppStore share |
+| Имя APK | `tbox-store-<versionName>-<debug\|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`) |
+
+Правила:
+
+1. Перед публикацией на Диск: поднять **versionCode** (+1), обновить **versionName** (semver), дописать блок сверху в `store/Changelog.dm`.
+2. Собрать ru и en, в Windows-менеджере «Заменить APK…» для `tbox-store` оба flavor — Store на ГУ увидит обновление по `versionCode`.
+3. Первый учтённый выпуск: **0.1.0** (`versionCode` 1).
+
+---
+
+## 12. Критерий готовности MVP
 
 На A9 и A10 (где применимо): магазин ставится один раз с USB, открывает
 `apps/catalog.json` с канала release, ставит MQTT (или другое лёгкое
