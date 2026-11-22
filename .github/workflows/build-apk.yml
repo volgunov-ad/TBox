@@ -2,16 +2,36 @@
 # Download: Actions → workflow run → Artifacts.
 #
 # Triggers:
-# - manual (workflow_dispatch): choose flavor + build type
-# - push to preRelease: always builds ruDebug for quick HU install
+# - manual (workflow_dispatch): choose module, and for Monitor/Store a flavor + build type
+# - push to preRelease: always builds Monitor ruDebug for a quick HU install
+#
+# A push does not build every module. Voice downloads models and camd builds
+# native code; those run only when someone picks the module by hand.
 
 name: Build APK
 
 on:
   workflow_dispatch:
     inputs:
+      module:
+        description: Gradle module
+        required: true
+        default: app
+        type: choice
+        options:
+          - app
+          - store
+          - voice
+          - phone
+          - mqtt
+          - dataresize
+          - usbaudio
+          - fwunlock
+          - winpatch
+          - camview
+          - camd
       flavor:
-        description: Product flavor
+        description: Language flavor (app and store only)
         required: true
         default: ru
         type: choice
@@ -35,12 +55,13 @@ on:
       - ".cursor/**"
 
 concurrency:
-  group: build-apk-${{ github.workflow }}-${{ github.ref }}-${{ inputs.flavor || 'ru' }}-${{ inputs.build_type || 'debug' }}
+  group: build-apk-${{ github.workflow }}-${{ github.ref }}-${{ inputs.module || 'app' }}-${{ inputs.flavor || 'ru' }}-${{ inputs.build_type || 'debug' }}
   cancel-in-progress: true
 
 jobs:
   unit-tests:
     name: Unit tests (ruDebug)
+    if: github.event_name == 'push' || github.event.inputs.module == 'app'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -64,6 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: unit-tests
+    if: always() && (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped')
 
     steps:
       - name: Checkout
@@ -83,20 +105,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # workflow_dispatch inputs; on push to preRelease default to ruDebug
+          EVENT="${{ github.event_name }}"
+          MODULE="${{ github.event.inputs.module }}"
           FLAVOR="${{ github.event.inputs.flavor }}"
           BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          FLAVOR="${FLAVOR:-ru}"
+          if [ "$EVENT" = "push" ]; then
+            MODULE="app"
+            FLAVOR="ru"
+            BUILD_TYPE="debug"
+          fi
+          MODULE="${MODULE:-app}"
           BUILD_TYPE="${BUILD_TYPE:-debug}"
-          FLAVOR_CAP="$(echo "${FLAVOR}" | sed 's/./\U&/')"
           BUILD_CAP="$(echo "${BUILD_TYPE}" | sed 's/./\U&/')"
-          TASK="assemble${FLAVOR_CAP}${BUILD_CAP}"
-          OUT_DIR="app/build/outputs/apk/${FLAVOR}/${BUILD_TYPE}"
+          case "$MODULE" in
+            app|store)
+              FLAVOR="${FLAVOR:-ru}"
+              FLAVOR_CAP="$(echo "${FLAVOR}" | sed 's/./\U&/')"
+              TASK=":${MODULE}:assemble${FLAVOR_CAP}${BUILD_CAP}"
+              OUT_DIR="${MODULE}/build/outputs/apk/${FLAVOR}/${BUILD_TYPE}"
+              ;;
+            *)
+              FLAVOR=""
+              TASK=":${MODULE}:assemble${BUILD_CAP}"
+              OUT_DIR="${MODULE}/build/outputs/apk/${BUILD_TYPE}"
+              ;;
+          esac
+          if [ "$MODULE" = "app" ]; then
+            ARTIFACT="tbox-monitor"
+          else
+            ARTIFACT="$MODULE"
+          fi
+          if [ -n "$FLAVOR" ]; then
+            ARTIFACT="${ARTIFACT}-${FLAVOR}"
+          fi
+          ARTIFACT="${ARTIFACT}-${BUILD_TYPE}"
           {
+            echo "module=${MODULE}"
             echo "flavor=${FLAVOR}"
             echo "build_type=${BUILD_TYPE}"
             echo "task=${TASK}"
             echo "out_dir=${OUT_DIR}"
+            echo "artifact=${ARTIFACT}"
           } >> "$GITHUB_OUTPUT"
           echo "Building ${TASK}"
 
@@ -107,12 +156,12 @@ jobs:
         run: |
           set -euo pipefail
           ls -la "${{ steps.variant.outputs.out_dir }}" || true
-          find app/build/outputs/apk -type f -name '*.apk' -print
+          find "${{ steps.variant.outputs.module }}/build/outputs/apk" -type f -name '*.apk' -print
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tbox-${{ steps.variant.outputs.flavor }}-${{ steps.variant.outputs.build_type }}-${{ github.sha }}
+          name: ${{ steps.variant.outputs.artifact }}-${{ github.sha }}
           path: ${{ steps.variant.outputs.out_dir }}/*.apk
           if-no-files-found: error
           retention-days: 30

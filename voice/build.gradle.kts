@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+extra["apkSlug"] = "voice"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
+
 android {
     namespace = "vad.dashing.voice"
     compileSdk = 36
@@ -21,15 +24,6 @@ android {
         }
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -37,7 +31,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false

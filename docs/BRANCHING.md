@@ -63,8 +63,8 @@ git rebase origin/preRelease   # или merge origin/preRelease
 ### Чеклист перед PR
 
 - [ ] `./gradlew testRuDebugUnitTest` (и/или `testEnDebugUnitTest`)
-- [ ] `./gradlew assembleRuRelease` / `assembleEnRelease` — сборка проходит
-- [ ] Версия и changelog обновлены (если это релиз с новым номером)
+- [ ] `./gradlew :app:assembleRuRelease` / `:app:assembleEnRelease` — сборка Monitor проходит. Для другого приложения: `python tools/build_app_release.py --module <имя> --output-dir <папка вне репо>`
+- [ ] Версия и changelog **того** приложения, которое выпускается: `versionCode` +1, блок сверху в его `Changelog.dm`. Проверка: `python tools/check_app_versions.py`
 - [ ] Нет незавершённых блокеров в открытых issue/PR
 
 ### Merge

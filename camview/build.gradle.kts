@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+extra["apkSlug"] = "camview"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
+
 android {
     namespace = "vad.dashing.camview"
     compileSdk = 36
@@ -20,19 +23,9 @@ android {
         }
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+extra["apkSlug"] = "usbaudio"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
+
 android {
     namespace = "vad.dashing.usbaudio"
     compileSdk = 36
@@ -16,19 +19,9 @@ android {
         versionName = "0.1.1"
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

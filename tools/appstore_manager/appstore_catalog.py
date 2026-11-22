@@ -241,7 +241,7 @@ def save_meta_map(apps_dir: Path, metas: dict[str, AppMeta]) -> None:
 
 def detect_flavor_from_filename(name: str) -> str | None:
     """
-    Guess ru/en from APK file name (…-ru-…, …_en.apk, tbox-store-0.1.0-ru-debug.apk).
+    Guess ru/en from APK file name (…-ru-…, …_en.apk, store-0.1.0-ru-debug.apk).
     Returns None when no language token is found → caller uses default/explicit.
     """
     stem = Path(name).stem.lower()

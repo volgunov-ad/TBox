@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+extra["apkSlug"] = "dataresize"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
+
 android {
     namespace = "vad.dashing.dataresize"
     compileSdk = 36
@@ -16,19 +19,9 @@ android {
         versionName = "0.2.0"
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

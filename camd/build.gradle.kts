@@ -1,10 +1,11 @@
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+extra["apkSlug"] = "camd"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
 
 android {
     namespace = "vad.dashing.camd"
@@ -28,26 +29,9 @@ android {
         }
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
-    applicationVariants.all {
-        outputs.all {
-            (this as BaseVariantOutputImpl).outputFileName =
-                "tbox-camd-${versionName}-${buildType.name}.apk"
         }
     }
 

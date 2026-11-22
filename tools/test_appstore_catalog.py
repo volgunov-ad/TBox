@@ -127,6 +127,7 @@ class AppStoreCatalogTest(unittest.TestCase):
 
     def test_detect_flavor_from_filename(self) -> None:
         self.assertEqual("ru", detect_flavor_from_filename("tbox-monitor-1.0-ru-release.apk"))
+        self.assertEqual("ru", detect_flavor_from_filename("store-0.1.1-ru-release.apk"))
         self.assertEqual("en", detect_flavor_from_filename("app-en.apk"))
         self.assertEqual("ru", detect_flavor_from_filename("store_0.1.0_ru_debug.apk"))
         self.assertIsNone(detect_flavor_from_filename("camd.apk"))

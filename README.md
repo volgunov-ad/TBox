@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, климат/багажник/зеркала через mbCAN или VHAL, темы оформления, управление служебными процессами блока TBox.
 
-**Текущая версия:** 1.1.9 (`ru` / `en` flavor).
+**Текущая версия:** 1.2.1 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -52,22 +52,24 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 Примеры команд:
 
 ```
-./gradlew assembleRuDebug
-./gradlew assembleRuRelease
-./gradlew assembleEnDebug
-./gradlew assembleEnRelease
+./gradlew :app:assembleRuDebug
+./gradlew :app:assembleRuRelease
+./gradlew :app:assembleEnDebug
+./gradlew :app:assembleEnRelease
 ```
 
 Debug и release подписываются `keystore/debug.keystore` из репозитория — облачная сборка ставится поверх уже установленного приложения.
+
+Имя APK: `tbox-monitor-<версия>-<ru|en>-<debug|release>.apk`. У остальных приложений префикса `tbox-` в имени файла нет (`store-…`, `camd-…`, `mqtt-…`). У каждого свой `Changelog.dm`. Проверка: `python tools/check_app_versions.py`. Сборка одного приложения в папку вне репозитория: `python tools/build_app_release.py --module <имя> --output-dir <папка>`.
 
 === APK из GitHub Actions
 
 Workflow [Build APK](.github/workflows/build-apk.yml):
 
-* **push в `preRelease`** — собирает `ruDebug` и кладёт APK в Artifacts;
-* **Actions → Build APK → Run workflow** — вручную выбрать `ru`/`en` и `debug`/`release`.
+* **push в `preRelease`** — собирает Monitor `ruDebug` и кладёт APK в Artifacts;
+* **Actions → Build APK → Run workflow** — вручную выбрать модуль, для Monitor и Store ещё `ru`/`en`, и `debug`/`release`.
 
-Скачать: вкладка **Actions** → нужный run → блок **Artifacts** → `tbox-…-apk` (хранение 30 дней).
+Скачать: вкладка **Actions** → нужный run → блок **Artifacts** → `tbox-monitor-ru-debug-<sha>` (для других модулей имя без `tbox-`, хранение 30 дней).
 
 === Прошивка компаньона (ESP32-S3) из GitHub Actions
 
@@ -115,7 +117,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 1.1.9) |
+| [Changelog.dm](Changelog.dm) | История версий TBox Monitor (0.12 … 1.2.1). У остальных приложений свой `Changelog.dm` |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Архитектура данных
