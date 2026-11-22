@@ -46,6 +46,18 @@ android {
         }
     }
 
+    flavorDimensions += "language"
+    productFlavors {
+        create("ru") {
+            dimension = "language"
+            versionNameSuffix = "-ru"
+        }
+        create("en") {
+            dimension = "language"
+            versionNameSuffix = "-en"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

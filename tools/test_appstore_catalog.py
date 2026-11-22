@@ -19,6 +19,8 @@ from appstore_catalog import (  # noqa: E402
     add_app,
     build_catalog,
     delete_app,
+    detect_flavor_from_filename,
+    parse_all_releases,
     resolve_apps_dir,
     scan_apps,
     set_apk,
@@ -119,6 +121,39 @@ class AppStoreCatalogTest(unittest.TestCase):
             delete_app(apps, "demo")
             self.assertEqual([], scan_apps(apps))
             self.assertFalse((apps / "demo").exists())
+
+    def test_detect_flavor_from_filename(self) -> None:
+        self.assertEqual("ru", detect_flavor_from_filename("tbox-monitor-1.0-ru-release.apk"))
+        self.assertEqual("en", detect_flavor_from_filename("app-en.apk"))
+        self.assertEqual("ru", detect_flavor_from_filename("store_0.1.0_ru_debug.apk"))
+        self.assertIsNone(detect_flavor_from_filename("camd.apk"))
+
+    def test_set_apk_keeps_other_flavor(self) -> None:
+        if not DCL_APK.is_file():
+            self.skipTest("DclInstall.apk missing")
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp) / "apps"
+            apps.mkdir()
+            upsert_meta(
+                apps,
+                AppMeta(
+                    id="demo",
+                    packageName="vad.dashing.dclinstall",
+                    title="Demo",
+                    hu=["a9"],
+                ),
+            )
+            ru_src = Path(tmp) / "demo-ru.apk"
+            en_src = Path(tmp) / "demo-en.apk"
+            ru_src.write_bytes(DCL_APK.read_bytes())
+            en_src.write_bytes(DCL_APK.read_bytes())
+            set_apk(apps, "demo", ru_src, flavor="ru", allow_cert_change=True)
+            set_apk(apps, "demo", en_src, flavor="en", allow_cert_change=True)
+            releases = parse_all_releases(apps / "demo" / "version.json")
+            flavors = sorted(r.flavor for r in releases)
+            self.assertEqual(["en", "ru"], flavors)
+            self.assertTrue((apps / "demo" / "demo-ru.apk").is_file())
+            self.assertTrue((apps / "demo" / "demo-en.apk").is_file())
 
     def test_read_apk_info_from_manifest(self) -> None:
         if not DCL_APK.is_file():

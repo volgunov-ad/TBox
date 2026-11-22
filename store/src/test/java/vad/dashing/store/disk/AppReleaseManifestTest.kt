@@ -69,4 +69,34 @@ class AppReleaseManifestTest {
         assertFalse(isReleaseNewer(1, 1))
         assertFalse(isReleaseNewer(1, 2))
     }
+
+    @Test
+    fun preferredRelease_picksRequestedLanguageFlavor() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "releases": [
+                {
+                  "versionCode": 10,
+                  "versionName": "1.0.0-ru",
+                  "flavor": "ru",
+                  "apkFileName": "app-ru.apk",
+                  "sha256": "aaa"
+                },
+                {
+                  "versionCode": 10,
+                  "versionName": "1.0.0-en",
+                  "flavor": "en",
+                  "apkFileName": "app-en.apk",
+                  "sha256": "bbb"
+                }
+              ]
+            }
+        """.trimIndent()
+        val manifest = AppReleaseManifest.parse(json)
+        assertTrue(manifest.hasLanguageChoice())
+        assertEquals(listOf("ru", "en"), manifest.languageFlavors())
+        assertEquals("app-en.apk", manifest.preferredRelease("en")?.apkFileName)
+        assertEquals("app-ru.apk", manifest.preferredRelease("ru")?.apkFileName)
+    }
 }

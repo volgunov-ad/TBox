@@ -103,6 +103,7 @@ class AppRecord:
     folder: Path
     has_version_json: bool
     missing_package: bool = False
+    releases: list[AppRelease] = field(default_factory=list)
 
 
 def utc_now() -> str:
@@ -230,24 +231,20 @@ def save_meta_map(apps_dir: Path, metas: dict[str, AppMeta]) -> None:
     save_json(apps_dir / META_NAME, {"apps": ordered})
 
 
-def parse_release(version_path: Path) -> AppRelease | None:
-    if not version_path.is_file():
-        return None
-    raw = load_json(version_path)
-    releases = raw.get("releases") if isinstance(raw, dict) else None
-    if not isinstance(releases, list) or not releases:
-        return None
-    preferred = None
-    for item in releases:
-        if not isinstance(item, dict):
-            continue
-        flavor = str(item.get("flavor", "default"))
-        if flavor.lower() in ("default", "all"):
-            preferred = item
-            break
-    item = preferred or next((x for x in releases if isinstance(x, dict)), None)
-    if item is None:
-        return None
+def detect_flavor_from_filename(name: str) -> str | None:
+    """
+    Guess ru/en from APK file name (…-ru-…, …_en.apk, tbox-store-0.1.0-ru-debug.apk).
+    Returns None when no language token is found → caller uses default/explicit.
+    """
+    stem = Path(name).stem.lower()
+    # Prefer explicit language tokens bounded by separators.
+    match = re.search(r"(?:^|[._\-])(ru|en)(?:[._\-]|$)", stem)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _release_from_dict(item: dict[str, Any]) -> AppRelease | None:
     version_code = int(item.get("versionCode", -1))
     version_name = str(item.get("versionName", "")).strip()
     apk_name = str(item.get("apkFileName", "")).strip()
@@ -268,28 +265,77 @@ def parse_release(version_path: Path) -> AppRelease | None:
     )
 
 
-def write_version_json(folder: Path, release: AppRelease) -> None:
-    payload = {
-        "schemaVersion": 1,
-        "releases": [
-            {
-                "versionCode": int(release.versionCode),
-                "versionName": release.versionName,
-                "flavor": release.flavor or "default",
-                "apkFileName": release.apkFileName,
-                "sha256": release.sha256.lower(),
-                "apkSizeBytes": int(release.apkSizeBytes or 0) or None,
-                "changelog": release.changelog,
-                "publishedAt": release.publishedAt or utc_now(),
-                "minSupportedVersionCode": int(release.minSupportedVersionCode or 0),
-            }
-        ],
+def parse_all_releases(version_path: Path) -> list[AppRelease]:
+    if not version_path.is_file():
+        return []
+    raw = load_json(version_path)
+    releases = raw.get("releases") if isinstance(raw, dict) else None
+    if not isinstance(releases, list) or not releases:
+        return []
+    out: list[AppRelease] = []
+    for item in releases:
+        if not isinstance(item, dict):
+            continue
+        parsed = _release_from_dict(item)
+        if parsed is not None:
+            out.append(parsed)
+    return out
+
+
+def parse_release(version_path: Path) -> AppRelease | None:
+    releases = parse_all_releases(version_path)
+    if not releases:
+        return None
+    for item in releases:
+        if item.flavor.lower() in ("default", "all"):
+            return item
+    # Prefer ru when both language flavors exist (common first-party default).
+    for item in releases:
+        if item.flavor.lower() == "ru":
+            return item
+    return releases[0]
+
+
+def _release_to_dict(release: AppRelease) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "versionCode": int(release.versionCode),
+        "versionName": release.versionName,
+        "flavor": release.flavor or "default",
+        "apkFileName": release.apkFileName,
+        "sha256": release.sha256.lower(),
+        "changelog": release.changelog,
+        "publishedAt": release.publishedAt or utc_now(),
+        "minSupportedVersionCode": int(release.minSupportedVersionCode or 0),
     }
-    # Drop null apkSizeBytes for cleaner JSON
-    rel = payload["releases"][0]
-    if rel["apkSizeBytes"] is None:
-        del rel["apkSizeBytes"]
-    save_json(folder / VERSION_NAME, payload)
+    size = int(release.apkSizeBytes or 0) or None
+    if size is not None:
+        data["apkSizeBytes"] = size
+    return data
+
+
+def write_version_json(folder: Path, release: AppRelease) -> None:
+    """Replace the whole version.json with a single release (legacy helper)."""
+    save_json(folder / VERSION_NAME, {"schemaVersion": 1, "releases": [_release_to_dict(release)]})
+
+
+def upsert_release(folder: Path, release: AppRelease) -> list[AppRelease]:
+    """Insert/replace one flavor entry; keep other flavors' releases."""
+    existing = parse_all_releases(folder / VERSION_NAME)
+    flavor_key = (release.flavor or "default").lower()
+    kept = [r for r in existing if r.flavor.lower() != flavor_key]
+    kept.append(release)
+    # Stable order: default, ru, en, then others alpha
+    order = {"default": 0, "all": 0, "ru": 1, "en": 2}
+
+    def sort_key(item: AppRelease) -> tuple:
+        return (order.get(item.flavor.lower(), 9), item.flavor.lower(), -item.versionCode)
+
+    kept.sort(key=sort_key)
+    save_json(
+        folder / VERSION_NAME,
+        {"schemaVersion": 1, "releases": [_release_to_dict(r) for r in kept]},
+    )
+    return kept
 
 
 def list_apks(folder: Path) -> list[Path]:
@@ -328,6 +374,7 @@ def scan_apps(apps_dir: Path) -> list[AppRecord]:
             packageName="",
             title=app_id,
         )
+        releases = parse_all_releases(folder / VERSION_NAME)
         release = parse_release(folder / VERSION_NAME)
         apk_path = None
         if release is not None:
@@ -345,6 +392,7 @@ def scan_apps(apps_dir: Path) -> list[AppRecord]:
                 folder=folder,
                 has_version_json=(folder / VERSION_NAME).is_file(),
                 missing_package=not bool(meta.packageName.strip()),
+                releases=releases,
             ),
         )
     return records
@@ -398,7 +446,7 @@ def add_app(
     version_code: int | None = None,
     version_name: str | None = None,
     changelog: str = "",
-    flavor: str = "default",
+    flavor: str | None = None,
     remove_other_apks: bool = True,
 ) -> AppRecord:
     meta.id = validate_app_id(meta.id)
@@ -443,7 +491,7 @@ def set_apk(
     version_code: int | None = None,
     version_name: str | None = None,
     changelog: str = "",
-    flavor: str = "default",
+    flavor: str | None = None,
     remove_other_apks: bool = True,
     min_supported_version_code: int = 0,
     sync_package_from_apk: bool = True,
@@ -452,10 +500,14 @@ def set_apk(
     extract_icon_from_apk: bool = True,
 ) -> AppRelease:
     """
-    Copy APK into apps/<id>/ and write version.json.
+    Copy APK into apps/<id>/ and upsert its flavor into version.json.
 
     versionCode / versionName default to values from the APK manifest
     (aapt or binary AndroidManifest.xml). Pass them explicitly only to override.
+
+    flavor defaults to ru/en guessed from the file name, else \"default\".
+    Other flavors' APKs and version.json entries are kept. When
+    remove_other_apks is True, only the previous APK for the same flavor is removed.
 
     Also (by default): pin signingCertSha256 from the APK signer and extract a
     launcher icon into apps/<id>/icon.png when a raster icon exists.
@@ -489,6 +541,10 @@ def set_apk(
     if not str(version_name or "").strip():
         raise ValueError("versionName пустой")
 
+    resolved_flavor = (flavor or detect_flavor_from_filename(apk_source.name) or "default").strip()
+    if not resolved_flavor:
+        resolved_flavor = "default"
+
     folder = apps_dir / app_id
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -497,9 +553,16 @@ def set_apk(
     if dest.resolve() != apk_source:
         shutil.copy2(apk_source, dest)
 
+    previous_same_flavor = [
+        r
+        for r in parse_all_releases(folder / VERSION_NAME)
+        if r.flavor.lower() == resolved_flavor.lower()
+    ]
     if remove_other_apks:
-        for old in list_apks(folder):
-            if old.resolve() != dest.resolve():
+        # Only remove the previous APK for this flavor; keep ru↔en siblings.
+        for prev in previous_same_flavor:
+            old = folder / prev.apkFileName
+            if old.is_file() and old.resolve() != dest.resolve():
                 old.unlink(missing_ok=True)
 
     digest = sha256_file(dest)
@@ -508,13 +571,13 @@ def set_apk(
         versionName=str(version_name),
         apkFileName=dest_name,
         sha256=digest,
-        flavor=flavor or "default",
+        flavor=resolved_flavor,
         apkSizeBytes=dest.stat().st_size,
         changelog=changelog,
         publishedAt=utc_now(),
         minSupportedVersionCode=int(min_supported_version_code or 0),
     )
-    write_version_json(folder, release)
+    upsert_release(folder, release)
 
     # Ensure meta exists; keep packageName / cert pin in sync with the APK when asked.
     metas = load_meta_map(apps_dir)

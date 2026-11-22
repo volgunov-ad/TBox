@@ -44,6 +44,7 @@ import vad.dashing.store.StoreActionState
 import vad.dashing.store.StoreAppRow
 import vad.dashing.store.StoreListState
 import vad.dashing.store.catalog.StoreAppOrigin
+import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.install.DownloadsApkSaver
@@ -62,6 +63,7 @@ fun StoreHomeScreen(
     val actionState by viewModel.actionState.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val cloudSource by viewModel.cloudSource.collectAsStateWithLifecycle()
+    val apkLanguage by viewModel.apkLanguage.collectAsStateWithLifecycle()
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
     val icons by viewModel.icons.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -196,6 +198,34 @@ fun StoreHomeScreen(
             style = MaterialTheme.typography.tboxBody,
         )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.store_apk_lang_label,
+                    when (apkLanguage) {
+                        ApkLanguage.RU -> stringResource(R.string.store_apk_lang_ru)
+                        ApkLanguage.EN -> stringResource(R.string.store_apk_lang_en)
+                    },
+                ),
+                style = MaterialTheme.typography.tboxBody,
+                modifier = Modifier.weight(1f),
+            )
+            ChannelButton(
+                label = stringResource(R.string.store_apk_lang_ru),
+                selected = apkLanguage == ApkLanguage.RU,
+                onClick = { viewModel.setApkLanguage(ApkLanguage.RU) },
+            )
+            ChannelButton(
+                label = stringResource(R.string.store_apk_lang_en),
+                selected = apkLanguage == ApkLanguage.EN,
+                onClick = { viewModel.setApkLanguage(ApkLanguage.EN) },
+            )
+        }
+
         if (!canInstall) {
             Text(
                 text = stringResource(R.string.store_install_hint),
@@ -223,6 +253,9 @@ fun StoreHomeScreen(
                 actionState = actionState,
                 canInstall = canInstall,
                 onBack = { viewModel.selectApp(null) },
+                onSelectFlavor = { flavor ->
+                    viewModel.setAppApkFlavor(selectedRow.entry.id, flavor)
+                },
                 onDownload = { startDownload(selectedRow) },
                 onCancel = { viewModel.cancelDownload() },
                 onInstall = { viewModel.install() },
@@ -375,6 +408,7 @@ private fun AppDetail(
     actionState: StoreActionState,
     canInstall: Boolean,
     onBack: () -> Unit,
+    onSelectFlavor: (String) -> Unit,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onInstall: () -> Unit,
@@ -411,6 +445,41 @@ private fun AppDetail(
             Text(row.entry.summary, style = MaterialTheme.typography.tboxBody)
         }
         Text(statusText(row), style = MaterialTheme.typography.tboxBody)
+        if (row.hasLanguageChoice) {
+            Text(
+                stringResource(R.string.store_apk_flavor_label),
+                style = MaterialTheme.typography.tboxTitle,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (flavor in row.languageFlavors) {
+                    val label = when (flavor) {
+                        "en" -> stringResource(R.string.store_apk_lang_en)
+                        else -> stringResource(R.string.store_apk_lang_ru)
+                    }
+                    ChannelButton(
+                        label = label,
+                        selected = row.selectedFlavor.equals(flavor, ignoreCase = true),
+                        onClick = { onSelectFlavor(flavor) },
+                    )
+                }
+            }
+        } else {
+            row.remote?.flavor?.takeIf {
+                it.equals("ru", true) || it.equals("en", true)
+            }?.let { flavor ->
+                Text(
+                    text = stringResource(
+                        R.string.store_apk_lang_label,
+                        if (flavor.equals("en", true)) {
+                            stringResource(R.string.store_apk_lang_en)
+                        } else {
+                            stringResource(R.string.store_apk_lang_ru)
+                        },
+                    ),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+        }
         row.remote?.apkSizeBytes?.let { bytes ->
             Text(
                 stringResource(R.string.store_apk_size_mb, formatApkSizeMegabytes(bytes)),
@@ -531,19 +600,21 @@ private fun AppDetail(
 
 @Composable
 private fun statusText(row: StoreAppRow): String {
+    val remote = row.remote
+    val installed = row.installed
     return when {
         row.unsupportedOnHu -> stringResource(R.string.store_status_unsupported)
-        row.remote != null && row.updateAvailable && row.installed != null ->
+        remote != null && row.updateAvailable && installed != null ->
             stringResource(
                 R.string.store_status_update,
-                row.remote.versionName,
-                row.remote.versionCode,
+                remote.versionName,
+                remote.versionCode,
             )
-        row.installed != null ->
+        installed != null ->
             stringResource(
                 R.string.store_status_installed,
-                row.installed.versionName,
-                row.installed.versionCode,
+                installed.versionName,
+                installed.versionCode,
             )
         else -> stringResource(R.string.store_status_not_installed)
     }

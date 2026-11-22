@@ -201,10 +201,16 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
 
 Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
-`versionCode`, `versionName`, `flavor` при необходимости, `apkFileName`,
+`versionCode`, `versionName`, `flavor`, `apkFileName`,
 `sha256`, `apkSizeBytes`, `changelog`, `publishedAt`,
-`minSupportedVersionCode`). Для приложений без ru/en flavor — одна запись
-`flavor: "default"` или ослабить требование flavor в общем парсере магазина.
+`minSupportedVersionCode`).
+
+- Приложения с ru/en сборками (Monitor, Store, …): две записи
+  `flavor: "ru"` и `flavor: "en"` (два APK в папке). Клиент Store даёт выбор
+  языка APK (глобально и на карточке).
+- Без языковых сборок: одна запись `flavor: "default"`.
+- Windows-менеджер при «Заменить APK…» спрашивает flavor и **не** удаляет APK
+  другого языка.
 
 ### 4.2. Сторонние проверенные приложения
 
