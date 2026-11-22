@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -73,34 +74,53 @@ class MainActivity : ComponentActivity() {
         if (granted) startService(Intent(this, CamdService::class.java))
     }
 
+    private fun exportDir(): File {
+        val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        } else {
+            Environment.getExternalStorageDirectory().absolutePath + "/Download"
+        }
+        return File(base, "camd").also { it.mkdirs() }
+    }
+
+    private fun writeFileToDownloads(relativeName: String, json: String): Boolean {
+        val file = File(exportDir(), relativeName)
+        return try {
+            file.writeText(json, Charsets.UTF_8)
+            file.isFile
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private val exportFile = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
             Thread {
+                val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val name = "${CamdBackup.FILE_PREFIX}_$stamp.json"
                 val json = controller.exportSettings()
-                val ok = runCatching {
-                    contentResolver.openOutputStream(uri)?.use { stream ->
-                        stream.write(json.toByteArray(Charsets.UTF_8))
-                    } != null
-                }.getOrDefault(false)
-                controller.setMessage(if (ok) "Экспорт сохранён: $uri" else "Не удалось записать файл")
+                controller.setMessage(
+                    if (writeFileToDownloads(name, json)) "Экспорт сохранён: /sdcard/Download/camd/$name"
+                    else "Не удалось записать файл"
+                )
             }.start()
         }
     }
 
     private val exportPresetsFile = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
             Thread {
+                val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val name = "${CamdBackup.PRESETS_FILE_PREFIX}_$stamp.json"
                 val json = controller.exportPresets()
-                val ok = runCatching {
-                    contentResolver.openOutputStream(uri)?.use { stream ->
-                        stream.write(json.toByteArray(Charsets.UTF_8))
-                    } != null
-                }.getOrDefault(false)
-                controller.setMessage(if (ok) "Экспорт пресетов сохранён: $uri" else "Не удалось записать файл")
+                controller.setMessage(
+                    if (writeFileToDownloads(name, json)) "Экспорт пресетов сохранён: /sdcard/Download/camd/$name"
+                    else "Не удалось записать файл"
+                )
             }.start()
         }
     }
@@ -259,15 +279,9 @@ class MainActivity : ComponentActivity() {
                         onCancelEditPreset = controller::cancelEditPreset,
                         onShowCloseButton = controller::setShowCloseButton,
                         onTapToClose = controller::setTapToClose,
-                        onExport = {
-                            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                            exportFile.launch("${CamdBackup.FILE_PREFIX}_$stamp.json")
-                        },
+                        onExport = { exportFile.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) },
                         onImport = { importFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) },
-                        onExportPresets = {
-                            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                            exportPresetsFile.launch("${CamdBackup.PRESETS_FILE_PREFIX}_$stamp.json")
-                        },
+                        onExportPresets = { exportPresetsFile.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) },
                         onImportPresets = { importPresetsFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) },
                         onKeepAvm = controller::setKeepAvmStopped,
                     )
