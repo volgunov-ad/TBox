@@ -29,6 +29,7 @@ from tkinter import (
     messagebox,
     ttk,
 )
+from tkinter.scrolledtext import ScrolledText
 
 # Allow `python appstore_manager.py` from this folder or repo root.
 _HERE = Path(__file__).resolve().parent
@@ -42,12 +43,15 @@ from appstore_catalog import (  # noqa: E402
     add_app,
     delete_app,
     ensure_seed_meta,
+    find_changelog_file,
     find_icon_file,
     list_channel_apps_dirs,
+    read_changelog,
     resolve_apps_dir,
     scan_apps,
     set_apk,
     set_icon,
+    write_changelog,
     upsert_meta,
     write_catalog,
 )
@@ -57,8 +61,8 @@ class AppStoreManagerApp:
     def __init__(self, root: Tk) -> None:
         self.root = root
         self.root.title("Dashing Store — менеджер каталога")
-        self.root.geometry("1100x720")
-        self.root.minsize(900, 560)
+        self.root.geometry("1100x780")
+        self.root.minsize(900, 620)
 
         self.appstore_root: Path | None = None
         self.apps_dir: Path | None = None
@@ -119,8 +123,12 @@ class AppStoreManagerApp:
         scroll.pack(side=RIGHT, fill=Y)
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
 
-        form = ttk.Frame(right, padding=4)
-        form.pack(fill=BOTH, expand=True)
+        notebook = ttk.Notebook(right)
+        notebook.pack(fill=BOTH, expand=True)
+        form = ttk.Frame(notebook, padding=4)
+        changelog_tab = ttk.Frame(notebook, padding=4)
+        notebook.add(form, text="Описание")
+        notebook.add(changelog_tab, text="Changelog (карточка)")
 
         self.fields: dict[str, StringVar] = {}
         rows = [
@@ -139,7 +147,7 @@ class AppStoreManagerApp:
             ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
-            ("changelog", "Changelog APK"),
+            ("changelog", "Changelog APK (кратко в version.json)"),
             ("apkInfo", "Текущий APK"),
             ("iconInfo", "Иконка"),
         ]
@@ -147,7 +155,7 @@ class AppStoreManagerApp:
         for key, label in rows:
             row = ttk.Frame(form)
             row.pack(fill=X, pady=2)
-            ttk.Label(row, text=label, width=32).pack(side=LEFT)
+            ttk.Label(row, text=label, width=36).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
             state = DISABLED if key in readonly else NORMAL
@@ -161,6 +169,36 @@ class AppStoreManagerApp:
         ttk.Button(btns, text="Заменить APK…", command=self.replace_apk).pack(side=LEFT, padx=8)
         ttk.Button(btns, text="Иконка…", command=self.replace_icon).pack(side=LEFT, padx=8)
         ttk.Button(btns, text="Удалить приложение…", command=self.delete_selected).pack(side=LEFT)
+
+        ttk.Label(
+            changelog_tab,
+            text=(
+                "Файлы changelog.ru.txt / changelog.en.txt в папке приложения. "
+                "Магазин на ГУ подтягивает их при открытии карточки (язык UI Store)."
+            ),
+            wraplength=520,
+        ).pack(fill=X, pady=(0, 8))
+
+        self.changelog_texts: dict[str, ScrolledText] = {}
+        for lang, title in (("ru", "changelog.ru.txt"), ("en", "changelog.en.txt")):
+            box = ttk.LabelFrame(changelog_tab, text=title, padding=4)
+            box.pack(fill=BOTH, expand=True, pady=4)
+            text = ScrolledText(box, height=12, wrap="word", state=DISABLED)
+            text.pack(fill=BOTH, expand=True)
+            self.changelog_texts[lang] = text
+
+        ch_btns = ttk.Frame(changelog_tab)
+        ch_btns.pack(fill=X, pady=8)
+        ttk.Button(
+            ch_btns,
+            text="Сохранить changelog.ru / .en",
+            command=self.save_changelogs,
+        ).pack(side=LEFT)
+        ttk.Button(
+            ch_btns,
+            text="Сохранить всё (описание + changelog)",
+            command=self.save_meta,
+        ).pack(side=LEFT, padx=8)
 
         status = ttk.Label(self.root, textvariable=self.status, relief="sunken", anchor=W, padding=6)
         status.pack(fill=X, side="bottom")
@@ -186,6 +224,20 @@ class AppStoreManagerApp:
         # versionCode / versionName всегда из манифеста APK — только просмотр
         self._entry_versionCode.configure(state=DISABLED)
         self._entry_versionName.configure(state=DISABLED)
+        for widget in self.changelog_texts.values():
+            widget.configure(state=state)
+
+    def _set_changelog_text(self, lang: str, body: str) -> None:
+        widget = self.changelog_texts[lang]
+        was = str(widget.cget("state"))
+        widget.configure(state=NORMAL)
+        widget.delete("1.0", END)
+        if body:
+            widget.insert("1.0", body)
+        widget.configure(state=was)
+
+    def _get_changelog_text(self, lang: str) -> str:
+        return self.changelog_texts[lang].get("1.0", "end-1c")
 
     def choose_root(self) -> None:
         path = filedialog.askdirectory(title="Папка AppStore (или release/apps)")
@@ -263,6 +315,8 @@ class AppStoreManagerApp:
     def _clear_form(self) -> None:
         for var in self.fields.values():
             var.set("")
+        for lang in self.changelog_texts:
+            self._set_changelog_text(lang, "")
 
     def on_select(self, _event=None) -> None:
         sel = self.tree.selection()
@@ -314,6 +368,8 @@ class AppStoreManagerApp:
             self.fields["iconInfo"].set(record.meta.icon)
         else:
             self.fields["iconInfo"].set("нет (будет буква / иконка установленного APK)")
+        for lang in ("ru", "en"):
+            self._set_changelog_text(lang, read_changelog(record.folder, lang))
 
     def _meta_from_form(self) -> AppMeta:
         hu = [x.strip() for x in self.fields["hu"].get().split(",") if x.strip()]
@@ -340,6 +396,31 @@ class AppStoreManagerApp:
             signingCertSha256=certs,
         )
 
+    def _selected_folder(self) -> Path | None:
+        if not self.selected_id:
+            return None
+        record = next((r for r in self.records if r.meta.id == self.selected_id), None)
+        return None if record is None else record.folder
+
+    def save_changelogs(self) -> None:
+        folder = self._selected_folder()
+        if folder is None:
+            return
+        try:
+            for lang in ("ru", "en"):
+                write_changelog(folder, lang, self._get_changelog_text(lang))
+            flags = []
+            for lang in ("ru", "en"):
+                path = find_changelog_file(folder, lang)
+                if path is not None and path.stat().st_size > 0:
+                    flags.append(path.name)
+            self.status.set(
+                f"Changelog сохранён ({', '.join(flags) if flags else 'пустые файлы'}): "
+                f"{self.selected_id}",
+            )
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
     def save_meta(self) -> None:
         if not self.selected_id:
             return
@@ -348,8 +429,12 @@ class AppStoreManagerApp:
             if meta.id != self.selected_id:
                 raise ValueError("id менять нельзя (создайте новое приложение)")
             upsert_meta(self._current_apps_dir(), meta)
+            folder = self._selected_folder()
+            if folder is not None:
+                for lang in ("ru", "en"):
+                    write_changelog(folder, lang, self._get_changelog_text(lang))
             write_catalog(self._current_apps_dir())
-            self.status.set(f"Сохранено: {meta.id}")
+            self.status.set(f"Сохранено: {meta.id} (описание + changelog.ru/en)")
             self.reload()
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))

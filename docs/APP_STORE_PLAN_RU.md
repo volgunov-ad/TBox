@@ -134,6 +134,8 @@ AppStore/                         # https://disk.yandex.ru/d/KDaHLxbFtPAjYA
       catalog.meta.json           # опционально для tools/build_apps_catalog.py
       tbox-monitor/
         version.json
+        changelog.ru.txt          # опционально, журнал на карточке
+        changelog.en.txt
         tbox_monitor-….apk
       mqtt/
         version.json
@@ -201,6 +203,7 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
 | `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
 | `installMode` | `hu` (по умолчанию) — ставить на ГУ; `phone` — карточка на ГУ показывает QR (публичная страница APK) и кнопку «Скачать в Загрузки», без установки на ГУ. Для `:phone` / `vad.dashing.tbox.phone` |
+| `changelogRu` / `changelogEn` | Опционально: путь к файлу changelog; по умолчанию `apps/<id>/changelog.ru.txt` и `changelog.en.txt` (UTF-8). Store грузит при открытии карточки (язык UI → fallback другой язык → короткий `changelog` в `version.json`) |
 
 Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
 `versionCode`, `versionName`, `flavor`, `apkFileName`,

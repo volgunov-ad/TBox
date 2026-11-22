@@ -118,8 +118,9 @@ pick which APK language to download (global default + per-app). The Store itself
 is catalog entry `tbox-store` and self-updates from that card (banner + Get/Update;
 no Open/Uninstall for self). Catalog `installMode: phone` (e.g. `:phone` /
 `vad.dashing.tbox.phone`) shows a QR + «Save to Downloads» and never installs on
-the HU. Windows manager seed merges `tbox-store` / `phone` into existing
-`catalog.meta.json` — publish new Store APKs like any other app
+the HU. Per-app `changelog.ru.txt` / `changelog.en.txt` load on the detail card
+(Windows manager tab «Changelog»). Seed merges `tbox-store` / `phone` into
+existing `catalog.meta.json` — publish new Store APKs like any other app
 (`tools/appstore_manager/ИНСТРУКЦИЯ.md`).
 
 ### Data Resize APK (`:dataresize`) and `:adbcore`

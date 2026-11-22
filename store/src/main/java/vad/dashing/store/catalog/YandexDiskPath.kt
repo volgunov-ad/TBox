@@ -45,6 +45,20 @@ object YandexDiskPath {
         "${channelRoot(channel)}/apps/$appId/$fileName"
 
     /**
+     * Per-app localized changelog on the share: `changelog.ru.txt` / `changelog.en.txt`.
+     * [lang] is `ru` or `en` (other values → `ru`).
+     */
+    fun appChangelogPath(channel: UpdateChannel, appId: String, lang: String): String {
+        val normalized = if (lang.equals("en", ignoreCase = true)) "en" else "ru"
+        return "${channelRoot(channel)}/apps/$appId/changelog.$normalized.txt"
+    }
+
+    fun changelogFileName(lang: String): String {
+        val normalized = if (lang.equals("en", ignoreCase = true)) "en" else "ru"
+        return "changelog.$normalized.txt"
+    }
+
+    /**
      * Maps a logical catalog path (`/apps/…` or already `/release|dev/…`)
      * to a physical path on the AppStore share.
      */

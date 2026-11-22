@@ -51,6 +51,8 @@
     <string name="store_install_hint">To install APKs, allow installs from unknown sources for Dashing Store.</string>
     <string name="store_apk_size_mb">Size: %1$s MB</string>
     <string name="store_changelog">Changelog</string>
+    <string name="store_changelog_loading">Loading changelog…</string>
+    <string name="store_changelog_missing">No changelog file published on the share yet</string>
     <string name="store_publisher">Publisher: %1$s</string>
     <string name="store_back">Back to list</string>
     <string name="store_sidecar_saved">APK for picking saved to Downloads:\n%1$s</string>

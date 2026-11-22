@@ -353,6 +353,31 @@ def list_apks(folder: Path) -> list[Path]:
 
 
 ICON_NAMES = ("icon.png", "icon.webp", "icon.jpg", "icon.jpeg")
+CHANGELOG_RU_NAME = "changelog.ru.txt"
+CHANGELOG_EN_NAME = "changelog.en.txt"
+
+
+def changelog_file_name(lang: str) -> str:
+    return CHANGELOG_EN_NAME if str(lang).lower() == "en" else CHANGELOG_RU_NAME
+
+
+def find_changelog_file(folder: Path, lang: str) -> Path | None:
+    path = folder / changelog_file_name(lang)
+    return path if path.is_file() else None
+
+
+def read_changelog(folder: Path, lang: str) -> str:
+    path = find_changelog_file(folder, lang)
+    if path is None:
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def write_changelog(folder: Path, lang: str, text: str) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / changelog_file_name(lang)
+    path.write_text(text.replace("\r\n", "\n").rstrip() + ("\n" if text.strip() else ""), encoding="utf-8")
+    return path
 
 
 def find_icon_file(folder: Path) -> Path | None:

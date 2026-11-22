@@ -20,13 +20,16 @@ from appstore_catalog import (  # noqa: E402
     build_catalog,
     delete_app,
     detect_flavor_from_filename,
+    find_changelog_file,
     parse_all_releases,
+    read_changelog,
     resolve_apps_dir,
     scan_apps,
     set_apk,
     set_icon,
     upsert_meta,
     write_catalog,
+    write_changelog,
 )
 
 DCL_APK = ROOT / "tools" / "dcl_install" / "DclInstall.apk"
@@ -257,6 +260,23 @@ class AppStoreCatalogTest(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 set_apk(apps, "dclinstall", DCL_APK)
+
+    def test_changelog_ru_en_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "mqtt"
+            folder.mkdir()
+            write_changelog(folder, "ru", "0.1.0\n1. Первая версия\n")
+            write_changelog(folder, "en", "0.1.0\n1. First release\n")
+            self.assertEqual(
+                "0.1.0\n1. Первая версия",
+                read_changelog(folder, "ru").rstrip(),
+            )
+            self.assertEqual(
+                "0.1.0\n1. First release",
+                read_changelog(folder, "en").rstrip(),
+            )
+            self.assertIsNotNone(find_changelog_file(folder, "ru"))
+            self.assertTrue(find_changelog_file(folder, "en").name.endswith("en.txt"))
 
     def test_copy_apk_to_downloads_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

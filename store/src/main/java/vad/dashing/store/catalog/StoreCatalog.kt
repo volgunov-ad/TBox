@@ -79,6 +79,10 @@ data class StoreCatalogEntry(
      * installed on the head unit — QR + Downloads only.
      */
     val installMode: StoreInstallMode = StoreInstallMode.HU,
+    /** Optional override; default file is `apps/<id>/changelog.ru.txt`. */
+    val changelogRuUrl: String = "",
+    /** Optional override; default file is `apps/<id>/changelog.en.txt`. */
+    val changelogEnUrl: String = "",
 ) {
     val isPhoneDistribution: Boolean get() = installMode == StoreInstallMode.PHONE
 
@@ -107,6 +111,23 @@ data class StoreCatalogEntry(
     }
 
     fun hasExplicitIcon(): Boolean = iconUrl.isNotBlank()
+
+    /**
+     * Logical path for a localized changelog file (`ru` / `en`).
+     * Catalog `changelogRu` / `changelogEn` override the convention
+     * `/apps/<id>/changelog.<lang>.txt`.
+     */
+    fun resolveChangelogLogicalPath(lang: String): String {
+        val preferEn = lang.equals("en", ignoreCase = true)
+        val override = if (preferEn) changelogEnUrl else changelogRuUrl
+        if (override.isNotBlank()) {
+            val fromUrl = YandexDiskPath.toLogicalPath(override)
+            if (!fromUrl.isNullOrBlank()) return fromUrl
+            return if (override.startsWith("/")) override else "/$override"
+        }
+        val tag = if (preferEn) "en" else "ru"
+        return "/apps/$id/changelog.$tag.txt"
+    }
 }
 
 data class StoreCatalog(
@@ -155,6 +176,12 @@ data class StoreCatalog(
                                 item.optString("installMode")
                                     .ifBlank { item.optString("distribution") },
                             ),
+                            changelogRuUrl = item.optString("changelogRu")
+                                .ifBlank { item.optString("changelog_ru") }
+                                .trim(),
+                            changelogEnUrl = item.optString("changelogEn")
+                                .ifBlank { item.optString("changelog_en") }
+                                .trim(),
                         ),
                     )
                 }
