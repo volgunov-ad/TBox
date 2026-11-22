@@ -20,9 +20,17 @@
     <string name="store_status_unsupported">Не для этой ГУ</string>
     <string name="store_badge_third_party">Стороннее</string>
     <string name="store_download">Скачать</string>
+    <string name="store_get">Получить</string>
     <string name="store_update">Обновить</string>
     <string name="store_install">Установить</string>
     <string name="store_open">Открыть</string>
+    <string name="store_settings">Ещё</string>
+    <string name="store_settings_hide">Скрыть</string>
+    <string name="store_apps_count">%1$d приложений</string>
+    <string name="store_section_about">О приложении</string>
+    <string name="store_category_app">Приложение</string>
+    <string name="store_category_tool">Инструмент</string>
+    <string name="store_category_oneshot">Утилита</string>
     <string name="store_cancel">Отменить</string>
     <string name="store_downloading">Загрузка %1$d%%</string>
     <string name="store_downloading_unknown">Загрузка…</string>

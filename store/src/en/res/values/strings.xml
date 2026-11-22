@@ -20,9 +20,17 @@
     <string name="store_status_unsupported">Not for this HU</string>
     <string name="store_badge_third_party">Third-party</string>
     <string name="store_download">Download</string>
+    <string name="store_get">Get</string>
     <string name="store_update">Update</string>
     <string name="store_install">Install</string>
     <string name="store_open">Open</string>
+    <string name="store_settings">More</string>
+    <string name="store_settings_hide">Hide</string>
+    <string name="store_apps_count">%1$d apps</string>
+    <string name="store_section_about">About</string>
+    <string name="store_category_app">App</string>
+    <string name="store_category_tool">Tool</string>
+    <string name="store_category_oneshot">Utility</string>
     <string name="store_cancel">Cancel</string>
     <string name="store_downloading">Downloading %1$d%%</string>
     <string name="store_downloading_unknown">Downloading…</string>
