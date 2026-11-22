@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TBox Store — менеджер каталога (Windows / любой Python с tkinter).
+Dashing Store — менеджер каталога (Windows / любой Python с tkinter).
 
 Открывает локальную sync-папку AppStore (Яндекс.Диск / Mail.ru),
 показывает приложения, правит описания, ставит/меняет APK, пишет
@@ -56,7 +56,7 @@ from appstore_catalog import (  # noqa: E402
 class AppStoreManagerApp:
     def __init__(self, root: Tk) -> None:
         self.root = root
-        self.root.title("TBox Store — менеджер каталога")
+        self.root.title("Dashing Store — менеджер каталога")
         self.root.geometry("1100x720")
         self.root.minsize(900, 560)
 

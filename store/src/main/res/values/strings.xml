@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TBox Store</string>
-    <string name="store_title">Магазин приложений</string>
+    <string name="app_name">Dashing Store</string>
+    <string name="store_title">Dashing Store</string>
     <string name="store_refresh">Обновить каталог</string>
     <string name="store_channel_release">Релиз</string>
     <string name="store_channel_development">Разработка</string>
@@ -28,7 +28,7 @@
     <string name="store_uninstall_confirm_title">Удалить приложение?</string>
     <string name="store_uninstall_confirm_message">«%1$s» будет удалено с ГУ. Подтвердите в системном диалоге.</string>
     <string name="store_uninstall_self_blocked">Нельзя удалить сам магазин из этого экрана</string>
-    <string name="store_self_update_banner">Доступно обновление TBox Store %1$s</string>
+    <string name="store_self_update_banner">Доступно обновление Dashing Store %1$s</string>
     <string name="store_self_update_button">Обновить магазин</string>
     <string name="store_this_app">Это приложение</string>
     <string name="store_settings">Ещё</string>
@@ -47,7 +47,7 @@
     <string name="store_error">Ошибка: %1$s</string>
     <string name="store_error_network">Нет подключения к интернету</string>
     <string name="store_grant_install">Разрешить установку из других источников</string>
-    <string name="store_install_hint">Для установки APK разрешите установку из неизвестных источников для TBox Store.</string>
+    <string name="store_install_hint">Для установки APK разрешите установку из неизвестных источников для Dashing Store.</string>
     <string name="store_apk_size_mb">Размер: %1$s МБ</string>
     <string name="store_changelog">Изменения</string>
     <string name="store_publisher">Издатель: %1$s</string>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Логика каталога TBox Store (без GUI).
+Логика каталога Dashing Store (без GUI).
 
 Работает с локальной sync-папкой канала:
   <AppStore>/release/apps/  или  <AppStore>/dev/apps/

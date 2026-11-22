@@ -24,7 +24,7 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 | Тема | Решение |
 |------|---------|
 | Форма | **Отдельный APK**, не вкладка внутри Monitor |
-| Имя / package | **TBox Store** / `vad.dashing.store` (модуль `:store`) |
+| Имя / package | **Dashing Store** / `vad.dashing.store` (модуль `:store`) |
 | Каналы | Имена **release / development** как у OTA Monitor; отдельный share AppStore |
 | Public key магазина | `https://disk.yandex.ru/d/KDaHLxbFtPAjYA` (`BuildConfig.STORE_PUBLIC_KEY`) — **не** ключи OTA Monitor |
 | Зеркало Mail.ru | `https://cloud.mail.ru/public/voi3/4Lx1RhqV9` (`STORE_MAILRU_PUBLIC_URL`, weblink `voi3/4Lx1RhqV9`) |
@@ -58,7 +58,7 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 2. Скачать APK с Яндекс.Диска → проверить sha256 (+ packageName, опционально cert) → установить.
 3. Показать «установлено» / «есть обновление» / «не для этой ГУ».
 4. Канал release / development — те же public key, что у Monitor.
-5. В каталоге: **TBox Store** (`tbox-store`), Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
+5. В каталоге: **Dashing Store** (`tbox-store`), Monitor, MQTT, camd, DCLInstall, лаунчер DCL + минимум один слот под стороннее проверенное приложение (схема полей готова сразу).
 6. Bootstrap: первая установка магазина с USB / из инструкции; из Monitor — кнопка «Все приложения» (если магазин уже стоит). Дальше Store **обновляет сам себя** из той же карточки `tbox-store` (ru/en APK), без отдельного OTA-канала.
 7. Windows-менеджер каталога знает `tbox-store` в seed: при открытии sync-папки дописывает запись, если её ещё нет; публикация — «Заменить APK…» как у остальных.
 
@@ -308,8 +308,8 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 | Компонент | Изменение |
 |-----------|-----------|
-| Monitor | Кнопка/пункт «Магазин приложений» (implicit Intent / package); OTA вкладка пока жива |
-| MQTT / camd / voice docs | Дистрибуция: «через TBox Store» вместо «только USB» |
+| Monitor | Кнопка/пункт «Dashing Store» (implicit Intent / package); OTA вкладка пока жива |
+| MQTT / camd / voice docs | Дистрибуция: «через Dashing Store» вместо «только USB» |
 | DCLInstall | Без слияния; магазин отдаёт APK |
 | `:fwunlock` / iptables | Документировать, что магазину нужен исходящий HTTPS к API Яндекса/Mail.ru |
 | AGENTS.md / README | Упомянуть модуль `:store` после появления кода |
@@ -344,7 +344,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ## 10. Открытые мелочи (не блокируют старт спеки)
 
-- Финальные `applicationId` / название на экране («TBox Store» vs «Магазин TBox»).
+- ~~Финальные `applicationId` / название на экране~~ — решено: **Dashing Store** / `vad.dashing.store` (id каталога `tbox-store`).
 - ~~Отдельный public key vs подпапка OTA~~ — решено: **отдельный** AppStore share.
 - Иконки: файл `apps/<id>/icon.png` (+ webp/jpg), в catalog поле `icon`;
   Store качает только явный `icon`, иначе иконка установленного пакета / буква.

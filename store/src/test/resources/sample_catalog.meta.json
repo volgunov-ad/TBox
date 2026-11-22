@@ -3,7 +3,7 @@
     {
       "id": "tbox-store",
       "packageName": "vad.dashing.store",
-      "title": "TBox Store",
+      "title": "Dashing Store",
       "summary": "Магазин приложений ГУ — обновляется сам из каталога (ru/en)",
       "publisher": "TBox",
       "origin": "first-party",

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TBox Store</string>
-    <string name="store_title">App store</string>
+    <string name="app_name">Dashing Store</string>
+    <string name="store_title">Dashing Store</string>
     <string name="store_refresh">Refresh catalog</string>
     <string name="store_channel_release">Release</string>
     <string name="store_channel_development">Development</string>
@@ -28,7 +28,7 @@
     <string name="store_uninstall_confirm_title">Uninstall this app?</string>
     <string name="store_uninstall_confirm_message">“%1$s” will be removed from the head unit. Confirm in the system dialog.</string>
     <string name="store_uninstall_self_blocked">You can’t uninstall the store from this screen</string>
-    <string name="store_self_update_banner">TBox Store update available: %1$s</string>
+    <string name="store_self_update_banner">Dashing Store update available: %1$s</string>
     <string name="store_self_update_button">Update store</string>
     <string name="store_this_app">This app</string>
     <string name="store_settings">More</string>
@@ -47,7 +47,7 @@
     <string name="store_error">Error: %1$s</string>
     <string name="store_error_network">No internet connection</string>
     <string name="store_grant_install">Allow installs from other sources</string>
-    <string name="store_install_hint">To install APKs, allow installs from unknown sources for TBox Store.</string>
+    <string name="store_install_hint">To install APKs, allow installs from unknown sources for Dashing Store.</string>
     <string name="store_apk_size_mb">Size: %1$s MB</string>
     <string name="store_changelog">Changelog</string>
     <string name="store_publisher">Publisher: %1$s</string>
