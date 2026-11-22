@@ -437,6 +437,14 @@ class RecorderController(
                     onWaiting = { waiting, reason ->
                         updateRunState(if (waiting) RunState.WAITING_MEDIA else RunState.RECORDING, reason)
                     },
+                    onSegmentError = { message ->
+                        // A corrupted segment: recording keeps going with the next one,
+                        // so the run state stays RECORDING — only surface the reason.
+                        _state.value = _state.value.copy(
+                            runState = RunState.RECORDING,
+                            message = message,
+                        )
+                    },
                     onError = { message ->
                         updateRunState(RunState.WAITING_MEDIA, message)
                     },
@@ -505,7 +513,10 @@ class RecorderController(
         if (!folder.isDirectory && folder.parentFile?.isDirectory == true) folder.mkdirs()
         if (!RecorderFiles.isWritable(folder)) return null
         val quota = quotaBytes()
-        if (!RecorderFiles.enforceQuota(folder, quota, RecorderFiles.SEGMENT_ESTIMATE_BYTES * 2)) {
+        // The reserve follows the selected segment length (0.8.6): a 5-minute segment
+        // needs more headroom than the default one.
+        val reserve = RecorderFiles.segmentEstimateBytes(segmentLengthMs()) * 2
+        if (!RecorderFiles.enforceQuota(folder, quota, reserve)) {
             _state.value = _state.value.copy(
                 runState = RunState.OVERFLOW,
                 message = "Нет места: квота ${_state.value.quotaGb} ГБ исчерпана, удалять старые сегменты нечего",
@@ -535,8 +546,15 @@ class RecorderController(
     private fun segmentLengthMs(): Long =
         prefs.getInt(PREF_SEGMENT_SEC, DEFAULT_SEGMENT_SEC) * 1000L
 
+    /**
+     * Engine-driven run state updates. `WAITING_MEDIA` from an engine does not override
+     * OVERFLOW set by [nextSegment] — the quota reason (place ran out, nothing to delete)
+     * stays visible while the engine re-polls every 5 s; RECORDING always wins back.
+     */
     private fun updateRunState(runState: RunState, message: String) {
-        _state.value = _state.value.copy(runState = runState, message = message)
+        val current = _state.value
+        if (runState == RunState.WAITING_MEDIA && current.runState == RunState.OVERFLOW) return
+        _state.value = current.copy(runState = runState, message = message)
     }
 
     companion object {

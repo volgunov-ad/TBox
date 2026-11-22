@@ -27,7 +27,10 @@ object RecorderFiles {
 
     /** Rough bytes of one segment at the fixed 6 Mbps — used as free-space reserve. */
     val SEGMENT_ESTIMATE_BYTES: Long
-        get() = BIT_RATE_BYTES_PER_SEC * (SEGMENT_MS / 1000L)
+        get() = segmentEstimateBytes(SEGMENT_MS)
+
+    /** Rough bytes of one [segmentMs] segment at the fixed 6 Mbps; the reserve follows the selected segment length. */
+    fun segmentEstimateBytes(segmentMs: Long): Long = BIT_RATE_BYTES_PER_SEC * (segmentMs / 1000L)
 
     private const val BIT_RATE_BYTES_PER_SEC = 750_000L
 
@@ -58,16 +61,26 @@ object RecorderFiles {
 
     /**
      * Deletes own oldest segments until the folder fits [quotaBytes] and the volume
-     * keeps at least [reserveBytes] free. Foreign files are never touched.
-     * Returns false when even a folder without own segments cannot satisfy the limits.
+     * keeps at least [reserveBytes] free. Foreign files are never touched. A file that
+     * refuses to be deleted (locked by another process, bad clusters) is skipped — its
+     * bytes keep counting against the quota, and the loop moves on to the next-oldest
+     * candidate. Returns false when nothing deletable can satisfy the limits.
      */
-    fun enforceQuota(dir: File, quotaBytes: Long, reserveBytes: Long): Boolean {
+    fun enforceQuota(
+        dir: File,
+        quotaBytes: Long,
+        reserveBytes: Long,
+        delete: (File) -> Boolean = { it.delete() },
+    ): Boolean {
         if (quotaBytes <= 0) return false
         val segments = listSegments(dir).toMutableList()
+        var stuckBytes = 0L
         fun fits(): Boolean =
-            segments.sumOf { it.length() } <= quotaBytes && dir.usableSpace >= reserveBytes
+            segments.sumOf { it.length() } + stuckBytes <= quotaBytes && dir.usableSpace >= reserveBytes
         while (!fits() && segments.isNotEmpty()) {
-            segments.removeAt(0).delete()
+            val candidate = segments.removeAt(0)
+            if (!candidate.exists() || delete(candidate)) continue
+            stuckBytes += candidate.length()
         }
         return fits()
     }

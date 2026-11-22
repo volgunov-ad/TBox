@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.IOException
@@ -45,6 +46,7 @@ object DownloadsApkSaver {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveViaMediaStore(context: Context, sourceApk: File, displayName: String): File {
         val resolver = context.contentResolver
         val values = ContentValues().apply {

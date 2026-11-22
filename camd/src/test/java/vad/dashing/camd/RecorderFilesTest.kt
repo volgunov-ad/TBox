@@ -25,6 +25,13 @@ class RecorderFilesTest {
     }
 
     @Test
+    fun segmentEstimateFollowsSelectedSegmentLength() {
+        assertEquals(750_000L * 30, RecorderFiles.segmentEstimateBytes(30_000L))
+        assertEquals(750_000L * 300, RecorderFiles.segmentEstimateBytes(300_000L))
+        assertTrue(RecorderFiles.segmentEstimateBytes(300_000L) > RecorderFiles.segmentEstimateBytes(30_000L))
+    }
+
+    @Test
     fun segmentNameEmbedsInputAndTimestamp() {
         val calendar = Calendar.getInstance().apply {
             set(2026, Calendar.NOVEMBER, 17, 12, 30, 45)
@@ -223,6 +230,61 @@ class RecorderFilesTest {
             assertTrue(RecorderFiles.enforceQuota(dir, quotaBytes = 150, reserveBytes = 0))
             assertFalse(a.exists())
             assertTrue(b.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun quotaRotationSkipsUndeletableAndRemovesNextCandidates() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val stuck = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val b = File(dir, "cam4_2026-11-17_10-03-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val c = File(dir, "cam4_2026-11-17_10-06-00.mp4").apply { writeBytes(ByteArray(100)) }
+            // 300 bytes total, quota 150: the oldest file is locked and survives,
+            // both deletable ones go instead.
+            val refused = mutableListOf<File>()
+            val result = RecorderFiles.enforceQuota(
+                dir,
+                quotaBytes = 150,
+                reserveBytes = 0,
+                delete = { file ->
+                    if (file == stuck) {
+                        refused.add(file)
+                        false
+                    } else {
+                        file.delete()
+                    }
+                },
+            )
+            assertTrue(result)
+            assertTrue(stuck.exists())
+            assertFalse(b.exists())
+            assertFalse(c.exists())
+            assertEquals(listOf(stuck), refused)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun quotaFailsHonestlyWhenOnlyUndeletableFilesRemain() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val stuck = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val undeletable = File(dir, "cam4_2026-11-17_10-03-00.mp4").apply { writeBytes(ByteArray(100)) }
+            // Both files refuse to be deleted and together exceed the quota —
+            // the failure must not be masked by dropping them from the accounting.
+            val result = RecorderFiles.enforceQuota(
+                dir,
+                quotaBytes = 150,
+                reserveBytes = 0,
+                delete = { file -> file != stuck && file != undeletable && file.delete() },
+            )
+            assertFalse(result)
+            assertTrue(stuck.exists())
+            assertTrue(undeletable.exists())
         } finally {
             dir.deleteRecursively()
         }
