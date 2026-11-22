@@ -15,9 +15,9 @@ android {
         applicationId = "vad.dashing.camd"
         minSdk = 28
         targetSdk = 36
-        versionCode = 19
+        versionCode = 20
 
-        versionName = "0.9.1"
+        versionName = "0.9.2"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
