@@ -279,7 +279,8 @@ enum class AutomationSignalId(
      */
     CAMD_RECORDER_ENABLED("camd_recorder_enabled", AutomationSignalValueType.STATE),
     /**
-     * Camd recording pipeline armed (`rec_active=`). Not the same as [CAMD_RECORDER_ENABLED].
+     * Camd dashcam segments actually being written (`rec_active=`). Not the same as
+     * [CAMD_RECORDER_ENABLED]: enabled may be on while waiting for media.
      */
     CAMD_RECORDING_ACTIVE("camd_recording_active", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),

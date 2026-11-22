@@ -21,7 +21,6 @@ class RecorderController(
 
     data class UiState(
         val enabled: Boolean = false,
-        val recording: Boolean = false,
         val runState: RunState = RunState.STOPPED,
         val message: String = "",
         val folder: String = "",
@@ -239,8 +238,9 @@ class RecorderController(
     /** Persisted master switch (survives reboot); not the same as [recordingActive]. */
     fun masterEnabled(): Boolean = prefs.getBoolean(PREF_ENABLED, false) || _state.value.enabled
 
-    /** True while the recording pipeline is armed (engines / watcher running). */
-    fun recordingActive(): Boolean = enabledNow
+    /** True only while segments are actually being written (not armed-but-waiting). */
+    fun recordingActive(): Boolean =
+        enabledNow && _state.value.runState == RunState.RECORDING
 
     /** Separate STATUS fields — do not pack into one blob. */
     fun statusFlags(): String =
@@ -376,7 +376,6 @@ class RecorderController(
             windows.setRecorderActive(false)
             Log.i(LOG_TAG, "выключение ГУ: сегменты завершены, переключатель сохранён")
             _state.value = _state.value.copy(
-                recording = false,
                 runState = RunState.STOPPED,
                 message = "Выключение ГУ — запись завершена",
             )
@@ -416,7 +415,6 @@ class RecorderController(
                 "запись стартовала: ${inputs.sorted().joinToString(" ") { "cam$it" }}",
             )
             _state.value = _state.value.copy(
-                recording = true,
                 runState = RunState.RECORDING,
                 message = "Запись идёт: ${inputs.sorted().joinToString(" ") { "cam$it" }} → ${_state.value.folder}",
             )
@@ -465,7 +463,6 @@ class RecorderController(
             prefs.edit().putBoolean(PREF_ENABLED, false).apply()
             _state.value = _state.value.copy(
                 enabled = false,
-                recording = false,
                 runState = RunState.STOPPED,
                 message = message,
             )

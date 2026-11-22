@@ -1293,7 +1293,7 @@ private fun RecorderTab(
     SettingSwitch(
         checked = recorderState.enabled,
         enabled = true,
-        title = if (recorderState.recording) {
+        title = if (recorderState.runState == RecorderController.RunState.RECORDING) {
             "● Идёт запись"
         } else {
             "Видеорегистратор"
@@ -1477,7 +1477,8 @@ private fun RecorderTab(
     }
     Button(
         onClick = onEmergencySave,
-        enabled = recorderState.recording && !recorderState.message.startsWith("Аварийное сохранение"),
+        enabled = recorderState.runState == RecorderController.RunState.RECORDING &&
+            !recorderState.message.startsWith("Аварийное сохранение"),
     ) {
         Text("Аварийно сохранить", style = MaterialTheme.typography.labelLarge)
     }

@@ -47,9 +47,9 @@ enum class CamdRecorderWidgetPaint {
     Unknown,
     /** Master off. */
     Disabled,
-    /** Master on, pipeline not armed. */
+    /** Master on, no media / not writing. */
     EnabledIdle,
-    /** Pipeline recording — always red. */
+    /** Segments actually being written — always red. */
     Recording,
 }
 
@@ -453,7 +453,7 @@ data class CamdServiceStatus(
     val keepAvm: Boolean,
     /** Master switch (`REC ON`); null when the camd build omits `rec_enabled=`. */
     val recorderEnabled: Boolean? = null,
-    /** Recording pipeline armed (`rec_active=`); null when omitted. Not the same as enabled. */
+    /** Segments are actually being written (`rec_active=`); null when omitted. Not the same as enabled. */
     val recordingActive: Boolean? = null,
 )
 

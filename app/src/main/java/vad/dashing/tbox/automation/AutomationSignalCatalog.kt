@@ -1104,7 +1104,7 @@ object AutomationSignalCatalog {
             "Камеры ГУ: запись идёт",
             appOnly,
             binaryStates,
-            typicalRange = "on/off из STATUS rec_active= (конвейер записи вооружён). " +
+            typicalRange = "on/off из STATUS rec_active= (сегменты сейчас пишутся). " +
                 "Отдельно от camd_recorder_enabled: enabled может быть on при ожидании носителя.",
         ),
         state(
