@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,8 +106,9 @@ fun StoreHomeScreen(
 
     fun startDownload(row: StoreAppRow) {
         val appId = row.entry.id
-        val needsSidecar = row.entry.copyApkToDownloadsAppId.isNotBlank()
-        if (needsSidecar &&
+        val needsDownloadsWrite = row.entry.isPhoneDistribution ||
+            row.entry.copyApkToDownloadsAppId.isNotBlank()
+        if (needsDownloadsWrite &&
             DownloadsApkSaver.needsWritePermission() &&
             !DownloadsApkSaver.hasWritePermission(context)
         ) {
@@ -191,6 +194,7 @@ fun StoreHomeScreen(
                     actionState = actionState,
                     canInstall = canInstall,
                     isSelf = selectedRow.entry.packageName == context.packageName,
+                    phoneQrUrl = viewModel.phoneApkBrowseUrl(selectedRow),
                     onSelectFlavor = { viewModel.setAppApkFlavor(selectedRow.entry.id, it) },
                     onDownload = { startDownload(selectedRow) },
                     onCancel = { viewModel.cancelDownload() },
@@ -208,6 +212,7 @@ fun StoreHomeScreen(
                     onQuickAction = { row ->
                         val isSelf = row.entry.packageName == context.packageName
                         when {
+                            row.entry.isPhoneDistribution -> viewModel.selectApp(row.entry.id)
                             isSelf && row.updateAvailable -> startDownload(row)
                             isSelf -> viewModel.selectApp(row.entry.id)
                             row.installed != null && !row.updateAvailable ->
@@ -703,6 +708,9 @@ private fun metaLine(row: StoreAppRow): String {
 @Composable
 private fun cardActionLabel(row: StoreAppRow, isSelf: Boolean): String? {
     if (row.remote == null) return null
+    if (row.entry.isPhoneDistribution) {
+        return stringResource(R.string.store_phone_qr_button)
+    }
     return when {
         row.installed == null -> stringResource(R.string.store_get)
         row.updateAvailable -> stringResource(R.string.store_update)
@@ -719,6 +727,7 @@ private fun AppDetail(
     actionState: StoreActionState,
     canInstall: Boolean,
     isSelf: Boolean,
+    phoneQrUrl: String?,
     onSelectFlavor: (String) -> Unit,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
@@ -757,7 +766,12 @@ private fun AppDetail(
                     )
                 }
                 Text(
-                    if (isSelf) stringResource(R.string.store_this_app) else statusText(row),
+                    when {
+                        row.entry.isPhoneDistribution ->
+                            stringResource(R.string.store_phone_only)
+                        isSelf -> stringResource(R.string.store_this_app)
+                        else -> statusText(row)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -779,6 +793,10 @@ private fun AppDetail(
                     }
                 }
             }
+        }
+
+        if (row.entry.isPhoneDistribution && !phoneQrUrl.isNullOrBlank()) {
+            PhoneQrSection(url = phoneQrUrl)
         }
 
         if (row.hasLanguageChoice) {
@@ -867,6 +885,56 @@ private fun DetailSection(
 }
 
 @Composable
+private fun PhoneQrSection(url: String) {
+    val qr by rememberStoreQrImage(url, sizePx = 512)
+    DetailSection(title = stringResource(R.string.store_phone_qr_button)) {
+        Text(
+            stringResource(R.string.store_phone_qr_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(16.dp),
+                shadowElevation = 2.dp,
+            ) {
+                val bitmap = qr
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = stringResource(R.string.store_phone_qr_button),
+                        modifier = Modifier
+                            .size(220.dp)
+                            .padding(12.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(220.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
+                    }
+                }
+            }
+        }
+        Text(
+            url,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun DetailActions(
     row: StoreAppRow,
     actionState: StoreActionState,
@@ -878,6 +946,7 @@ private fun DetailActions(
     onOpen: () -> Unit,
     onUninstall: () -> Unit,
 ) {
+    val phoneOnly = row.entry.isPhoneDistribution
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         when {
             actionState is StoreActionState.Downloading &&
@@ -928,6 +997,14 @@ private fun DetailActions(
                     )
                 }
             }
+            actionState is StoreActionState.SavedToDownloads &&
+                actionState.appId == row.entry.id -> {
+                Text(
+                    stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             actionState is StoreActionState.ReadyToInstall &&
                 actionState.appId == row.entry.id -> {
                 actionState.downloadsSidecarPath?.let { path ->
@@ -944,24 +1021,26 @@ private fun DetailActions(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                Button(
-                    onClick = onInstall,
-                    enabled = canInstall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
-                ) {
-                    Text(stringResource(R.string.store_install), style = MaterialTheme.typography.tboxButton)
+                if (!phoneOnly) {
+                    Button(
+                        onClick = onInstall,
+                        enabled = canInstall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(28.dp),
+                    ) {
+                        Text(stringResource(R.string.store_install), style = MaterialTheme.typography.tboxButton)
+                    }
                 }
             }
             actionState is StoreActionState.Error &&
                 (actionState.appId == row.entry.id || actionState.appId == null) -> {
                 Text(
-                    text = if (actionState.message == "network_unavailable") {
-                        stringResource(R.string.store_error_network)
-                    } else {
-                        stringResource(R.string.store_error, actionState.message)
+                    text = when (actionState.message) {
+                        "network_unavailable" -> stringResource(R.string.store_error_network)
+                        "phone_apk_not_for_hu" -> stringResource(R.string.store_error_phone_not_for_hu)
+                        else -> stringResource(R.string.store_error, actionState.message)
                     },
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.error,
@@ -969,19 +1048,13 @@ private fun DetailActions(
             }
         }
 
-        if (!row.unsupportedOnHu && row.remote != null &&
-            actionState !is StoreActionState.Downloading &&
-            actionState !is StoreActionState.Verifying &&
-            (actionState as? StoreActionState.ReadyToInstall)?.appId != row.entry.id
-        ) {
-            val label = when {
-                row.installed == null -> stringResource(R.string.store_get)
-                row.updateAvailable ->
-                    if (isSelf) stringResource(R.string.store_self_update_button)
-                    else stringResource(R.string.store_update)
-                else -> null
-            }
-            if (label != null) {
+        val busyForThis =
+            (actionState is StoreActionState.Downloading && actionState.appId == row.entry.id) ||
+                (actionState is StoreActionState.Verifying && actionState.appId == row.entry.id) ||
+                (actionState as? StoreActionState.ReadyToInstall)?.appId == row.entry.id
+
+        if (!row.unsupportedOnHu && row.remote != null && !busyForThis) {
+            if (phoneOnly) {
                 Button(
                     onClick = onDownload,
                     modifier = Modifier
@@ -989,11 +1062,34 @@ private fun DetailActions(
                         .height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                 ) {
-                    Text(label, style = MaterialTheme.typography.tboxButton)
+                    Text(
+                        stringResource(R.string.store_save_to_downloads),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+            } else {
+                val label = when {
+                    row.installed == null -> stringResource(R.string.store_get)
+                    row.updateAvailable ->
+                        if (isSelf) stringResource(R.string.store_self_update_button)
+                        else stringResource(R.string.store_update)
+                    else -> null
+                }
+                if (label != null) {
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(28.dp),
+                    ) {
+                        Text(label, style = MaterialTheme.typography.tboxButton)
+                    }
                 }
             }
         }
-        if (row.installed != null &&
+        if (!phoneOnly &&
+            row.installed != null &&
             !isSelf &&
             actionState !is StoreActionState.Downloading &&
             (actionState as? StoreActionState.ReadyToInstall)?.appId != row.entry.id

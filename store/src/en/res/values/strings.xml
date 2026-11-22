@@ -54,6 +54,12 @@
     <string name="store_back">Back to list</string>
     <string name="store_sidecar_saved">APK for picking saved to Downloads:\n%1$s</string>
     <string name="store_sidecar_error">Could not save companion APK to Downloads: %1$s</string>
+    <string name="store_phone_only">Phone only</string>
+    <string name="store_phone_qr_hint">Scan the QR code on your phone to open the APK download page</string>
+    <string name="store_phone_qr_button">QR</string>
+    <string name="store_save_to_downloads">Save to Downloads</string>
+    <string name="store_saved_to_downloads">APK saved to Downloads:\n%1$s</string>
+    <string name="store_error_phone_not_for_hu">This app installs on the phone, not the head unit</string>
     <string name="store_apk_lang_label">Download language: %1$s</string>
     <string name="store_apk_lang_ru">RU</string>
     <string name="store_apk_lang_en">EN</string>

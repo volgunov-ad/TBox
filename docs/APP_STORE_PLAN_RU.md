@@ -200,6 +200,7 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `signingCertSha256` | Белый список отпечатков (lowercase hex); несовпадение → отказ. Менеджер каталога заполняет из APK (`apksigner` / `keytool`); пустой = проверка cert на клиенте выключена |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
 | `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
+| `installMode` | `hu` (по умолчанию) — ставить на ГУ; `phone` — карточка на ГУ показывает QR (публичная страница APK) и кнопку «Скачать в Загрузки», без установки на ГУ. Для `:phone` / `vad.dashing.tbox.phone` |
 
 Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
 `versionCode`, `versionName`, `flavor`, `apkFileName`,
@@ -282,7 +283,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | сторонние verified | по полю `hu` | по полю `hu` | да (схема + ≥0 записей) |
 | voice | ✓ | ✓ | фаза 2 |
 | dataresize / usbaudio / fwunlock / winpatch | ✗ | ✓ | фаза 2 (`oneshot`) |
-| phone | — | — | нет (не ГУ) |
+| phone | ✓ (QR + Загрузки) | ✓ (QR + Загрузки) | да (`installMode: phone`) |
 
 ---
 

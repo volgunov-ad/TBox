@@ -17,6 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import vad.dashing.store.catalog.StoreCatalog
 import vad.dashing.store.catalog.StoreCatalogEntry
+import vad.dashing.store.catalog.StorePublicShareUrl
 import vad.dashing.store.catalog.YandexDiskPath
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppReleaseInfo
@@ -103,6 +104,14 @@ sealed interface StoreActionState {
         val downloadsSidecarPath: String? = null,
         /** Soft failure while saving the companion APK; main APK is still ready. */
         val downloadsSidecarError: String? = null,
+    ) : StoreActionState
+
+    /** Phone-distribution APK saved to public Downloads (not installed on HU). */
+    data class SavedToDownloads(
+        val appId: String,
+        val downloadsPath: String,
+        val release: AppReleaseInfo,
+        val entry: StoreCatalogEntry,
     ) : StoreActionState
 
     data class Error(val appId: String?, val message: String) : StoreActionState
@@ -205,7 +214,12 @@ class StoreRepository(
             val rows = catalog.apps.mapNotNull { entry ->
                 if (entry.minStoreVersionCode > storeVersion) return@mapNotNull null
                 val unsupported = !entry.supportsHu(huKind.catalogTag)
-                val installed = installedInfo(entry.packageName)
+                // Phone APKs are not installed on the HU — skip PackageManager lookup.
+                val installed = if (entry.isPhoneDistribution) {
+                    null
+                } else {
+                    installedInfo(entry.packageName)
+                }
                 if (unsupported) {
                     return@mapNotNull StoreAppRow(
                         entry = entry,
@@ -282,21 +296,33 @@ class StoreRepository(
             withContext(Dispatchers.IO) {
                 verifyDownloadedApk(destination, row.entry, release)
             }
-            val sidecar = withContext(Dispatchers.IO) {
-                downloadSidecarToDownloads(channel, row.entry)
-            }
             val withSize = release.copy(
                 apkSizeBytes = release.apkSizeBytes
                     ?: destination.length().takeIf { it > 0L },
             )
-            _actionState.value = StoreActionState.ReadyToInstall(
-                appId = appId,
-                apkFile = destination,
-                release = withSize,
-                entry = row.entry,
-                downloadsSidecarPath = sidecar.path,
-                downloadsSidecarError = sidecar.error,
-            )
+            if (row.entry.isPhoneDistribution) {
+                val saved = withContext(Dispatchers.IO) {
+                    saveApkToDownloads(row.entry, withSize, destination)
+                }
+                _actionState.value = StoreActionState.SavedToDownloads(
+                    appId = appId,
+                    downloadsPath = saved.absolutePath,
+                    release = withSize,
+                    entry = row.entry,
+                )
+            } else {
+                val sidecar = withContext(Dispatchers.IO) {
+                    downloadSidecarToDownloads(channel, row.entry)
+                }
+                _actionState.value = StoreActionState.ReadyToInstall(
+                    appId = appId,
+                    apkFile = destination,
+                    release = withSize,
+                    entry = row.entry,
+                    downloadsSidecarPath = sidecar.path,
+                    downloadsSidecarError = sidecar.error,
+                )
+            }
         } catch (error: CancellationException) {
             withContext(NonCancellable + Dispatchers.IO) {
                 clearPartialDownloads(row.entry.id, release)
@@ -323,6 +349,13 @@ class StoreRepository(
 
     fun installPreparedApk() {
         val state = _actionState.value as? StoreActionState.ReadyToInstall ?: return
+        if (state.entry.isPhoneDistribution) {
+            _actionState.value = StoreActionState.Error(
+                state.appId,
+                "phone_apk_not_for_hu",
+            )
+            return
+        }
         try {
             ApkInstaller.install(context, state.apkFile)
         } catch (error: Exception) {
@@ -331,6 +364,20 @@ class StoreRepository(
                 error.message ?: error.javaClass.simpleName,
             )
         }
+    }
+
+    /** Browser URL for the current remote APK (QR on phone-distribution cards). */
+    fun phoneApkBrowseUrl(row: StoreAppRow): String? {
+        if (!row.entry.isPhoneDistribution) return null
+        val release = row.remote ?: return null
+        return StorePublicShareUrl.apkBrowseUrl(
+            yandexPublicKey = BuildConfig.STORE_PUBLIC_KEY,
+            mailRuPublicUrl = BuildConfig.STORE_MAILRU_PUBLIC_URL,
+            cloudSource = _cloudSource.value,
+            channel = _channel.value,
+            appId = row.entry.id,
+            apkFileName = release.apkFileName,
+        )
     }
 
     fun openInstalledApp(packageName: String): Boolean {
@@ -349,7 +396,11 @@ class StoreRepository(
     fun refreshInstalledStatuses() {
         val ready = _listState.value as? StoreListState.Ready ?: return
         val updated = ready.rows.map { row ->
-            row.copy(installed = installedInfo(row.entry.packageName))
+            if (row.entry.isPhoneDistribution) {
+                row.copy(installed = null)
+            } else {
+                row.copy(installed = installedInfo(row.entry.packageName))
+            }
         }
         lastRows = updated
         _listState.value = ready.copy(rows = updated)
@@ -391,6 +442,26 @@ class StoreRepository(
         val error: String? = null,
     )
 
+    private fun downloadsDisplayName(entry: StoreCatalogEntry, release: AppReleaseInfo): String =
+        buildString {
+            append(entry.id)
+            if (release.versionName.isNotBlank()) {
+                append('-')
+                append(release.versionName.replace(Regex("""[^\w.\-]+"""), "_"))
+            }
+            append(".apk")
+        }
+
+    private fun saveApkToDownloads(
+        entry: StoreCatalogEntry,
+        release: AppReleaseInfo,
+        cacheFile: File,
+    ): File = DownloadsApkSaver.save(
+        context,
+        cacheFile,
+        downloadsDisplayName(entry, release),
+    )
+
     /**
      * For tools like DCLInstall: also fetch companion app APK into public Downloads
      * so the user can pick it inside that tool. Does not install the companion.
@@ -413,15 +484,7 @@ class StoreRepository(
                 destination = cacheFile,
             )
             verifyDownloadedApk(cacheFile, sidecarEntry, release)
-            val displayName = buildString {
-                append(sidecarEntry.id)
-                if (release.versionName.isNotBlank()) {
-                    append('-')
-                    append(release.versionName.replace(Regex("""[^\w.\-]+"""), "_"))
-                }
-                append(".apk")
-            }
-            val saved = DownloadsApkSaver.save(context, cacheFile, displayName)
+            val saved = saveApkToDownloads(sidecarEntry, release, cacheFile)
             SidecarResult(path = saved.absolutePath)
         } catch (error: Exception) {
             SidecarResult(error = error.message ?: error.javaClass.simpleName)

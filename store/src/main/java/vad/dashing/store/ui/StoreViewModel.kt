@@ -97,6 +97,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun uninstallApp(packageName: String): Boolean = repository.uninstallApp(packageName)
 
+    fun phoneApkBrowseUrl(row: StoreAppRow): String? = repository.phoneApkBrowseUrl(row)
+
     fun canInstallPackages(): Boolean = repository.canInstallPackages()
 
     fun onResume() {

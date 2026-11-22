@@ -47,6 +47,8 @@ class AppMeta:
     # When set (e.g. dclinstall → dcl-launcher), Store also saves that app's APK
     # into public Downloads after download (for tools that pick an APK from storage).
     copyApkToDownloadsAppId: str = ""
+    # hu (default) | phone — phone: QR + Downloads on HU, never install on HU.
+    installMode: str = "hu"
 
     def to_meta_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -70,6 +72,9 @@ class AppMeta:
             data["reviewNotes"] = self.reviewNotes
         if self.copyApkToDownloadsAppId:
             data["copyApkToDownloadsAppId"] = self.copyApkToDownloadsAppId
+        mode = (self.installMode or "hu").strip().lower()
+        if mode and mode not in ("hu", "head-unit", "head_unit", "default", ""):
+            data["installMode"] = mode
         return data
 
     def to_catalog_entry(self, icon_file_name: str | None = None) -> dict[str, Any]:
@@ -206,6 +211,9 @@ def _meta_from_dict(raw: dict[str, Any], fallback_id: str) -> AppMeta:
         copyApkToDownloadsAppId=str(
             raw.get("copyApkToDownloadsAppId") or raw.get("downloadsSidecarAppId") or "",
         ).strip(),
+        installMode=str(
+            raw.get("installMode") or raw.get("distribution") or "hu",
+        ).strip().lower() or "hu",
     )
 
 

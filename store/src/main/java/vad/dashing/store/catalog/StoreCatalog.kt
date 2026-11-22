@@ -33,6 +33,26 @@ enum class StoreAppCategory {
     }
 }
 
+/**
+ * Where the APK is meant to be installed.
+ * [PHONE] — show on HU catalog, but never install here: QR for the phone + save to Downloads.
+ */
+enum class StoreInstallMode {
+    HU,
+    PHONE,
+    ;
+
+    companion object {
+        fun fromRaw(raw: String?): StoreInstallMode =
+            when (raw?.trim()?.lowercase()) {
+                "phone", "phone-only", "phone_only", "downloads", "downloads-only",
+                "downloads_only", "mobile",
+                -> PHONE
+                else -> HU
+            }
+    }
+}
+
 data class StoreCatalogEntry(
     val id: String,
     val packageName: String,
@@ -54,7 +74,14 @@ data class StoreCatalogEntry(
      * like DCLInstall that pick an APK from storage, without installing the companion.
      */
     val copyApkToDownloadsAppId: String = "",
+    /**
+     * [StoreInstallMode.PHONE] for companion apps (e.g. `:phone`) that must not be
+     * installed on the head unit — QR + Downloads only.
+     */
+    val installMode: StoreInstallMode = StoreInstallMode.HU,
 ) {
+    val isPhoneDistribution: Boolean get() = installMode == StoreInstallMode.PHONE
+
     fun supportsHu(huTag: String?): Boolean {
         if (huTag.isNullOrBlank() || huTag == "unknown") return true
         return hu.any { it.equals(huTag, ignoreCase = true) }
@@ -124,6 +151,10 @@ data class StoreCatalog(
                             copyApkToDownloadsAppId = item.optString("copyApkToDownloadsAppId")
                                 .ifBlank { item.optString("downloadsSidecarAppId") }
                                 .trim(),
+                            installMode = StoreInstallMode.fromRaw(
+                                item.optString("installMode")
+                                    .ifBlank { item.optString("distribution") },
+                            ),
                         ),
                     )
                 }

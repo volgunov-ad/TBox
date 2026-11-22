@@ -7,6 +7,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 
 @RunWith(RobolectricTestRunner::class)
@@ -144,7 +145,7 @@ class StoreCatalogTest {
             .bufferedReader()
             .readText()
         val catalog = StoreCatalog.parse(json)
-        assertEquals(6, catalog.apps.size)
+        assertEquals(7, catalog.apps.size)
         assertTrue(catalog.apps.any { it.id == "tbox-store" && it.packageName == "vad.dashing.store" })
         assertTrue(catalog.apps.any { it.id == "dcl-launcher" && it.origin == StoreAppOrigin.THIRD_PARTY })
         assertTrue(catalog.apps.first { it.id == "camd" }.supportsHu("a9"))
@@ -152,6 +153,30 @@ class StoreCatalogTest {
         val dclInstall = catalog.apps.first { it.id == "dclinstall" }
         assertEquals("dcl-launcher", dclInstall.copyApkToDownloadsAppId)
         assertEquals(StoreAppCategory.TOOL, dclInstall.category)
+        val phone = catalog.apps.first { it.id == "phone" }
+        assertEquals(StoreInstallMode.PHONE, phone.installMode)
+        assertTrue(phone.isPhoneDistribution)
+        assertEquals("vad.dashing.tbox.phone", phone.packageName)
+    }
+
+    @Test
+    fun parse_installModePhone() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "apps": [
+                {
+                  "id": "phone",
+                  "packageName": "vad.dashing.tbox.phone",
+                  "title": "TBox Phone",
+                  "verified": true,
+                  "installMode": "phone"
+                }
+              ]
+            }
+        """.trimIndent()
+        val entry = StoreCatalog.parse(json).apps.single()
+        assertEquals(StoreInstallMode.PHONE, entry.installMode)
     }
 
     @Test
@@ -172,5 +197,33 @@ class StoreCatalogTest {
         """.trimIndent()
         val entry = StoreCatalog.parse(json).apps.single()
         assertEquals("dcl-launcher", entry.copyApkToDownloadsAppId)
+    }
+
+    @Test
+    fun publicShareUrl_apkBrowseUrl() {
+        val yandex = "https://disk.yandex.ru/d/KDaHLxbFtPAjYA"
+        val mail = "https://cloud.mail.ru/public/voi3/4Lx1RhqV9"
+        assertEquals(
+            "$yandex/release/apps/phone/tbox-phone-0.1.0.apk",
+            StorePublicShareUrl.apkBrowseUrl(
+                yandexPublicKey = yandex,
+                mailRuPublicUrl = mail,
+                cloudSource = CloudSource.AUTO,
+                channel = UpdateChannel.RELEASE,
+                appId = "phone",
+                apkFileName = "tbox-phone-0.1.0.apk",
+            ),
+        )
+        assertEquals(
+            "$mail/dev/apps/phone/tbox-phone.apk",
+            StorePublicShareUrl.apkBrowseUrl(
+                yandexPublicKey = yandex,
+                mailRuPublicUrl = mail,
+                cloudSource = CloudSource.MAILRU,
+                channel = UpdateChannel.DEVELOPMENT,
+                appId = "phone",
+                apkFileName = "tbox-phone.apk",
+            ),
+        )
     }
 }

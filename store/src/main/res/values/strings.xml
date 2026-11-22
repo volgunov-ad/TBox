@@ -54,6 +54,12 @@
     <string name="store_back">Назад к списку</string>
     <string name="store_sidecar_saved">APK для выбора сохранён в Загрузки:\n%1$s</string>
     <string name="store_sidecar_error">Не удалось сохранить companion APK в Загрузки: %1$s</string>
+    <string name="store_phone_only">Только для телефона</string>
+    <string name="store_phone_qr_hint">Сканируйте QR на телефоне, чтобы открыть страницу скачивания APK</string>
+    <string name="store_phone_qr_button">QR</string>
+    <string name="store_save_to_downloads">Скачать в Загрузки</string>
+    <string name="store_saved_to_downloads">APK сохранён в Загрузки:\n%1$s</string>
+    <string name="store_error_phone_not_for_hu">Это приложение ставится на телефон, не на ГУ</string>
     <string name="store_apk_lang_label">Язык APK: %1$s</string>
     <string name="store_apk_lang_ru">RU</string>
     <string name="store_apk_lang_en">EN</string>

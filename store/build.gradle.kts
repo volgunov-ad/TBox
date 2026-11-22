@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.okhttp)
+    implementation(libs.zxing)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

@@ -135,6 +135,7 @@ class AppStoreManagerApp:
             ("verified", "verified (true|false)"),
             ("reviewNotes", "Заметки проверки"),
             ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
+            ("installMode", "installMode (hu|phone)"),
             ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
@@ -177,6 +178,7 @@ class AppStoreManagerApp:
             ("verified", "_entry_verified"),
             ("reviewNotes", "_entry_reviewNotes"),
             ("copyApkToDownloadsAppId", "_entry_copyApkToDownloadsAppId"),
+            ("installMode", "_entry_installMode"),
             ("signingCertSha256", "_entry_signingCertSha256"),
             ("changelog", "_entry_changelog"),
         ):
@@ -284,6 +286,7 @@ class AppStoreManagerApp:
         self.fields["verified"].set("true" if m.verified else "false")
         self.fields["reviewNotes"].set(m.reviewNotes)
         self.fields["copyApkToDownloadsAppId"].set(m.copyApkToDownloadsAppId)
+        self.fields["installMode"].set(m.installMode or "hu")
         self.fields["signingCertSha256"].set(",".join(m.signingCertSha256))
         if record.releases:
             primary = record.release or record.releases[0]
@@ -333,6 +336,7 @@ class AppStoreManagerApp:
             verified=verified,
             reviewNotes=self.fields["reviewNotes"].get().strip(),
             copyApkToDownloadsAppId=self.fields["copyApkToDownloadsAppId"].get().strip(),
+            installMode=self.fields["installMode"].get().strip().lower() or "hu",
             signingCertSha256=certs,
         )
 

@@ -75,6 +75,19 @@
       "verified": true,
       "manifest": "yandex-disk:/apps/dclinstall/version.json",
       "copyApkToDownloadsAppId": "dcl-launcher"
+    },
+    {
+      "id": "phone",
+      "packageName": "vad.dashing.tbox.phone",
+      "title": "TBox Phone",
+      "summary": "Связь телефона с ГУ — QR для установки на телефон, APK можно сохранить в Загрузки на ГУ",
+      "publisher": "TBox",
+      "origin": "first-party",
+      "hu": ["a9", "a10"],
+      "category": "app",
+      "verified": true,
+      "manifest": "yandex-disk:/apps/phone/version.json",
+      "installMode": "phone"
     }
   ]
 }
