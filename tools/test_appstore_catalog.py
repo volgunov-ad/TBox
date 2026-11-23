@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -33,6 +34,9 @@ from appstore_catalog import (  # noqa: E402
 )
 
 DCL_APK = ROOT / "tools" / "dcl_install" / "DclInstall.apk"
+_DCL_MANIFEST = (ROOT / "tools" / "dcl_install" / "AndroidManifest.xml").read_text(encoding="utf-8")
+DCL_CODE = int(re.search(r'android:versionCode="(\d+)"', _DCL_MANIFEST).group(1))
+DCL_NAME = re.search(r'android:versionName="([^"]+)"', _DCL_MANIFEST).group(1)
 
 
 class AppStoreCatalogTest(unittest.TestCase):
@@ -164,8 +168,8 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.skipTest("DclInstall.apk missing")
         info = read_apk_info(DCL_APK)
         self.assertEqual("vad.dashing.dclinstall", info.packageName)
-        self.assertEqual(21, info.versionCode)
-        self.assertEqual("1.20", info.versionName)
+        self.assertEqual(DCL_CODE, info.versionCode)
+        self.assertEqual(DCL_NAME, info.versionName)
         self.assertTrue(info.source in ("aapt", "axml"))
 
     def test_set_apk_reads_version_from_apk(self) -> None:
@@ -183,8 +187,8 @@ class AppStoreCatalogTest(unittest.TestCase):
             )
             upsert_meta(apps, meta)
             release = set_apk(apps, "dclinstall", DCL_APK)
-            self.assertEqual(21, release.versionCode)
-            self.assertEqual("1.20", release.versionName)
+            self.assertEqual(DCL_CODE, release.versionCode)
+            self.assertEqual(DCL_NAME, release.versionName)
             self.assertTrue((apps / "dclinstall" / DCL_APK.name).is_file())
 
     def test_extract_icon_and_cert_pin(self) -> None:
@@ -240,7 +244,7 @@ class AppStoreCatalogTest(unittest.TestCase):
                 DCL_APK,
                 allow_cert_change=True,
             )
-            self.assertEqual(21, release.versionCode)
+            self.assertEqual(DCL_CODE, release.versionCode)
             meta = scan_apps(apps)[0].meta
             self.assertEqual(64, len(meta.signingCertSha256[0]))
 
