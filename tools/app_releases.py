@@ -164,7 +164,10 @@ def app_by_key(key: str) -> AppRelease:
 
 
 def read_version(root: Path, app: AppRelease) -> tuple[int, str]:
-    text = (root / app.version_file).read_text(encoding="utf-8")
+    return parse_version(app, (root / app.version_file).read_text(encoding="utf-8"))
+
+
+def parse_version(app: AppRelease, text: str) -> tuple[int, str]:
     if app.kind == "gradle":
         code_match = GRADLE_CODE_RE.search(text)
         name_match = GRADLE_NAME_RE.search(text)
@@ -202,6 +205,59 @@ def changelog_error(app: AppRelease, version_code: int, version_name: str, chang
     if headers.count(version_name) != 1:
         return f"{app.key}: version {version_name} appears {headers.count(version_name)} times in {app.changelog}"
     return None
+
+
+def version_bump_error(
+    app: AppRelease,
+    base: tuple[int, str],
+    current: tuple[int, str],
+    base_ref: str,
+) -> str | None:
+    base_code, base_name = base
+    code, name = current
+    if code < base_code:
+        return f"{app.key}: versionCode {code} is lower than {base_code} in {base_ref}"
+    if name != base_name and code <= base_code:
+        return (
+            f"{app.key}: versionName {base_name!r} -> {name!r} needs versionCode above "
+            f"{base_code} ({base_ref}), got {code}"
+        )
+    return None
+
+
+SETTINGS_INCLUDE_RE = re.compile(r'include\(\s*":([^"]+)"\s*\)')
+APK_SLUG_RE = re.compile(r'extra\["apkSlug"\]\s*=\s*"([^"]+)"')
+
+
+def application_modules(root: Path) -> list[str]:
+    """Gradle modules from settings.gradle.kts that build an APK."""
+    settings = (root / "settings.gradle.kts").read_text(encoding="utf-8")
+    modules = []
+    for module in SETTINGS_INCLUDE_RE.findall(settings):
+        build_file = root / module.replace(":", "/") / "build.gradle.kts"
+        if build_file.is_file() and "plugins.android.application" in build_file.read_text(encoding="utf-8"):
+            modules.append(module)
+    return modules
+
+
+def module_catalog_errors(root: Path) -> list[str]:
+    errors: list[str] = []
+    listed = {app.gradle_module: app for app in APPS if app.gradle_module}
+    for module in application_modules(root):
+        app = listed.pop(module, None)
+        if app is None:
+            errors.append(f":{module} builds an APK but is missing from tools/app_releases.py")
+            continue
+        text = (root / app.version_file).read_text(encoding="utf-8")
+        if "gradle/apk-release.gradle" not in text:
+            errors.append(f"{app.key}: {app.version_file} does not apply gradle/apk-release.gradle")
+        slug = APK_SLUG_RE.search(text)
+        if not slug or slug.group(1) != app.slug:
+            found = slug.group(1) if slug else None
+            errors.append(f"{app.key}: apkSlug in {app.version_file} is {found!r}, catalog has {app.slug!r}")
+    for module in listed:
+        errors.append(f"tools/app_releases.py lists :{module}, but settings.gradle.kts has no such application")
+    return errors
 
 
 def apk_file_name(app: AppRelease, version_name: str, build_type: str, flavor: str | None = None) -> str:
