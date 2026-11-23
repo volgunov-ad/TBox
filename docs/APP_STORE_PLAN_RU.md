@@ -276,7 +276,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 | Unknown sources | `REQUEST_INSTALL_PACKAGES` + проверка `canRequestPackageInstalls` |
 | Install API | Intent + FileProvider (как Monitor OTA) |
 | Подпись | Отказ или явный диалог, если cert ∉ `signingCertSha256` |
-| Dexopt | Подсказка / кнопка «Компилировать» позже; полный auto — фаза 2 |
+| Dexopt | С 0.1.2 — блок «Компиляция» в карточке установленного приложения (только на ГУ). Статус при открытии карточки читается из `compiler-filter` в заголовке `oat/<isa>/base.odex` (без ADB); если файл не читается — через `dumpsys package <pkg>`, но только когда ADB по сети уже открыт и ключ магазина уже разрешён (без перезапуска adbd и диалога отладки). Кнопка «Компилировать» — `cmd package compile -m speed -f` фоново (команда из `AppDexoptCodec` Monitor) через свой ADB на 127.0.0.1:5555 (`:adbcore`); если TCP был выключен, магазин включает его на время компиляции и опроса (до 10 мин) и выключает обратно. APK > 250 МБ не компилируются. Автозапуска после установки нет (решение 23.11.2026) |
 | A10 firewall | Магазин должен быть в whitelist / чиниться runtime iptables; иначе каталог не скачается. Документировать зависимость от Monitor/`fwunlock` |
 | `/data` | Перед закачкой проверить свободное место (критично на стоковом A10 ~2 GiB) |
 | Root | Не требовать для MVP |

@@ -76,4 +76,16 @@
     <string name="store_section_channel">Channel</string>
     <string name="store_section_source">Download source</string>
     <string name="store_phone_qr_title">Get it on the phone</string>
+    <string name="store_compile_title">Compilation</string>
+    <string name="store_compile_button">Compile</string>
+    <string name="store_compile_hint">The head unit never compiles apps by itself: after install and every update the code runs in the interpreter — slower start, dropped frames, risk of freezes while the HU boots. Compiling takes from a few seconds to 2–3 minutes; you can keep using the app. On first use the HU asks to allow debugging.</string>
+    <string name="store_compile_status_unknown">Compilation status unknown</string>
+    <string name="store_compile_status_checking">Checking status…</string>
+    <string name="store_compile_status_compiling">Compiling, you can keep using the app…</string>
+    <string name="store_compile_status_compiled">Compiled (%1$s)</string>
+    <string name="store_compile_status_not_compiled">Not compiled (%1$s): code runs in the interpreter</string>
+    <string name="store_compile_too_large">APK is over 250 MB: speed compilation does not finish on the HU</string>
+    <string name="store_compile_error_adb">No access to the HU ADB. Tap «Allow debugging» on the HU screen and retry</string>
+    <string name="store_compile_error_timeout">Compilation did not finish in 10 minutes</string>
+    <string name="store_compile_error">Compilation error: %1$s</string>
 </resources>

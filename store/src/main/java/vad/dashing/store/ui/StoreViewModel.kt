@@ -17,6 +17,7 @@ import vad.dashing.store.StoreAppRow
 import vad.dashing.store.StoreIconLoader
 import vad.dashing.store.StoreListState
 import vad.dashing.store.StoreRepository
+import vad.dashing.store.dexopt.StoreAppCompiler
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
@@ -24,6 +25,7 @@ import vad.dashing.store.disk.UpdateChannel
 class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = StoreRepository(application)
     private val iconLoader = StoreIconLoader(application, repository.cloud())
+    private val compiler = StoreAppCompiler(application)
 
     val listState = repository.listState
     val actionState = repository.actionState
@@ -32,6 +34,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val apkLanguage = repository.apkLanguage
     val appChangelogs = repository.appChangelogs
     val hu = repository.hu
+    val compileStates = compiler.states
 
     /** Not a head unit (phone, tablet, emulator): Downloads is the main action. */
     val isHeadUnit: Boolean get() = hu != HuKind.UNKNOWN
@@ -46,6 +49,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private var downloadJob: Job? = null
     private var iconsJob: Job? = null
     private val changelogJobs = mutableMapOf<String, Job>()
+    private var compileJob: Job? = null
 
     init {
         refresh()
@@ -100,6 +104,17 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 changelogJobs.remove(appId)
             }
         }
+    }
+
+    /** Re-run when the detail card opens or the installed version changes. */
+    fun checkCompileStatus(packageName: String) {
+        if (!isHeadUnit || packageName.isBlank()) return
+        viewModelScope.launch { compiler.check(packageName) }
+    }
+
+    fun compile(packageName: String) {
+        if (!isHeadUnit || compileJob?.isActive == true) return
+        compileJob = viewModelScope.launch { compiler.compile(packageName) }
     }
 
     fun download(appId: String, target: DownloadTarget = DownloadTarget.INSTALL) {

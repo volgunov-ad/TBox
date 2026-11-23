@@ -133,7 +133,7 @@ existing `catalog.meta.json` — publish new Store APKs like any other app
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.
 
-`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, `:usbaudio`, `:fwunlock`, and `:winpatch`.
+`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, `:usbaudio`, `:fwunlock`, `:winpatch`, and `:store` (per-app `speed` compile button).
 
 ```
 ./gradlew :adbcore:testDebugUnitTest

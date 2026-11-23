@@ -76,4 +76,16 @@
     <string name="store_section_channel">Канал</string>
     <string name="store_section_source">Источник загрузки</string>
     <string name="store_phone_qr_title">Скачать на телефон</string>
+    <string name="store_compile_title">Компиляция</string>
+    <string name="store_compile_button">Компилировать</string>
+    <string name="store_compile_hint">ГУ само не компилирует приложения: после установки и каждого обновления код работает в интерпретаторе — медленнее запуск, пропуски кадров, риск зависания при загрузке ГУ. Компиляция идёт от нескольких секунд до 2–3 минут, приложением можно пользоваться. При первом запуске ГУ спросит разрешение на отладку.</string>
+    <string name="store_compile_status_unknown">Статус компиляции неизвестен</string>
+    <string name="store_compile_status_checking">Проверка статуса…</string>
+    <string name="store_compile_status_compiling">Компиляция идёт, приложением можно пользоваться…</string>
+    <string name="store_compile_status_compiled">Скомпилировано (%1$s)</string>
+    <string name="store_compile_status_not_compiled">Не скомпилировано (%1$s): код работает в интерпретаторе</string>
+    <string name="store_compile_too_large">APK больше 250 МБ: компиляция speed на ГУ не успевает завершиться</string>
+    <string name="store_compile_error_adb">Нет доступа к ADB ГУ. Подтвердите на экране ГУ «Разрешить отладку» и повторите</string>
+    <string name="store_compile_error_timeout">Компиляция не завершилась за 10 минут</string>
+    <string name="store_compile_error">Ошибка компиляции: %1$s</string>
 </resources>

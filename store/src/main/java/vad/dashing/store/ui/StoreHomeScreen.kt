@@ -97,6 +97,8 @@ import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
+import vad.dashing.store.dexopt.CompileErrors
+import vad.dashing.store.dexopt.CompileState
 import vad.dashing.store.install.DownloadsApkSaver
 import vad.dashing.store.install.InstallPermissionHelper
 import vad.dashing.store.install.formatApkSizeMegabytes
@@ -118,6 +120,7 @@ fun StoreHomeScreen(
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
     val icons by viewModel.icons.collectAsStateWithLifecycle()
     val appChangelogs by viewModel.appChangelogs.collectAsStateWithLifecycle()
+    val compileStates by viewModel.compileStates.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isHeadUnit = viewModel.isHeadUnit
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
@@ -184,6 +187,13 @@ fun StoreHomeScreen(
     val selfRow = readyRows.firstOrNull { it.entry.packageName == context.packageName }
     val selectedChangelog = selectedRow?.let { appChangelogs[it.entry.id] } ?: AppChangelogState.Idle
 
+    val compilePackage = selectedRow
+        ?.takeIf { isHeadUnit && !it.entry.isPhoneDistribution && it.installed != null }
+        ?.entry?.packageName
+    LaunchedEffect(compilePackage, selectedRow?.installed?.versionCode) {
+        compilePackage?.let { viewModel.checkCompileStatus(it) }
+    }
+
     LaunchedEffect(selectedRow?.entry?.id, selectedChangelog is AppChangelogState.Idle) {
         val id = selectedRow?.entry?.id
         if (id != null && selectedChangelog is AppChangelogState.Idle) {
@@ -222,6 +232,9 @@ fun StoreHomeScreen(
                     isSelf = selectedRow.entry.packageName == context.packageName,
                     phoneQrUrl = viewModel.phoneApkBrowseUrl(selectedRow),
                     changelogState = selectedChangelog,
+                    compileState = compilePackage?.let { compileStates[it] ?: CompileState.Unknown },
+                    compileBusy = compileStates.values.any { it is CompileState.Compiling },
+                    onCompile = { compilePackage?.let { viewModel.compile(it) } },
                     onSelectFlavor = { viewModel.setAppApkFlavor(selectedRow.entry.id, it) },
                     onDownload = { target -> startDownload(selectedRow, target) },
                     onCancel = { viewModel.cancelDownload() },
@@ -1074,6 +1087,9 @@ private fun AppDetail(
     isSelf: Boolean,
     phoneQrUrl: String?,
     changelogState: AppChangelogState,
+    compileState: CompileState?,
+    compileBusy: Boolean,
+    onCompile: () -> Unit,
     onSelectFlavor: (String) -> Unit,
     onDownload: (DownloadTarget) -> Unit,
     onCancel: () -> Unit,
@@ -1150,6 +1166,12 @@ private fun AppDetail(
                 )
             }
 
+            if (compileState != null) {
+                DetailCard(title = stringResource(R.string.store_compile_title)) {
+                    CompileSection(state = compileState, busy = compileBusy, onCompile = onCompile)
+                }
+            }
+
             if (row.entry.isPhoneDistribution && isHeadUnit && !phoneQrUrl.isNullOrBlank()) {
                 DetailCard(title = stringResource(R.string.store_phone_qr_title)) {
                     PhoneQrSection(url = phoneQrUrl)
@@ -1195,6 +1217,70 @@ private fun DetailCard(
             }
             content()
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.CompileSection(
+    state: CompileState,
+    busy: Boolean,
+    onCompile: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val (text, color) = when (state) {
+        CompileState.Unknown -> stringResource(R.string.store_compile_status_unknown) to colors.onSurfaceVariant
+        CompileState.Checking -> stringResource(R.string.store_compile_status_checking) to colors.onSurfaceVariant
+        CompileState.Compiling -> stringResource(R.string.store_compile_status_compiling) to colors.primary
+        is CompileState.Compiled ->
+            stringResource(R.string.store_compile_status_compiled, state.filter) to colors.tertiary
+        is CompileState.NotCompiled -> if (state.tooLarge) {
+            stringResource(R.string.store_compile_too_large) to colors.onSurfaceVariant
+        } else {
+            stringResource(R.string.store_compile_status_not_compiled, state.filter) to colors.error
+        }
+        is CompileState.Failed -> when (state.message) {
+            CompileErrors.ADB_CONNECT -> stringResource(R.string.store_compile_error_adb)
+            CompileErrors.TIMEOUT -> stringResource(R.string.store_compile_error_timeout)
+            CompileErrors.TOO_LARGE -> stringResource(R.string.store_compile_too_large)
+            else -> stringResource(R.string.store_compile_error, state.message)
+        } to colors.error
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (state == CompileState.Checking || state == CompileState.Compiling) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+        }
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+    if (state == CompileState.Compiling) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp),
+            trackColor = colors.surfaceContainerHighest,
+        )
+    }
+    val canCompile = when (state) {
+        is CompileState.NotCompiled -> !state.tooLarge
+        is CompileState.Failed -> state.message != CompileErrors.TOO_LARGE
+        CompileState.Unknown -> true
+        else -> false
+    }
+    if (canCompile) {
+        SecondaryButton(
+            text = stringResource(R.string.store_compile_button),
+            onClick = onCompile,
+            enabled = !busy,
+        )
+    }
+    if (state !is CompileState.Compiled) {
+        Text(
+            stringResource(R.string.store_compile_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
     }
 }
 
