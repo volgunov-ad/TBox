@@ -41,3 +41,21 @@ fun transportPlan(
 }
 
 const val DIRECT_FIRST_MS: Long = 8_000L
+
+/**
+ * Settings is the only way forward after a permanent denial. The first result of a fresh
+ * launch is not that: Android 11+ reports no rationale when the dialog is dismissed, and
+ * that used to stick the button on the settings screen.
+ * Blocked when rationale was offered before the request and is gone after it, or after
+ * the second denial in this session.
+ */
+fun markBluetoothPermissionBlocked(
+    granted: Boolean,
+    showedRationaleBefore: Boolean,
+    showsRationaleAfter: Boolean,
+    denialsThisSession: Int,
+): Boolean {
+    if (granted) return false
+    if (showedRationaleBefore && !showsRationaleAfter) return true
+    return denialsThisSession >= 2
+}

@@ -6,7 +6,11 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -24,7 +28,8 @@ import java.util.concurrent.RejectedExecutionException
 /**
  * RFCOMM to TBox Monitor on a head unit the phone is already bonded with
  * ([PhoneDirectWire]). Candidates: the head unit that answered last time, devices
- * connected over HFP or A2DP, and bonded devices whose cached SDP lists the service.
+ * connected over HFP or A2DP that are not headphones or wearables, car audio and
+ * hands-free, and bonded devices whose cached SDP lists the service.
  * A worker thread connects and reads; snapshots are opened on the main thread.
  */
 @SuppressLint("MissingPermission")
@@ -45,12 +50,20 @@ class PhoneDirectLink(
     @Volatile private var generation = 0
     /** Connected socket or the one blocked in connect(); closing it unblocks the worker. */
     private val sockets = GenerationSlot<BluetoothSocket>()
-    /** Addresses whose SDP lookup said the TBox service is absent. Cleared when the UUID appears. */
-    private val noService = ConcurrentHashMap.newKeySet<String>()
-    /** fetchUuidsWithSdp is once per address per process, not once per connect attempt. */
-    private val sdpAsked = ConcurrentHashMap.newKeySet<String>()
-    /** Fast rejects of [PhoneStore.directAddress]. Out-of-range timeouts do not count. */
+    /**
+     * Fast rejects of devices that are not the remembered head unit: address to the
+     * elapsedRealtime when the entry expires. Cleared on ACL connect and [BluetoothDevice.ACTION_UUID].
+     */
+    private val noServiceUntil = ConcurrentHashMap<String, Long>()
+    /** elapsedRealtime of the last [BluetoothDevice.fetchUuidsWithSdp] per address. */
+    private val sdpAskedAt = ConcurrentHashMap<String, Long>()
+    /** elapsedRealtime of the latest ACL connect (or the moment a profile proxy first saw it). */
+    private val aclAt = ConcurrentHashMap<String, Long>()
+    /** Addresses seen on HFP/A2DP since the last search, so a new ACL refetches SDP. */
+    private val seenConnected = ConcurrentHashMap.newKeySet<String>()
+    /** Fast rejects of [PhoneStore.directAddress]. The address itself is never cleared. */
     private var rememberedFailures = 0
+    private var btEventsRegistered = false
     private var running = false
     /** elapsedRealtime of link-up and of the last accepted snapshot (0 = none on this link). */
     private var linkAt = 0L
@@ -90,6 +103,7 @@ class PhoneDirectLink(
         }
         running = true
         passesWithoutLink = 0
+        registerBtEvents()
         openProxies()
         val gen = ++generation
         Thread({ loop(gen) }, "phone-direct").apply {
@@ -105,6 +119,7 @@ class PhoneDirectLink(
         running = false
         generation++
         main.removeCallbacks(watchdog)
+        unregisterBtEvents()
         closeSocket()
         closeProxies()
         linkUp = false
@@ -266,34 +281,34 @@ class PhoneDirectLink(
         val adapter = runCatching { manager?.adapter }.getOrNull()
         if (adapter == null || !adapter.isEnabled) return pause(gen, RETRY_MS)
         var answered = false
-        var rememberedFailed = false
+        var rememberedFastFail = false
         val remembered = store.directAddress
         for (candidate in candidates(adapter)) {
             if (gen != generation) return false
-            val attempt = connect(gen, adapter, candidate)
-            if (attempt.discoveryFailed) noService.add(candidate.address)
+            val attempt = connect(gen, adapter, candidate.device)
             val link = attempt.socket
             if (link == null) {
-                if (candidate.address == remembered && attempt.fastFail) rememberedFailed = true
+                if (candidate.device.address == remembered && attempt.fastFail) rememberedFastFail = true
+                // A connected head unit often rejects until its server is listening. Cache only
+                // devices that are not on HFP/A2DP, so the first pairing can keep retrying.
+                if (attempt.fastFail &&
+                    candidate.device.address != remembered &&
+                    !candidate.connectedProfile
+                ) {
+                    noServiceUntil[candidate.device.address] =
+                        SystemClock.elapsedRealtime() + PhoneBleLinkPolicy.NEGATIVE_CACHE_MS
+                }
                 continue
             }
-            answered = serve(gen, link, candidate)
-            if (candidate.address == remembered && !answered) rememberedFailed = true
+            answered = serve(gen, link, candidate.device)
             break
         }
         if (gen != generation) return false
-        if (answered) {
-            rememberedFailures = 0
-        } else if (rememberedFailed) {
-            rememberedFailures++
-            if (rememberedFailures >= PhoneBleLinkPolicy.FORGET_REMEMBERED_AFTER &&
-                store.directAddress == remembered
-            ) {
-                store.directAddress = null
-                remembered?.let { noService.remove(it) }
-                rememberedFailures = 0
-            }
-        }
+        rememberedFailures = PhoneBleLinkPolicy.nextRememberedFastRejects(
+            current = rememberedFailures,
+            fastFailOnRemembered = rememberedFastFail,
+            answered = answered,
+        )
         val decision = PhoneBleLinkPolicy.directWaitAfterClose(
             answered = answered,
             foreground = foreground,
@@ -303,35 +318,75 @@ class PhoneDirectLink(
         return pause(gen, decision.waitMs)
     }
 
-    private fun candidates(adapter: BluetoothAdapter): List<BluetoothDevice> {
+    private fun candidates(adapter: BluetoothAdapter): List<Candidate> {
         val bonded = runCatching { adapter.bondedDevices.orEmpty() }.getOrDefault(emptySet())
         val remembered = store.directAddress
+        val connected = LinkedHashMap<String, BluetoothDevice>()
+        for (proxy in proxies.values) {
+            runCatching { proxy.connectedDevices }.getOrNull()?.forEach { connected.putIfAbsent(it.address, it) }
+        }
+        val now = SystemClock.elapsedRealtime()
+        noteConnected(connected.keys, now)
         val byAddress = LinkedHashMap<String, BluetoothDevice>()
         remembered?.let { last ->
             bonded.firstOrNull { it.address == last }?.let { byAddress[it.address] = it }
+            connected[last]?.let { byAddress.putIfAbsent(it.address, it) }
         }
-        for (proxy in proxies.values) {
-            runCatching { proxy.connectedDevices }.getOrNull()?.forEach { byAddress.putIfAbsent(it.address, it) }
-        }
+        for ((address, device) in connected) byAddress.putIfAbsent(address, device)
         for (device in bonded) byAddress.putIfAbsent(device.address, device)
-        val ranked = ArrayList<Pair<Int, BluetoothDevice>>()
+        val ranked = ArrayList<Pair<Int, Candidate>>()
         for (device in byAddress.values) {
+            val address = device.address
+            val onProfile = address in connected
+            val isRemembered = address == remembered
             val listed = listsService(device)
-            if (listed) noService.remove(device.address)
-            if (!listed && sdpAsked.add(device.address)) {
+            if (listed) noServiceUntil.remove(address)
+            val btClass = runCatching { device.bluetoothClass }.getOrNull()
+            val major = btClass?.majorDeviceClass ?: 0
+            val deviceClass = btClass?.deviceClass ?: 0
+            val skippedAudio = PhoneBleLinkPolicy.isWearableOrHeadphones(major, deviceClass)
+            if (PhoneBleLinkPolicy.shouldFetchServiceUuid(isRemembered, onProfile, skippedAudio, listed) &&
+                PhoneBleLinkPolicy.sdpFetchDue(
+                    lastAskedAtMs = sdpAskedAt[address] ?: 0L,
+                    nowMs = now,
+                    aclConnectedAtMs = aclAt[address] ?: 0L,
+                )
+            ) {
+                sdpAskedAt[address] = now
                 runCatching { device.fetchUuidsWithSdp() }
             }
-            if (device.address in noService) continue
-            val btClass = runCatching { device.bluetoothClass }.getOrNull()
+            if (negativeCacheBlocks(address, isRemembered, now)) continue
             val rank = PhoneBleLinkPolicy.directCandidateRank(
-                majorClass = btClass?.majorDeviceClass ?: 0,
-                deviceClass = btClass?.deviceClass ?: 0,
+                majorClass = major,
+                deviceClass = deviceClass,
                 hasServiceUuid = listed,
-                remembered = device.address == remembered,
+                remembered = isRemembered,
+                connectedProfile = onProfile,
+                rememberedDemoted = isRemembered && PhoneBleLinkPolicy.rememberedDemoted(rememberedFailures),
             ) ?: continue
-            ranked += rank to device
+            ranked += rank to Candidate(device, onProfile)
         }
         return ranked.sortedBy { it.first }.map { it.second }
+    }
+
+    /** A profile that was down and is up again counts as a new ACL for the SDP timer. */
+    private fun noteConnected(addresses: Set<String>, now: Long) {
+        for (address in addresses) {
+            if (seenConnected.add(address) && sdpAskedAt.containsKey(address)) {
+                aclAt[address] = now
+                noServiceUntil.remove(address)
+            }
+        }
+        seenConnected.removeIf { it !in addresses }
+    }
+
+    private fun negativeCacheBlocks(address: String, remembered: Boolean, now: Long): Boolean {
+        val expires = noServiceUntil[address] ?: return false
+        if (!PhoneBleLinkPolicy.negativeCacheBlocks(remembered, expires, now)) {
+            if (expires <= now) noServiceUntil.remove(address)
+            return false
+        }
+        return true
     }
 
     private fun listsService(device: BluetoothDevice): Boolean =
@@ -344,37 +399,30 @@ class PhoneDirectLink(
             candidate.createRfcommSocketToServiceRecord(PhoneDirectWire.SERVICE_UUID)
         } catch (e: Exception) {
             Log.w(TAG, "socket: ${e.message}")
-            return ConnectAttempt(socket = null, discoveryFailed = discoveryFailed(e), fastFail = true)
+            return ConnectAttempt(socket = null, fastFail = true)
         }
         val published = sockets.publish(gen, { generation }, attempt) { runCatching { it.close() } }
         if (!published) {
-            return ConnectAttempt(socket = null, discoveryFailed = false, fastFail = false)
+            return ConnectAttempt(socket = null, fastFail = false)
         }
-        var failed: Exception? = null
         val ok = try {
             runCatching { adapter.cancelDiscovery() }
             connectAt = SystemClock.elapsedRealtime()
             attempt.connect()
             gen == generation
         } catch (e: Exception) {
-            failed = e
+            Log.w(TAG, "connect: ${e.message}")
             false
         } finally {
             connectAt = 0L
         }
-        if (ok) return ConnectAttempt(socket = attempt, discoveryFailed = false, fastFail = false)
+        if (ok) return ConnectAttempt(socket = attempt, fastFail = false)
         val elapsed = SystemClock.elapsedRealtime() - started
         runCatching { attempt.close() }
         return ConnectAttempt(
             socket = null,
-            discoveryFailed = failed?.let(::discoveryFailed) == true,
             fastFail = elapsed < PhoneBleLinkPolicy.DIRECT_FAST_FAIL_MS,
         )
-    }
-
-    private fun discoveryFailed(error: Exception): Boolean {
-        val message = error.message?.lowercase().orEmpty()
-        return "service discovery failed" in message
     }
 
     /** True when a sealed snapshot or telemetry ack arrived before the socket closed. */
@@ -491,13 +539,21 @@ class PhoneDirectLink(
     /** False when the worker became obsolete during the wait. */
     private fun pause(gen: Int, ms: Long): Boolean {
         val startedAt = SystemClock.elapsedRealtime()
+        val wasForeground = foreground
         val until = startedAt + ms
         while (gen == generation) {
             val now = SystemClock.elapsedRealtime()
             val left = until - now
             if (left <= 0) return true
-            // Opening the UI cuts a long background back-off short.
-            if (foreground && now - startedAt >= RETRY_MS) return true
+            // Only a UI that opened during this wait cuts a background back-off short.
+            if (PhoneBleLinkPolicy.directPauseCutShort(
+                    wasForeground = wasForeground,
+                    foregroundNow = foreground,
+                    elapsedMs = now - startedAt,
+                )
+            ) {
+                return true
+            }
             try {
                 Thread.sleep(minOf(left, 250L))
             } catch (e: InterruptedException) {
@@ -507,9 +563,52 @@ class PhoneDirectLink(
         return false
     }
 
+    private fun registerBtEvents() {
+        if (btEventsRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_UUID)
+        }
+        val registered = runCatching {
+            if (Build.VERSION.SDK_INT >= 33) {
+                appContext.registerReceiver(btEvents, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                appContext.registerReceiver(btEvents, filter)
+            }
+        }.isSuccess
+        btEventsRegistered = registered
+    }
+
+    private fun unregisterBtEvents() {
+        if (!btEventsRegistered) return
+        runCatching { appContext.unregisterReceiver(btEvents) }
+        btEventsRegistered = false
+    }
+
+    private val btEvents = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            if (intent == null) return
+            @Suppress("DEPRECATION")
+            val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE) ?: return
+            val address = runCatching { device.address }.getOrNull() ?: return
+            val now = SystemClock.elapsedRealtime()
+            when (intent.action) {
+                BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                    aclAt[address] = now
+                    noServiceUntil.remove(address)
+                }
+                BluetoothDevice.ACTION_UUID -> noServiceUntil.remove(address)
+            }
+        }
+    }
+
+    private class Candidate(
+        val device: BluetoothDevice,
+        val connectedProfile: Boolean,
+    )
+
     private class ConnectAttempt(
         val socket: BluetoothSocket?,
-        val discoveryFailed: Boolean,
         val fastFail: Boolean,
     )
 

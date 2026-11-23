@@ -40,8 +40,8 @@ class PhoneLinkPolicyTest {
         )
         assertFalse(idle.direct)
         assertTrue(idle.radio)
+        assertEquals(0L, idle.searchSince)
 
-        val sharing = idle.copy()
         val withTelemetry = transportPlan(
             path = PhonePath.AUTO,
             foreground = false,
@@ -55,7 +55,51 @@ class PhoneLinkPolicyTest {
         )
         assertTrue(withTelemetry.direct)
         assertFalse(withTelemetry.radio)
-        assertEquals(0L, sharing.searchSince)
+        assertEquals(0L, withTelemetry.searchSince)
+    }
+
+    @Test
+    fun permissionBlock_needsRationaleLossOrSecondDenial() {
+        assertFalse(
+            markBluetoothPermissionBlocked(
+                granted = false,
+                showedRationaleBefore = false,
+                showsRationaleAfter = false,
+                denialsThisSession = 1,
+            ),
+        )
+        assertFalse(
+            markBluetoothPermissionBlocked(
+                granted = false,
+                showedRationaleBefore = false,
+                showsRationaleAfter = true,
+                denialsThisSession = 1,
+            ),
+        )
+        assertTrue(
+            markBluetoothPermissionBlocked(
+                granted = false,
+                showedRationaleBefore = true,
+                showsRationaleAfter = false,
+                denialsThisSession = 1,
+            ),
+        )
+        assertTrue(
+            markBluetoothPermissionBlocked(
+                granted = false,
+                showedRationaleBefore = true,
+                showsRationaleAfter = true,
+                denialsThisSession = 2,
+            ),
+        )
+        assertFalse(
+            markBluetoothPermissionBlocked(
+                granted = true,
+                showedRationaleBefore = true,
+                showsRationaleAfter = false,
+                denialsThisSession = 2,
+            ),
+        )
     }
 
     @Test

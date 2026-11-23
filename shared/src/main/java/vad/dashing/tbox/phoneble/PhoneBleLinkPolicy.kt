@@ -79,8 +79,12 @@ object PhoneBleLinkPolicy {
      */
     const val DIRECT_CLOSED_BEFORE_ANSWER_FG_MS: Long = 10_000L
 
-    /** Header values older than this are stale: dim them and stop sending commands. */
-    const val SNAP_STALE_MS: Long = 6_000L
+    /**
+     * Header values older than this are stale: dim them and stop sending commands.
+     * A lost REFRESH is retried after 3 s, so 6 s flipped the status to «no answer»
+     * for a couple of seconds on every lost packet. 10 s covers that gap.
+     */
+    const val SNAP_STALE_MS: Long = 10_000L
 
     /** Re-open the Connect page once per link when no snapshot arrives. */
     const val NO_SNAP_REOPEN_MS: Long = 10_000L
@@ -98,14 +102,30 @@ object PhoneBleLinkPolicy {
     /** [android.bluetooth.BluetoothGatt.GATT_ERROR], the status-133 connect failure. */
     const val GATT_ERROR: Int = 133
 
-    /** Stop the telemetry foreground service after this long without a direct link. */
+    /** Stop the telemetry foreground service after this long without a confirmed direct session. */
     const val FGS_IDLE_MS: Long = 10 * 60 * 1000L
 
-    /** Forget [directAddress] after this many fast rejects, not after out-of-range timeouts. */
+    /**
+     * After this many fast rejects, the remembered head unit is tried after the live
+     * candidates. The stored address is kept: clearing it also disables ACL autostart.
+     * An accepted socket that closes before an answer does not count.
+     */
     const val FORGET_REMEMBERED_AFTER: Int = 5
+
+    /** Rank of a remembered head unit that has been demoted. Live candidates are 1..4. */
+    const val DEMOTED_REMEMBERED_RANK: Int = 5
+
+    /** Connected over HFP/A2DP, not headphones or a wearable, service UUID not cached yet. */
+    const val CONNECTED_UNKNOWN_RANK: Int = 4
 
     /** A connect that fails faster than this was rejected, not a radio timeout. */
     const val DIRECT_FAST_FAIL_MS: Long = 2_000L
+
+    /** Ask SDP again for a connected device after this, or sooner on a new ACL. */
+    const val SDP_REFETCH_MS: Long = 2 * 60 * 1000L
+
+    /** Fast rejects of a device that is not the remembered head unit. */
+    const val NEGATIVE_CACHE_MS: Long = 10 * 60 * 1000L
 
     data class AcceptWindow(val acceptFrom: Long, val waiting: Long)
 
@@ -247,26 +267,90 @@ object PhoneBleLinkPolicy {
     const val BT_DEVICE_HEADPHONES: Int = 0x0418
     const val BT_DEVICE_CAR_AUDIO: Int = 0x0420
 
+    fun isWearableOrHeadphones(majorClass: Int, deviceClass: Int): Boolean {
+        val wearable = majorClass == BT_MAJOR_WEARABLE || deviceClass == BT_DEVICE_WEARABLE_HEADSET
+        val headphones = deviceClass == BT_DEVICE_HEADPHONES
+        return wearable || headphones
+    }
+
+    /** Fast rejects only. A link the head unit accepts and then closes does not move the count. */
+    fun nextRememberedFastRejects(current: Int, fastFailOnRemembered: Boolean, answered: Boolean): Int =
+        when {
+            answered -> 0
+            fastFailOnRemembered -> current + 1
+            else -> current
+        }
+
+    fun rememberedDemoted(fastRejects: Int, after: Int = FORGET_REMEMBERED_AFTER): Boolean =
+        fastRejects >= after
+
+    /**
+     * SDP is fetched for the remembered head unit and for a connected HFP/A2DP device
+     * that is not headphones or a wearable. Other bonded devices stay on the cache.
+     */
+    fun shouldFetchServiceUuid(
+        remembered: Boolean,
+        connectedProfile: Boolean,
+        wearableOrHeadphones: Boolean,
+        alreadyListed: Boolean,
+    ): Boolean = !alreadyListed && (remembered || (connectedProfile && !wearableOrHeadphones))
+
+    /** First lookup, a new ACL after the last lookup, or [refetchAfterMs] since that lookup. */
+    fun sdpFetchDue(
+        lastAskedAtMs: Long,
+        nowMs: Long,
+        aclConnectedAtMs: Long,
+        refetchAfterMs: Long = SDP_REFETCH_MS,
+    ): Boolean {
+        if (lastAskedAtMs <= 0L) return true
+        if (aclConnectedAtMs > lastAskedAtMs) return true
+        return nowMs - lastAskedAtMs >= refetchAfterMs
+    }
+
+    /** The remembered address is never blocked. An expired entry does not block. */
+    fun negativeCacheBlocks(remembered: Boolean, expiresAtMs: Long, nowMs: Long): Boolean =
+        !remembered && expiresAtMs > nowMs
+
+    /**
+     * A background wait may be cut once the UI becomes visible. A wait that already
+     * started in the foreground runs for the full time, including the 10 s pause
+     * after a link that closed before an answer.
+     */
+    fun directPauseCutShort(
+        wasForeground: Boolean,
+        foregroundNow: Boolean,
+        elapsedMs: Long,
+        minElapsedMs: Long = DIRECT_RETRY_MS,
+    ): Boolean = !wasForeground && foregroundNow && elapsedMs >= minElapsedMs
+
     /**
      * Lower rank is tried first. Null means do not connect.
-     * The head unit that answered last time is always rank 0.
-     * Earbuds, watches and other audio devices are skipped unless their cached SDP
-     * already lists the TBox service. Car audio and hands-free are still tried.
+     * The head unit that answered last time is rank 0 until [rememberedDemoted], then
+     * [DEMOTED_REMEMBERED_RANK], and it is still tried.
+     * Headphones and wearables are skipped unless their cached SDP lists the TBox service.
+     * Any other device connected over HFP or A2DP is rank [CONNECTED_UNKNOWN_RANK] even
+     * when the class is not car audio or hands-free: the head unit's class is not known.
      */
     fun directCandidateRank(
         majorClass: Int,
         deviceClass: Int,
         hasServiceUuid: Boolean,
         remembered: Boolean,
+        connectedProfile: Boolean = false,
+        rememberedDemoted: Boolean = false,
     ): Int? {
-        if (remembered) return 0
-        val wearable = majorClass == BT_MAJOR_WEARABLE || deviceClass == BT_DEVICE_WEARABLE_HEADSET
-        val headphones = deviceClass == BT_DEVICE_HEADPHONES
-        if ((wearable || headphones) && !hasServiceUuid) return null
+        if (remembered && !rememberedDemoted) return 0
+        val skippedAudio = isWearableOrHeadphones(majorClass, deviceClass)
+        if (skippedAudio && !hasServiceUuid && !remembered) return null
+        if (remembered && rememberedDemoted) return DEMOTED_REMEMBERED_RANK
         return when (deviceClass) {
             BT_DEVICE_CAR_AUDIO -> 1
             BT_DEVICE_HANDSFREE -> 2
-            else -> if (hasServiceUuid) 3 else null
+            else -> when {
+                hasServiceUuid -> 3
+                connectedProfile && !skippedAudio -> CONNECTED_UNKNOWN_RANK
+                else -> null
+            }
         }
     }
 }

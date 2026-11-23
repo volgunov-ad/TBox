@@ -219,6 +219,183 @@ class PhoneSessionPolicyTest {
                 remembered = false,
             ),
         )
+        assertEquals(
+            PhoneBleLinkPolicy.CONNECTED_UNKNOWN_RANK,
+            PhoneBleLinkPolicy.directCandidateRank(
+                majorClass = 0x0200,
+                deviceClass = 0x0204,
+                hasServiceUuid = false,
+                remembered = false,
+                connectedProfile = true,
+            ),
+        )
+        assertNull(
+            PhoneBleLinkPolicy.directCandidateRank(
+                majorClass = 0x0200,
+                deviceClass = 0x0204,
+                hasServiceUuid = false,
+                remembered = false,
+                connectedProfile = false,
+            ),
+        )
+        assertNull(
+            PhoneBleLinkPolicy.directCandidateRank(
+                majorClass = PhoneBleLinkPolicy.BT_MAJOR_AUDIO_VIDEO,
+                deviceClass = PhoneBleLinkPolicy.BT_DEVICE_HEADPHONES,
+                hasServiceUuid = false,
+                remembered = false,
+                connectedProfile = true,
+            ),
+        )
+        assertEquals(
+            PhoneBleLinkPolicy.DEMOTED_REMEMBERED_RANK,
+            PhoneBleLinkPolicy.directCandidateRank(
+                majorClass = 0x0200,
+                deviceClass = 0x0204,
+                hasServiceUuid = false,
+                remembered = true,
+                connectedProfile = true,
+                rememberedDemoted = true,
+            ),
+        )
+    }
+
+    @Test
+    fun rememberedRejects_demoteRank_andDoNotCountAClosedLink() {
+        var rejects = 0
+        repeat(PhoneBleLinkPolicy.FORGET_REMEMBERED_AFTER - 1) {
+            rejects = PhoneBleLinkPolicy.nextRememberedFastRejects(
+                current = rejects,
+                fastFailOnRemembered = true,
+                answered = false,
+            )
+        }
+        assertFalse(PhoneBleLinkPolicy.rememberedDemoted(rejects))
+        rejects = PhoneBleLinkPolicy.nextRememberedFastRejects(
+            current = rejects,
+            fastFailOnRemembered = false,
+            answered = false,
+        )
+        assertFalse(PhoneBleLinkPolicy.rememberedDemoted(rejects))
+        rejects = PhoneBleLinkPolicy.nextRememberedFastRejects(
+            current = rejects,
+            fastFailOnRemembered = true,
+            answered = false,
+        )
+        assertTrue(PhoneBleLinkPolicy.rememberedDemoted(rejects))
+        assertEquals(
+            0,
+            PhoneBleLinkPolicy.nextRememberedFastRejects(
+                current = rejects,
+                fastFailOnRemembered = true,
+                answered = true,
+            ),
+        )
+    }
+
+    @Test
+    fun sdpFetch_isLimitedToRememberedAndConnectedNonAudio() {
+        assertTrue(
+            PhoneBleLinkPolicy.shouldFetchServiceUuid(
+                remembered = true,
+                connectedProfile = false,
+                wearableOrHeadphones = false,
+                alreadyListed = false,
+            ),
+        )
+        assertTrue(
+            PhoneBleLinkPolicy.shouldFetchServiceUuid(
+                remembered = false,
+                connectedProfile = true,
+                wearableOrHeadphones = false,
+                alreadyListed = false,
+            ),
+        )
+        assertFalse(
+            PhoneBleLinkPolicy.shouldFetchServiceUuid(
+                remembered = false,
+                connectedProfile = true,
+                wearableOrHeadphones = true,
+                alreadyListed = false,
+            ),
+        )
+        assertFalse(
+            PhoneBleLinkPolicy.shouldFetchServiceUuid(
+                remembered = false,
+                connectedProfile = false,
+                wearableOrHeadphones = false,
+                alreadyListed = false,
+            ),
+        )
+        assertFalse(
+            PhoneBleLinkPolicy.shouldFetchServiceUuid(
+                remembered = true,
+                connectedProfile = true,
+                wearableOrHeadphones = false,
+                alreadyListed = true,
+            ),
+        )
+        assertTrue(PhoneBleLinkPolicy.sdpFetchDue(lastAskedAtMs = 0L, nowMs = 1_000L, aclConnectedAtMs = 0L))
+        assertFalse(
+            PhoneBleLinkPolicy.sdpFetchDue(
+                lastAskedAtMs = 1_000L,
+                nowMs = 1_000L + PhoneBleLinkPolicy.SDP_REFETCH_MS - 1,
+                aclConnectedAtMs = 500L,
+            ),
+        )
+        assertTrue(
+            PhoneBleLinkPolicy.sdpFetchDue(
+                lastAskedAtMs = 1_000L,
+                nowMs = 1_000L + PhoneBleLinkPolicy.SDP_REFETCH_MS,
+                aclConnectedAtMs = 500L,
+            ),
+        )
+        assertTrue(
+            PhoneBleLinkPolicy.sdpFetchDue(
+                lastAskedAtMs = 1_000L,
+                nowMs = 2_000L,
+                aclConnectedAtMs = 1_500L,
+            ),
+        )
+    }
+
+    @Test
+    fun negativeCache_neverBlocksRemembered_andExpires() {
+        assertFalse(PhoneBleLinkPolicy.negativeCacheBlocks(remembered = true, expiresAtMs = 5_000L, nowMs = 1_000L))
+        assertTrue(PhoneBleLinkPolicy.negativeCacheBlocks(remembered = false, expiresAtMs = 5_000L, nowMs = 1_000L))
+        assertFalse(PhoneBleLinkPolicy.negativeCacheBlocks(remembered = false, expiresAtMs = 5_000L, nowMs = 5_000L))
+    }
+
+    @Test
+    fun foregroundPause_isCutOnlyWhenTheUiOpensDuringTheWait() {
+        assertFalse(
+            PhoneBleLinkPolicy.directPauseCutShort(
+                wasForeground = true,
+                foregroundNow = true,
+                elapsedMs = PhoneBleLinkPolicy.DIRECT_CLOSED_BEFORE_ANSWER_FG_MS,
+            ),
+        )
+        assertFalse(
+            PhoneBleLinkPolicy.directPauseCutShort(
+                wasForeground = false,
+                foregroundNow = true,
+                elapsedMs = PhoneBleLinkPolicy.DIRECT_RETRY_MS - 1,
+            ),
+        )
+        assertTrue(
+            PhoneBleLinkPolicy.directPauseCutShort(
+                wasForeground = false,
+                foregroundNow = true,
+                elapsedMs = PhoneBleLinkPolicy.DIRECT_RETRY_MS,
+            ),
+        )
+        assertFalse(
+            PhoneBleLinkPolicy.directPauseCutShort(
+                wasForeground = false,
+                foregroundNow = false,
+                elapsedMs = 60_000L,
+            ),
+        )
     }
 
     @Test

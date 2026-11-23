@@ -2,6 +2,7 @@ package vad.dashing.tbox.phone
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
@@ -156,7 +157,10 @@ private fun storedPage(store: PhoneStore): Page =
     Page.entries.firstOrNull { it.name == store.page && it != Page.CONNECT } ?: Page.CLIMATE
 
 /** Ask again without an answer only after this long: the request or the answer was lost. */
-private const val UNANSWERED_RETRY_MS = 6_000L
+private const val UNANSWERED_RETRY_MS = 3_000L
+
+private fun permissionsGranted(context: Context, permissions: Array<String>): Boolean =
+    permissions.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
 /** An old companion answers with pages 0..4 only: a full answer is at least this many pages. */
 private const val OLD_FIRMWARE_PAGES = 8
@@ -191,13 +195,14 @@ private fun PhoneScreen() {
     var commandBlocked by remember { mutableStateOf(false) }
     var locationEnabled by remember { mutableStateOf(true) }
     var bluetoothBlocked by remember { mutableStateOf(false) }
+    var bluetoothDenials by remember { mutableIntStateOf(0) }
+    var rationaleBeforeRequest by remember { mutableStateOf(false) }
     var showBgRationale by remember { mutableStateOf(false) }
     var showForget by remember { mutableStateOf(false) }
     var autostartBound by remember { mutableStateOf(PhoneSystemHelpers.hasCompanionAssociation(context)) }
     var clock by remember { mutableLongStateOf(0L) }
     var directLinkUp by remember { mutableStateOf(false) }
     var demandMask by remember { mutableIntStateOf(PhoneSessionController.huDemandMask) }
-    val askedBluetooth = remember { mutableStateOf(false) }
     var shareLocation by remember { mutableStateOf(store.shareLocation) }
     var shareGyro by remember { mutableStateOf(store.shareGyro) }
     var shareCompass by remember { mutableStateOf(store.shareCompass) }
@@ -258,12 +263,22 @@ private fun PhoneScreen() {
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        ready = granted.values.all { it }
-        if (!ready && askedBluetooth.value) {
+        val grantedNow = granted.values.all { it } || permissionsGranted(context, permissions)
+        ready = grantedNow
+        if (grantedNow) {
+            bluetoothBlocked = false
+            bluetoothDenials = 0
+        } else {
+            bluetoothDenials++
             val host = context as ComponentActivity
-            bluetoothBlocked = permissions.none { host.shouldShowRequestPermissionRationale(it) }
+            val rationaleAfter = permissions.any { host.shouldShowRequestPermissionRationale(it) }
+            bluetoothBlocked = markBluetoothPermissionBlocked(
+                granted = false,
+                showedRationaleBefore = rationaleBeforeRequest,
+                showsRationaleAfter = rationaleAfter,
+                denialsThisSession = bluetoothDenials,
+            )
         }
-        askedBluetooth.value = true
     }
     val enableBluetoothLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -334,12 +349,23 @@ private fun PhoneScreen() {
     }
 
     val activity = context as ComponentActivity
-    DisposableEffect(activity, ready) {
+    fun syncPermissionGrant(): Boolean {
+        val grantedNow = permissionsGranted(context, permissions)
+        ready = grantedNow
+        if (grantedNow) bluetoothBlocked = false
+        return grantedNow
+    }
+    fun requestBluetoothPermission() {
+        rationaleBeforeRequest = permissions.any { activity.shouldShowRequestPermissionRationale(it) }
+        launcher.launch(permissions)
+    }
+    DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
+                    val grantedNow = syncPermissionGrant()
                     screenStarted = true
-                    PhoneSessionController.onUiStarted(context, ready)
+                    PhoneSessionController.onUiStarted(context, grantedNow)
                 }
                 Lifecycle.Event.ON_STOP -> {
                     screenStarted = false
@@ -350,25 +376,21 @@ private fun PhoneScreen() {
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
+                    val grantedNow = syncPermissionGrant()
                     batteryOptDisabled = PhoneSystemHelpers.isIgnoringBatteryOptimizations(context)
                     hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
                     locationEnabled = locationServiceEnabled(context)
                     autostartBound = PhoneSystemHelpers.hasCompanionAssociation(context)
-                    if (ready) radio.kickSearch()
+                    if (grantedNow) radio.kickSearch()
                 }
                 else -> Unit
             }
         }
         activity.lifecycle.addObserver(observer)
-        if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            screenStarted = true
-            PhoneSessionController.onUiStarted(context, ready)
-        }
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) {
-        askedBluetooth.value = true
-        launcher.launch(permissions)
+        if (!permissionsGranted(context, permissions)) requestBluetoothPermission()
     }
     LaunchedEffect(ready, screenStarted) {
         if (!ready || !screenStarted) return@LaunchedEffect
@@ -421,7 +443,7 @@ private fun PhoneScreen() {
 
     fun send(op: Int, seat: Int, arg: Int) {
         if (!ready) {
-            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
+            if (bluetoothBlocked) openAppSettings(context) else requestBluetoothPermission()
             return
         }
         if (!canControl) {
@@ -450,7 +472,7 @@ private fun PhoneScreen() {
 
     fun pair() {
         if (!ready) {
-            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
+            if (bluetoothBlocked) openAppSettings(context) else requestBluetoothPermission()
             return
         }
         if (!radio.linkUp) {
@@ -538,7 +560,7 @@ private fun PhoneScreen() {
                 if (!ready) {
                     Button(
                         onClick = {
-                            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
+                            if (bluetoothBlocked) openAppSettings(context) else requestBluetoothPermission()
                         },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                         shape = RoundedCornerShape(12.dp),

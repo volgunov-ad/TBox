@@ -104,7 +104,9 @@ object PhoneSessionController {
             }
             syncStreamer()
             val now = SystemClock.elapsedRealtime()
-            if (uiVisible || r.directLinkUp) {
+            // A socket the head unit accepts and then drops, without a snapshot, must not
+            // keep the foreground service alive.
+            if (uiVisible || r.directConfirmed) {
                 directIdleSinceMs = 0L
             } else if (st.anyTelemetryEnabled) {
                 if (directIdleSinceMs == 0L) directIdleSinceMs = now
