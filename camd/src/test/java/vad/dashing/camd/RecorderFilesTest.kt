@@ -92,6 +92,27 @@ class RecorderFilesTest {
     }
 
     @Test
+    fun quotaCountsAndRotatesRepairLeftovers() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val broken = File(dir, "cam4_2026-11-17_09-00-00.broken.mp4").apply { writeBytes(ByteArray(100)) }
+            val fixed = File(dir, "cam4_2026-11-17_09-30-00.fixed.mp4").apply { writeBytes(ByteArray(100)) }
+            val segment = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val repairTmp = File(dir, "cam4_2026-11-17_08-00-00.fixed.mp4.tmp").apply { writeBytes(ByteArray(100)) }
+
+            assertEquals(listOf(segment), RecorderFiles.listSegments(dir))
+            assertEquals(300L, RecorderFiles.totalBytes(dir))
+            assertTrue(RecorderFiles.enforceQuota(dir, quotaBytes = 150, reserveBytes = 0))
+            assertFalse(broken.exists())
+            assertFalse(fixed.exists())
+            assertTrue(segment.exists())
+            assertTrue(repairTmp.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun segmentsAcrossCamerasSortedByTimestampNotByCamera() {
         val dir = Files.createTempDirectory("camdrec").toFile()
         try {
@@ -200,6 +221,28 @@ class RecorderFilesTest {
                 RecorderFiles.sosSegmentsForCamera(dir, 4, 10),
             )
             assertEquals(listOf(cam2new), RecorderFiles.sosSegmentsForCamera(dir, 2, 5))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun sosSelectionSkipsSegmentStartedAfterTheClosedOne() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val previous = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(10)) }
+            val closed = File(dir, "cam4_2026-11-17_10-03-00.mp4").apply { writeBytes(ByteArray(10)) }
+            val inFlight = File(dir, "cam4_2026-11-17_10-03-00_1.mp4").apply { writeBytes(ByteArray(10)) }
+
+            assertEquals(listOf(closed, inFlight), RecorderFiles.sosSegmentsForCamera(dir, 4, 2))
+            assertEquals(
+                listOf(previous, closed),
+                RecorderFiles.sosSegmentsForCamera(dir, 4, 2, newest = closed),
+            )
+            assertEquals(
+                listOf(previous, closed),
+                RecorderFiles.sosSegmentsForCamera(dir, 4, 2, exclude = setOf(inFlight.name)),
+            )
         } finally {
             dir.deleteRecursively()
         }

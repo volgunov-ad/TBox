@@ -63,37 +63,40 @@ internal object SegmentRepairEngine {
                 setByteBuffer("csd-0", csd0.duplicate())
                 setByteBuffer("csd-1", csd1.duplicate())
             }
-            muxer = MediaMuxer(targetTmp.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val track = muxer.addTrack(format)
-            muxer.start()
+            val active = MediaMuxer(targetTmp.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxer = active
+            val track = active.addTrack(format)
+            active.start()
 
             val buffer = ByteBuffer.allocateDirect(4 * 1024 * 1024)
             val info = MediaCodec.BufferInfo()
             var ptsUs = 0L
             var written = 0
             RandomAccessFile(file, "r").use { raf ->
+                val channel = raf.channel
                 for (sample in samples) {
                     if (sample.size > buffer.capacity()) continue
                     buffer.clear()
-                    raf.seek(sample.offset)
-                    val channel = raf.channel
-                    var read = 0L
-                    while (read < sample.size) {
-                        buffer.position(buffer.position() + read.toInt())
-                        val chunk = channel.read(buffer)
-                        if (chunk <= 0) break
-                        read += chunk
+                    buffer.limit(sample.size)
+                    channel.position(sample.offset)
+                    while (buffer.hasRemaining()) {
+                        if (channel.read(buffer) <= 0) break
                     }
-                    if (read < sample.size) return Outcome(file, false, "обрыв чтения в mdat")
+                    if (buffer.hasRemaining()) {
+                        runCatching { active.release() }
+                        muxer = null
+                        runCatching { targetTmp.delete() }
+                        return Outcome(file, false, "обрыв чтения в mdat")
+                    }
                     buffer.flip()
                     info.set(0, sample.size, ptsUs, if (sample.keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
-                    muxer.writeSampleData(track, buffer, info)
+                    active.writeSampleData(track, buffer, info)
                     ptsUs += 1_000_000L / TARGET_FPS
                     written++
                 }
             }
-            muxer.stop()
-            muxer.release()
+            active.stop()
+            active.release()
             muxer = null
             if (written == 0) {
                 runCatching { targetTmp.delete() }
