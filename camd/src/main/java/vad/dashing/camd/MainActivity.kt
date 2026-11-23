@@ -1600,6 +1600,8 @@ private fun RecorderFolderDialog(
         current.listFiles()?.filter { it.isDirectory && it.canRead() }?.sortedBy { it.name.lowercase() } ?: emptyList()
     }
     var newFolderName by remember { mutableStateOf("") }
+    // Cleared on every navigation — the message belongs to the directory it failed in.
+    var createError by remember(current) { mutableStateOf("") }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Папка для записи") },
@@ -1610,6 +1612,13 @@ private fun RecorderFolderDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (createError.isNotBlank()) {
+                    Text(
+                        createError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 if (current.absolutePath != "/") {
                     TextButton(onClick = { current = current.parentFile ?: current }) {
                         Text(".. наверх", style = MaterialTheme.typography.labelLarge)
@@ -1646,6 +1655,8 @@ private fun RecorderFolderDialog(
                             if (created.mkdirs() || created.isDirectory) {
                                 current = created
                                 newFolderName = ""
+                            } else {
+                                createError = "Не удалось создать «$name» в ${current.absolutePath}: нет прав на запись или имя недопустимо"
                             }
                         }
                     }) {

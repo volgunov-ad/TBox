@@ -22,9 +22,12 @@ import java.nio.channels.FileChannel
  * renders each frame through the same correction shader as the preview into an
  * hardware AVC encoder input surface, and writes short crash-safe MP4 segments
  * ([RecorderFiles.SEGMENT_MS]): MediaMuxer places moov at each segment close, so a
- * power cut leaves finished files playable (P1-3).
- * When the media folder is unavailable [nextSegment] returns null and the engine
- * parks itself, retrying every few seconds until stopped.
+ * power cut loses at most one in-flight segment (~[SEGMENT_MS], user-selectable, 0.8.6),
+ * and every finished file remains playable.
+ * A failure of one segment (muxer/IO error on a corrupted file) skips that segment and
+ * starts the next one — the recording thread survives ([onSegmentError]). The thread
+ * parks itself only when the media folder is unavailable ([nextSegment] returns null),
+ * retrying every few seconds until stopped.
  */
 internal class RecorderEngine(
     private val inputId: Int,
@@ -34,6 +37,7 @@ internal class RecorderEngine(
     private val onSegmentClosed: (File) -> Unit,
     private val onWaiting: (Boolean, String) -> Unit,
     private val onError: (String) -> Unit,
+    private val onSegmentError: (String) -> Unit = onError,
     /** Segment wall-clock length; re-read per segment, so a settings change applies to the next segment. */
     private val segmentMs: () -> Long = { RecorderFiles.SEGMENT_MS },
 ) : Thread("camd-rec-$inputId") {
@@ -96,7 +100,19 @@ internal class RecorderEngine(
                         return
                     }
                 }
-                recordSegment(segment, gl)
+                try {
+                    recordSegment(segment, gl)
+                } catch (error: Throwable) {
+                    // A corrupted segment (muxer failure, IO error) must not kill the
+                    // recording thread: the broken file is removed by recordSegment's
+                    // finally, the loop starts the next segment after a short backoff
+                    // so the skip reason stays visible in the UI.
+                    if (running) {
+                        onSegmentError("камера $inputId: сегмент пропущен — ${error.message ?: error.javaClass.simpleName}")
+                    }
+                    runCatching { segment.delete() }
+                    sleep(3_000)
+                }
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
