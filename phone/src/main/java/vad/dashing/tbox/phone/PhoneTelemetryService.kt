@@ -8,6 +8,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.graphics.drawable.Icon
 import android.bluetooth.BluetoothDevice
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -31,6 +32,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -40,6 +42,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import vad.dashing.tbox.phoneble.PhoneBleCodec
+import vad.dashing.tbox.phoneble.PhoneBleLinkPolicy
 import vad.dashing.tbox.phoneble.PhoneSensorMath
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.regex.Pattern
@@ -77,8 +80,13 @@ object PhoneSessionController {
         private set
 
     private var uiVisible: Boolean = false
+    private var permissionsReady: Boolean = false
     private var serviceRunning: Boolean = false
     private var lastBgHeartbeatAtElapsedMs: Long = 0L
+    private var directIdleSinceMs: Long = 0L
+    private var lastNoticeAtElapsedMs: Long = 0L
+
+    fun isUiVisible(): Boolean = uiVisible
 
     private val bgTickRunnable = object : Runnable {
         override fun run() {
@@ -89,11 +97,34 @@ object PhoneSessionController {
                 streamer?.stopAll()
                 return
             }
-            if (r.bluetoothOn) {
+            val ctx = appContext
+            if (ctx != null && bluetoothPermissionGranted(ctx)) permissionsReady = true
+            if (permissionsReady && r.bluetoothOn) {
                 r.start()
             }
             syncStreamer()
             val now = SystemClock.elapsedRealtime()
+            if (uiVisible || r.directLinkUp) {
+                directIdleSinceMs = 0L
+            } else if (st.anyTelemetryEnabled) {
+                if (directIdleSinceMs == 0L) directIdleSinceMs = now
+                if (PhoneBleLinkPolicy.foregroundServiceIdle(
+                        uiVisible = false,
+                        telemetryEnabled = true,
+                        directLinkUp = false,
+                        idleMs = now - directIdleSinceMs,
+                    )
+                ) {
+                    streamer?.stopAll()
+                    r.stop()
+                    ctx?.let { PhoneTelemetryService.stop(it) }
+                    return
+                }
+            }
+            if (serviceRunning && now - lastNoticeAtElapsedMs >= BG_HEARTBEAT_MS) {
+                lastNoticeAtElapsedMs = now
+                PhoneTelemetryService.refreshIfRunning()
+            }
             if (!uiVisible && st.anyTelemetryEnabled && r.directLinkUp) {
                 if (now - lastBgHeartbeatAtElapsedMs >= BG_HEARTBEAT_MS) {
                     lastBgHeartbeatAtElapsedMs = now
@@ -165,9 +196,11 @@ object PhoneSessionController {
     fun onUiStarted(context: Context, permissionsReady: Boolean) {
         val r = ensureInitialized(context)
         uiVisible = true
+        directIdleSinceMs = 0L
+        this.permissionsReady = permissionsReady || bluetoothPermissionGranted(context)
         r.foreground = true
         r.storeKey = store.key
-        if (permissionsReady) {
+        if (this.permissionsReady) {
             r.start()
             syncServiceAndStreamer(context)
         }
@@ -192,8 +225,10 @@ object PhoneSessionController {
     fun onServiceStarted(context: Context) {
         ensureInitialized(context)
         serviceRunning = true
+        if (bluetoothPermissionGranted(context)) permissionsReady = true
+        directIdleSinceMs = 0L
         router?.storeKey = store.key
-        router?.start()
+        if (permissionsReady) router?.start()
         syncStreamer()
         scheduleBgLoop()
     }
@@ -209,20 +244,33 @@ object PhoneSessionController {
 
     fun updateTelemetryToggles(
         context: Context,
-        shareLocation: Boolean = store.shareLocation,
-        shareGyro: Boolean = store.shareGyro,
-        shareCompass: Boolean = store.shareCompass,
+        shareLocation: Boolean? = null,
+        shareGyro: Boolean? = null,
+        shareCompass: Boolean? = null,
     ) {
         ensureInitialized(context)
-        store.shareLocation = shareLocation
-        store.shareGyro = shareGyro
-        store.shareCompass = shareCompass
+        if (shareLocation != null) store.shareLocation = shareLocation
+        if (shareGyro != null) store.shareGyro = shareGyro
+        if (shareCompass != null) store.shareCompass = shareCompass
         router?.keepDirectForTelemetry = store.anyTelemetryEnabled
         if (uiVisible || store.anyTelemetryEnabled) {
             router?.start()
         }
         syncServiceAndStreamer(context)
         listeners.forEach { it.onStateChanged() }
+    }
+
+    fun forgetPairing(context: Context) {
+        ensureInitialized(context)
+        store.forgetPairing()
+        snapshot = PhoneBleCodec.Snapshot()
+        lastSnapAtElapsedMs = 0L
+        huDemandMask = PhoneBleCodec.DEMAND_ALL
+        val r = router
+        r?.stop()
+        if (uiVisible && permissionsReady) r?.start()
+        listeners.forEach { it.onStateChanged() }
+        listeners.forEach { it.onSnapshotChanged(snapshot, 0L) }
     }
 
     fun onPathChanged(context: Context, next: PhonePath) {
@@ -268,6 +316,17 @@ object PhoneSessionController {
         )
     }
 
+    private fun bluetoothPermissionGranted(context: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= 31) {
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED &&
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+
     private fun scheduleBgLoop() {
         mainHandler.removeCallbacks(bgTickRunnable)
         if (uiVisible || store.anyTelemetryEnabled || serviceRunning) {
@@ -290,12 +349,14 @@ class PhoneTelemetryStreamer(
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val sensorThread = HandlerThread("phone-sensors").apply { start() }
+    private val sensorHandler = Handler(sensorThread.looper)
     private val locationManager = appContext.getSystemService(LocationManager::class.java)
     private val sensorManager = appContext.getSystemService(SensorManager::class.java)
 
-    private var locationActive = false
-    private var gyroActive = false
-    private var compassActive = false
+    @Volatile private var locationActive = false
+    @Volatile private var gyroActive = false
+    @Volatile private var compassActive = false
     private var sensorListenerRegistered = false
 
     private var locGen = 0
@@ -534,6 +595,24 @@ class PhoneTelemetryStreamer(
         wantGyro: Boolean,
         wantCompass: Boolean,
     ) {
+        onSensorThread {
+            updateActiveStreamsOnSensorThread(wantLocation, wantGyro, wantCompass)
+        }
+    }
+
+    fun stopAll() {
+        onSensorThread { stopAllOnSensorThread() }
+    }
+
+    private fun onSensorThread(block: () -> Unit) {
+        if (Looper.myLooper() == sensorThread.looper) block() else sensorHandler.post(block)
+    }
+
+    private fun updateActiveStreamsOnSensorThread(
+        wantLocation: Boolean,
+        wantGyro: Boolean,
+        wantCompass: Boolean,
+    ) {
         val canReadLocation = hasFineLocationPermission(appContext)
         val targetLoc = wantLocation && canReadLocation
         if (targetLoc != locationActive) {
@@ -546,7 +625,7 @@ class PhoneTelemetryStreamer(
         }
     }
 
-    fun stopAll() {
+    private fun stopAllOnSensorThread() {
         stopLocationUpdates()
         gyroActive = false
         compassActive = false
@@ -568,6 +647,8 @@ class PhoneTelemetryStreamer(
             )
             locationActive = true
         } catch (e: Exception) {
+            runCatching { lm.unregisterGnssStatusCallback(gnssCallback) }
+            locationActive = false
             Log.w(TAG, "startLocationUpdates failed: ${e.message}")
         }
     }
@@ -594,19 +675,19 @@ class PhoneTelemetryStreamer(
         val gravitySensor = sm.getDefaultSensor(Sensor.TYPE_GRAVITY)
         val accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         hasGravitySensor = gravitySensor != null &&
-            sm.registerListener(sensorListener, gravitySensor, SensorManager.SENSOR_DELAY_GAME)
+            sm.registerListener(sensorListener, gravitySensor, SensorManager.SENSOR_DELAY_GAME, sensorHandler)
         mountTiltSinceElapsedMs = 0L
         if (accelSensor != null) {
-            sm.registerListener(sensorListener, accelSensor, SensorManager.SENSOR_DELAY_GAME)
+            sm.registerListener(sensorListener, accelSensor, SensorManager.SENSOR_DELAY_GAME, sensorHandler)
         }
         if (gyroActive) {
             sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let {
-                sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+                sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME, sensorHandler)
             }
         }
         if (compassActive) {
             sm.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.let {
-                sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_UI)
+                sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_UI, sensorHandler)
             }
         }
         sensorListenerRegistered = true
@@ -645,10 +726,23 @@ class PhoneTelemetryService : Service() {
     private var promotedFgsType: Int? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        active.set(this)
         val store = PhoneStore(this)
         // Every start comes from startForegroundService: startForeground must run before any
         // stopSelf, otherwise the system kills the app ("did not then call startForeground").
         val promoted = promoteToForeground(store)
+        if (intent?.action == ACTION_STOP) {
+            PhoneSessionController.updateTelemetryToggles(
+                this,
+                shareLocation = false,
+                shareGyro = false,
+                shareCompass = false,
+            )
+            PhoneSessionController.onServiceStopped()
+            if (promoted) stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!promoted || !store.anyTelemetryEnabled) {
             PhoneSessionController.onServiceStopped()
             if (promoted) stopForeground(STOP_FOREGROUND_REMOVE)
@@ -660,6 +754,7 @@ class PhoneTelemetryService : Service() {
     }
 
     override fun onDestroy() {
+        active.compareAndSet(this, null)
         promotedFgsType = null
         PhoneSessionController.onServiceStopped()
         super.onDestroy()
@@ -730,19 +825,61 @@ class PhoneTelemetryService : Service() {
             Intent(this, PhoneActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val stopIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, PhoneTelemetryService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val stopAction = Notification.Action.Builder(
+            Icon.createWithResource(this, R.drawable.ic_stat_phone),
+            getString(R.string.telemetry_stop),
+            stopIntent,
+        ).build()
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.telemetry_notification_text))
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setContentText(getString(notificationTextRes()))
+            .setSmallIcon(R.drawable.ic_stat_phone)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .addAction(stopAction)
             .build()
+    }
+
+    private fun notificationTextRes(): Int {
+        val router = PhoneSessionController.router
+        val linked = router?.directLinkUp == true
+        val store = runCatching { PhoneSessionController.store }.getOrNull()
+        val want = if (store == null) {
+            0
+        } else {
+            (if (store.shareLocation) PhoneBleCodec.DEMAND_LOC else 0) or
+                (if (store.shareGyro) PhoneBleCodec.DEMAND_YAW else 0) or
+                (if (store.shareCompass) PhoneBleCodec.DEMAND_MAG else 0)
+        }
+        val sending = linked && (want and PhoneSessionController.huDemandMask) != 0
+        return when (PhoneBleLinkPolicy.telemetryNotice(linked, sending)) {
+            PhoneBleLinkPolicy.TelemetryNotice.SEARCHING -> R.string.telemetry_notification_searching
+            PhoneBleLinkPolicy.TelemetryNotice.SENDING -> R.string.telemetry_notification_sending
+            PhoneBleLinkPolicy.TelemetryNotice.WAITING_FOR_CAR -> R.string.telemetry_notification_waiting
+        }
+    }
+
+    private fun refreshNotification() {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        runCatching { nm.notify(NOTIFICATION_ID, buildNotification()) }
     }
 
     companion object {
         private const val TAG = "PhoneTelemetryService"
         private const val CHANNEL_ID = "phone_telemetry"
         private const val NOTIFICATION_ID = 1001
+        private const val ACTION_STOP = "vad.dashing.tbox.phone.STOP_SHARING"
+        private val active = java.util.concurrent.atomic.AtomicReference<PhoneTelemetryService?>(null)
+
+        fun refreshIfRunning() {
+            active.get()?.refreshNotification()
+        }
 
         fun startOrUpdate(context: Context) {
             val app = context.applicationContext
@@ -787,13 +924,29 @@ class PhoneTelemetryService : Service() {
 class PhoneCompanionDeviceService : CompanionDeviceService() {
     @Deprecated("Deprecated in API 33")
     override fun onDeviceAppeared(address: String) {
-        super.onDeviceAppeared(address)
+        if (Build.VERSION.SDK_INT >= 33) return
         maybeStartForHeadUnit()
     }
 
+    @Deprecated("Overrides a platform method that newer SDKs mark deprecated")
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
-        super.onDeviceAppeared(associationInfo)
         maybeStartForHeadUnit()
+    }
+
+    @Deprecated("Deprecated in API 33")
+    override fun onDeviceDisappeared(address: String) {
+        if (Build.VERSION.SDK_INT >= 33) return
+        onHeadUnitGone()
+    }
+
+    @Deprecated("Overrides a platform method that newer SDKs mark deprecated")
+    override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
+        onHeadUnitGone()
+    }
+
+    private fun onHeadUnitGone() {
+        if (PhoneSessionController.isUiVisible()) return
+        PhoneTelemetryService.stop(this)
     }
 
     private fun maybeStartForHeadUnit() {
@@ -815,6 +968,7 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
                 // Headphones and watches connect too; only the known head unit should wake us.
                 val known = store.directAddress
+                if (known.isNullOrBlank()) return
                 @Suppress("DEPRECATION")
                 val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                 val address = if (Build.VERSION.SDK_INT >= 31 &&
@@ -825,7 +979,7 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
                 } else {
                     runCatching { device?.address }.getOrNull()
                 }
-                if (known.isNullOrBlank() || address.equals(known, ignoreCase = true)) {
+                if (address.equals(known, ignoreCase = true)) {
                     PhoneTelemetryService.startOrUpdate(context)
                 }
             }
@@ -912,5 +1066,34 @@ object PhoneSystemHelpers {
             },
             Handler(Looper.getMainLooper()),
         )
+    }
+
+    fun hasCompanionAssociation(context: Context): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT < 31) return false
+        val cdm = context.getSystemService(CompanionDeviceManager::class.java) ?: return false
+        if (Build.VERSION.SDK_INT >= 33) {
+            cdm.myAssociations.isNotEmpty()
+        } else {
+            @Suppress("DEPRECATION")
+            cdm.associations.isNotEmpty()
+        }
+    }.getOrDefault(false)
+
+    fun clearCompanionAssociations(context: Context) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val cdm = context.getSystemService(CompanionDeviceManager::class.java) ?: return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 33) {
+                cdm.myAssociations.forEach { info ->
+                    runCatching { cdm.disassociate(info.id) }
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                cdm.associations.forEach { mac ->
+                    @Suppress("DEPRECATION")
+                    runCatching { cdm.disassociate(mac) }
+                }
+            }
+        }.onFailure { Log.w("PhoneCompanion", "disassociate failed: ${it.message}") }
     }
 }

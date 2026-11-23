@@ -12,22 +12,15 @@ class PhoneStore(context: Context) {
     val key: ByteArray
 
     init {
-        val existingId = prefs.getString(KEY_ID, null)?.let(PhoneBleCodec::parseIdHex)
-        val existingKey = prefs.getString(KEY_SECRET, null)
-            ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
-        if (existingId != null && existingKey != null && existingKey.size == PhoneBleCodec.KEY_LEN) {
-            id = existingId
-            key = existingKey
-        } else {
-            val random = SecureRandom()
-            id = ByteArray(PhoneBleCodec.ID_LEN).also(random::nextBytes)
-            key = ByteArray(PhoneBleCodec.KEY_LEN).also(random::nextBytes)
-            prefs.edit()
-                .putString(KEY_ID, PhoneBleCodec.idHex(id))
-                .putString(KEY_SECRET, Base64.encodeToString(key, Base64.NO_WRAP))
-                .putLong(KEY_COUNTER, 0L)
-                .apply()
-        }
+        val identity = loadIdentity(prefs)
+        id = identity.first
+        key = identity.second
+    }
+
+    /** Clears the remembered head unit. The id and key stay so a new pair can reuse them. */
+    fun forgetPairing() {
+        paired = false
+        directAddress = null
     }
 
     fun nextCounter(): Long = synchronized(counterLock) {
@@ -90,9 +83,8 @@ class PhoneStore(context: Context) {
             prefs.edit().putBoolean(KEY_SHARE_COMPASS, value).apply()
         }
 
-    var anyTelemetryEnabled: Boolean
+    val anyTelemetryEnabled: Boolean
         get() = path != PhonePath.COMPANION && (shareLocation || shareGyro || shareCompass)
-        private set(_) = Unit
 
     val hasAnyTelemetryToggleChecked: Boolean
         get() = shareLocation || shareGyro || shareCompass
@@ -112,6 +104,36 @@ class PhoneStore(context: Context) {
         const val KEY_SHARE_GYRO = "share_gyro"
         const val KEY_SHARE_COMPASS = "share_compass"
         const val COUNTER_BLOCK = 512L
+
+        private val identityLock = Any()
+
+        /**
+         * Two stores created together (activity and a boot receiver) must not each invent
+         * an id. The second caller re-reads after the first has committed.
+         */
+        private fun loadIdentity(prefs: SharedPreferences): Pair<ByteArray, ByteArray> =
+            synchronized(identityLock) {
+                fun read(): Pair<ByteArray, ByteArray>? {
+                    val existingId = prefs.getString(KEY_ID, null)?.let(PhoneBleCodec::parseIdHex)
+                    val existingKey = prefs.getString(KEY_SECRET, null)
+                        ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
+                    if (existingId != null && existingKey != null && existingKey.size == PhoneBleCodec.KEY_LEN) {
+                        return existingId to existingKey
+                    }
+                    return null
+                }
+                read() ?: run {
+                    val random = SecureRandom()
+                    val newId = ByteArray(PhoneBleCodec.ID_LEN).also(random::nextBytes)
+                    val newKey = ByteArray(PhoneBleCodec.KEY_LEN).also(random::nextBytes)
+                    prefs.edit()
+                        .putString(KEY_ID, PhoneBleCodec.idHex(newId))
+                        .putString(KEY_SECRET, Base64.encodeToString(newKey, Base64.NO_WRAP))
+                        .putLong(KEY_COUNTER, 0L)
+                        .commit()
+                    read() ?: (newId to newKey)
+                }
+            }
 
         /*
          * The stored value is a reserved upper bound, written with commit() before any

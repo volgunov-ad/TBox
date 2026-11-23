@@ -190,4 +190,33 @@ class PhoneBleLinkPolicyTest {
             bg,
         )
     }
+
+    @Test
+    fun directWaitAfterClose_failedPassDoesNotLookLikeSuccess() {
+        val failed = PhoneBleLinkPolicy.directWaitAfterClose(
+            answered = false,
+            foreground = true,
+            passesWithoutLink = 2,
+        )
+        assertEquals(3, failed.passesWithoutLink)
+        assertTrue(failed.waitMs >= PhoneBleLinkPolicy.DIRECT_CLOSED_BEFORE_ANSWER_FG_MS)
+        val answered = PhoneBleLinkPolicy.directWaitAfterClose(
+            answered = true,
+            foreground = true,
+            passesWithoutLink = 2,
+        )
+        assertEquals(0, answered.passesWithoutLink)
+        assertEquals(PhoneBleLinkPolicy.DIRECT_RECONNECT_MS, answered.waitMs)
+    }
+
+    @Test
+    fun acceptWindow_commandBlocksOlderSnapshot() {
+        val after = PhoneBleLinkPolicy.acceptWindowAfterSend(
+            previous = PhoneBleLinkPolicy.AcceptWindow(1L, 4L),
+            counter = 5L,
+            resetAcceptRange = true,
+            updateWaiting = false,
+        )
+        assertFalse(PhoneBleLinkPolicy.counterInAcceptWindow(4L, after))
+    }
 }

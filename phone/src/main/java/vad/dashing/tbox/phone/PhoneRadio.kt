@@ -41,6 +41,9 @@ class PhoneRadio(
     private val manager = appContext.getSystemService(BluetoothManager::class.java)
     private val serviceUuid = ParcelUuid(PhoneBleCodec.SERVICE_UUID)
     private val pending = ArrayDeque<ByteArray>()
+    private val scanStartTimes = ArrayDeque<Long>()
+    private var connectFailures133 = 0
+    private var scanScheduled = false
     private var gatt: BluetoothGatt? = null
     private var inbox: BluetoothGattCharacteristic? = null
     private var running = false
@@ -89,6 +92,7 @@ class PhoneRadio(
                 if (newState == BluetoothGatt.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                     if (!gatt.requestMtu(PhoneBleCodec.ATT_MTU)) gatt.discoverServices()
                 } else {
+                    if (status == PhoneBleLinkPolicy.GATT_ERROR) connectFailures133++
                     dropLink()
                     rescanLater()
                 }
@@ -136,6 +140,7 @@ class PhoneRadio(
                 if (descriptor.uuid != CCCD) return@post
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     linkUp = true
+                    connectFailures133 = 0
                     lastSnapAt = 0L
                     attemptAt = SystemClock.elapsedRealtime()
                     scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)
@@ -212,6 +217,8 @@ class PhoneRadio(
         }
         Log.i(TAG, "kickSearch: drop stale attempt/link and rescan linkUp=$linkUp")
         main.removeCallbacks(watchdog)
+        main.removeCallbacks(scanRunnable)
+        scanScheduled = false
         stopScan()
         dropLink(peerRejected = false)
         startScan()
@@ -219,10 +226,12 @@ class PhoneRadio(
 
     override fun stop() {
         running = false
+        scanScheduled = false
         main.removeCallbacksAndMessages(null)
         stopScan()
-        gatt?.close()
+        val dying = gatt
         gatt = null
+        closeGatt(dying)
         inbox = null
         linkUp = false
         writing = false
@@ -238,8 +247,20 @@ class PhoneRadio(
         pump()
     }
 
+    private val scanRunnable = Runnable {
+        scanScheduled = false
+        startScan()
+    }
+
     private fun startScan() {
-        if (!running || scanning || gatt != null || !bluetoothOn) return
+        if (!running || scanning || gatt != null || !bluetoothOn || scanScheduled) return
+        val now = SystemClock.elapsedRealtime()
+        val delay = PhoneBleLinkPolicy.scanStartDelayMs(now, scanStartTimes.toList())
+        if (delay > 0L) {
+            scanScheduled = true
+            main.postDelayed(scanRunnable, delay)
+            return
+        }
         val scanner = runCatching { manager?.adapter?.bluetoothLeScanner }.getOrNull() ?: return
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -247,7 +268,13 @@ class PhoneRadio(
         val filters = listOf(ScanFilter.Builder().setServiceUuid(serviceUuid).build())
         attemptAt = SystemClock.elapsedRealtime()
         scanning = guarded("startScan") { scanner.startScan(filters, settings, scanCallback) }
-        if (scanning) scheduleWatchdog(PhoneBleLinkPolicy.SCAN_STALE_MS)
+        if (scanning) {
+            scanStartTimes.addLast(attemptAt)
+            while (scanStartTimes.size > PhoneBleLinkPolicy.SCAN_STARTS_PER_WINDOW) {
+                scanStartTimes.removeFirst()
+            }
+            scheduleWatchdog(PhoneBleLinkPolicy.SCAN_STALE_MS)
+        }
     }
 
     private fun stopScan() {
@@ -275,7 +302,13 @@ class PhoneRadio(
 
     private fun rescanLater() {
         if (!running) return
-        main.postDelayed({ startScan() }, if (strangerDrop) STRANGER_RESCAN_MS else RESCAN_MS)
+        main.removeCallbacks(scanRunnable)
+        val delay = PhoneBleLinkPolicy.bleConnectRetryMs(
+            consecutive133 = connectFailures133,
+            stranger = strangerDrop,
+        )
+        scanScheduled = true
+        main.postDelayed(scanRunnable, delay)
     }
 
     private fun scheduleWatchdog(delayMs: Long) {
@@ -321,8 +354,9 @@ class PhoneRadio(
      */
     private fun dropLink(peerRejected: Boolean = true) {
         strangerDrop = peerRejected && linkUp && !snapOnLink
-        gatt?.close()
+        val dying = gatt
         gatt = null
+        closeGatt(dying)
         inbox = null
         linkUp = false
         writing = false
@@ -351,7 +385,13 @@ class PhoneRadio(
     private fun acceptSnap(value: ByteArray) {
         val open = PhoneBleCodec.open(storeKey, value) ?: return
         if (!PhoneBleCodec.isSnapType(open.type)) return
-        if (open.counter !in acceptFromCounter..waitingCounter) return
+        if (!PhoneBleLinkPolicy.counterInAcceptWindow(
+                open.counter,
+                PhoneBleLinkPolicy.AcceptWindow(acceptFromCounter, waitingCounter),
+            )
+        ) {
+            return
+        }
         snapOnLink = true
         lastSnapAt = SystemClock.elapsedRealtime()
         scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)
@@ -408,6 +448,12 @@ class PhoneRadio(
             if (!radio.writeDescriptor(descriptor)) error("cccd rejected")
         }
 
+    private fun closeGatt(radio: BluetoothGatt?) {
+        if (radio == null) return
+        runCatching { radio.disconnect() }
+        runCatching { radio.close() }
+    }
+
     private inline fun guarded(what: String, block: () -> Unit): Boolean =
         try {
             block()
@@ -415,10 +461,8 @@ class PhoneRadio(
         } catch (e: SecurityException) {
             Log.w(TAG, "$what: no permission", e)
             false
-        } catch (e: IllegalStateException) {
-            Log.w(TAG, "$what: adapter off", e)
-            false
-        } catch (e: IllegalArgumentException) {
+        } catch (e: RuntimeException) {
+            // Includes NullPointerException from a torn-down Bluetooth stack.
             Log.w(TAG, what, e)
             false
         }
@@ -429,17 +473,14 @@ class PhoneRadio(
         } catch (e: SecurityException) {
             Log.w(TAG, "$what: no permission", e)
             null
-        } catch (e: IllegalStateException) {
-            Log.w(TAG, "$what: adapter off", e)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, what, e)
             null
         }
 
     private companion object {
         const val TAG = "PhoneRadio"
         const val PENDING_MAX = 16
-        const val RESCAN_MS = 800L
-        /** The companion drops a phone it does not know and refuses it for a minute. */
-        const val STRANGER_RESCAN_MS = 10_000L
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import vad.dashing.tbox.phoneble.GenerationSlot
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneBleLinkPolicy
 import vad.dashing.tbox.phoneble.PhoneDirectWire
@@ -18,6 +19,7 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * RFCOMM to TBox Monitor on a head unit the phone is already bonded with
@@ -37,12 +39,18 @@ class PhoneDirectLink(
     private val main = Handler(Looper.getMainLooper())
     private val manager = appContext.getSystemService(BluetoothManager::class.java)
     /** Replaced when a write hangs: the stuck thread is abandoned with its dead socket. */
-    private var writer: ExecutorService = Executors.newSingleThreadExecutor()
+    @Volatile private var writer: ExecutorService = Executors.newSingleThreadExecutor()
     private val proxies = ConcurrentHashMap<Int, BluetoothProfile>()
     /** Bumped by [start]/[stop]; a worker of an older generation leaves the state alone. */
     @Volatile private var generation = 0
     /** Connected socket or the one blocked in connect(); closing it unblocks the worker. */
-    @Volatile private var socket: BluetoothSocket? = null
+    private val sockets = GenerationSlot<BluetoothSocket>()
+    /** Addresses whose SDP lookup said the TBox service is absent. Cleared when the UUID appears. */
+    private val noService = ConcurrentHashMap.newKeySet<String>()
+    /** fetchUuidsWithSdp is once per address per process, not once per connect attempt. */
+    private val sdpAsked = ConcurrentHashMap.newKeySet<String>()
+    /** Fast rejects of [PhoneStore.directAddress]. Out-of-range timeouts do not count. */
+    private var rememberedFailures = 0
     private var running = false
     /** elapsedRealtime of link-up and of the last accepted snapshot (0 = none on this link). */
     private var linkAt = 0L
@@ -108,7 +116,7 @@ class PhoneDirectLink(
     }
 
     override fun write(payload: ByteArray) {
-        val link = socket ?: return
+        val link = liveSocket() ?: return
         if (!linkUp) return
         val frame = PhoneDirectWire.frame(payload)
         enqueueFrames(link, frame)
@@ -126,16 +134,18 @@ class PhoneDirectLink(
         resetAcceptRange: Boolean = false,
         updateWaitingCounter: Boolean = false,
     ) {
-        val link = socket ?: return
+        val link = liveSocket() ?: return
         if (!linkUp) return
-        writer.execute {
+        executeWrite {
             val counter = store.nextCounter()
-            if (resetAcceptRange) {
-                acceptFromCounter = counter
-            }
-            if (updateWaitingCounter) {
-                waitingCounter = counter
-            }
+            val window = PhoneBleLinkPolicy.acceptWindowAfterSend(
+                previous = PhoneBleLinkPolicy.AcceptWindow(acceptFromCounter, waitingCounter),
+                counter = counter,
+                resetAcceptRange = resetAcceptRange,
+                updateWaiting = updateWaitingCounter,
+            )
+            acceptFromCounter = window.acceptFrom
+            waitingCounter = window.waiting
             val sealed = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
             val frame = PhoneDirectWire.frame(sealed)
             writeFrameBlocking(link, frame)
@@ -148,9 +158,9 @@ class PhoneDirectLink(
      */
     fun writeSealedBatch(packets: List<Pair<Int, ByteArray>>) {
         if (packets.isEmpty()) return
-        val link = socket ?: return
+        val link = liveSocket() ?: return
         if (!linkUp) return
-        writer.execute {
+        executeWrite {
             val frames = packets.map { (type, body) ->
                 val counter = store.nextCounter()
                 val sealed = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
@@ -168,10 +178,28 @@ class PhoneDirectLink(
     }
 
     private fun enqueueFrames(link: BluetoothSocket, frame: ByteArray) {
-        writer.execute {
+        executeWrite {
             writeFrameBlocking(link, frame)
         }
     }
+
+    private fun executeWrite(block: () -> Unit) {
+        val exec = writer
+        try {
+            exec.execute {
+                if (exec.isShutdown) return@execute
+                try {
+                    block()
+                } catch (e: Exception) {
+                    Log.w(TAG, "write task", e)
+                }
+            }
+        } catch (e: RejectedExecutionException) {
+            Log.w(TAG, "writer rejected", e)
+        }
+    }
+
+    private fun liveSocket(): BluetoothSocket? = sockets.current(generation)
 
     private fun writeFrameBlocking(link: BluetoothSocket, frame: ByteArray) {
         val started = SystemClock.elapsedRealtime()
@@ -224,85 +252,143 @@ class PhoneDirectLink(
 
     private fun loop(gen: Int) {
         while (gen == generation) {
-            val adapter = runCatching { manager?.adapter }.getOrNull()
-            if (adapter == null || !adapter.isEnabled) {
+            try {
+                if (!searchOnce(gen)) return
+            } catch (e: Exception) {
+                Log.w(TAG, "direct loop", e)
                 if (!pause(gen, RETRY_MS)) return
+            }
+        }
+    }
+
+    /** False when this worker became obsolete during the wait. */
+    private fun searchOnce(gen: Int): Boolean {
+        val adapter = runCatching { manager?.adapter }.getOrNull()
+        if (adapter == null || !adapter.isEnabled) return pause(gen, RETRY_MS)
+        var answered = false
+        var rememberedFailed = false
+        val remembered = store.directAddress
+        for (candidate in candidates(adapter)) {
+            if (gen != generation) return false
+            val attempt = connect(gen, adapter, candidate)
+            if (attempt.discoveryFailed) noService.add(candidate.address)
+            val link = attempt.socket
+            if (link == null) {
+                if (candidate.address == remembered && attempt.fastFail) rememberedFailed = true
                 continue
             }
-            var linked = false
-            for (candidate in candidates(adapter)) {
-                if (gen != generation) return
-                val link = connect(gen, adapter, candidate) ?: continue
-                linked = true
-                serve(gen, link, candidate)
-                break
-            }
-            if (!linked && gen == generation) passesWithoutLink++
-            val wait = if (linked) RECONNECT_MS else PhoneBleLinkPolicy.directSearchRetryMs(foreground, passesWithoutLink)
-            if (!pause(gen, wait)) return
+            answered = serve(gen, link, candidate)
+            if (candidate.address == remembered && !answered) rememberedFailed = true
+            break
         }
+        if (gen != generation) return false
+        if (answered) {
+            rememberedFailures = 0
+        } else if (rememberedFailed) {
+            rememberedFailures++
+            if (rememberedFailures >= PhoneBleLinkPolicy.FORGET_REMEMBERED_AFTER &&
+                store.directAddress == remembered
+            ) {
+                store.directAddress = null
+                remembered?.let { noService.remove(it) }
+                rememberedFailures = 0
+            }
+        }
+        val decision = PhoneBleLinkPolicy.directWaitAfterClose(
+            answered = answered,
+            foreground = foreground,
+            passesWithoutLink = passesWithoutLink,
+        )
+        passesWithoutLink = decision.passesWithoutLink
+        return pause(gen, decision.waitMs)
     }
 
     private fun candidates(adapter: BluetoothAdapter): List<BluetoothDevice> {
         val bonded = runCatching { adapter.bondedDevices.orEmpty() }.getOrDefault(emptySet())
-        val out = LinkedHashMap<String, BluetoothDevice>()
-        store.directAddress?.let { last ->
-            bonded.firstOrNull { it.address == last }?.let { out[it.address] = it }
+        val remembered = store.directAddress
+        val byAddress = LinkedHashMap<String, BluetoothDevice>()
+        remembered?.let { last ->
+            bonded.firstOrNull { it.address == last }?.let { byAddress[it.address] = it }
         }
         for (proxy in proxies.values) {
-            runCatching { proxy.connectedDevices }.getOrNull()?.forEach { out.putIfAbsent(it.address, it) }
+            runCatching { proxy.connectedDevices }.getOrNull()?.forEach { byAddress.putIfAbsent(it.address, it) }
         }
-        for (device in bonded) {
-            val listed = runCatching { device.uuids }.getOrNull()
-                ?.any { it.uuid == PhoneDirectWire.SERVICE_UUID } == true
-            if (listed) out.putIfAbsent(device.address, device)
+        for (device in bonded) byAddress.putIfAbsent(device.address, device)
+        val ranked = ArrayList<Pair<Int, BluetoothDevice>>()
+        for (device in byAddress.values) {
+            val listed = listsService(device)
+            if (listed) noService.remove(device.address)
+            if (!listed && sdpAsked.add(device.address)) {
+                runCatching { device.fetchUuidsWithSdp() }
+            }
+            if (device.address in noService) continue
+            val btClass = runCatching { device.bluetoothClass }.getOrNull()
+            val rank = PhoneBleLinkPolicy.directCandidateRank(
+                majorClass = btClass?.majorDeviceClass ?: 0,
+                deviceClass = btClass?.deviceClass ?: 0,
+                hasServiceUuid = listed,
+                remembered = device.address == remembered,
+            ) ?: continue
+            ranked += rank to device
         }
-        return out.values.toList()
+        return ranked.sortedBy { it.first }.map { it.second }
     }
 
-    private fun connect(gen: Int, adapter: BluetoothAdapter, candidate: BluetoothDevice): BluetoothSocket? {
+    private fun listsService(device: BluetoothDevice): Boolean =
+        runCatching { device.uuids }.getOrNull()
+            ?.any { it.uuid == PhoneDirectWire.SERVICE_UUID } == true
+
+    private fun connect(gen: Int, adapter: BluetoothAdapter, candidate: BluetoothDevice): ConnectAttempt {
+        val started = SystemClock.elapsedRealtime()
         val attempt = try {
             candidate.createRfcommSocketToServiceRecord(PhoneDirectWire.SERVICE_UUID)
-        } catch (e: IOException) {
-            return null
-        } catch (e: SecurityException) {
-            Log.w(TAG, "connect: no permission", e)
-            return null
+        } catch (e: Exception) {
+            Log.w(TAG, "socket: ${e.message}")
+            return ConnectAttempt(socket = null, discoveryFailed = discoveryFailed(e), fastFail = true)
         }
-        socket = attempt
-        if (gen != generation) {
-            runCatching { attempt.close() }
-            return null
+        val published = sockets.publish(gen, { generation }, attempt) { runCatching { it.close() } }
+        if (!published) {
+            return ConnectAttempt(socket = null, discoveryFailed = false, fastFail = false)
         }
+        var failed: Exception? = null
         val ok = try {
             runCatching { adapter.cancelDiscovery() }
             connectAt = SystemClock.elapsedRealtime()
             attempt.connect()
             gen == generation
-        } catch (e: IOException) {
-            // No TBox service on this device, it is out of range, or stop() or the watchdog closed it.
-            false
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
+            failed = e
             false
         } finally {
             connectAt = 0L
         }
-        if (ok) return attempt
+        if (ok) return ConnectAttempt(socket = attempt, discoveryFailed = false, fastFail = false)
+        val elapsed = SystemClock.elapsedRealtime() - started
         runCatching { attempt.close() }
-        return null
+        return ConnectAttempt(
+            socket = null,
+            discoveryFailed = failed?.let(::discoveryFailed) == true,
+            fastFail = elapsed < PhoneBleLinkPolicy.DIRECT_FAST_FAIL_MS,
+        )
     }
 
-    private fun serve(gen: Int, link: BluetoothSocket, peer: BluetoothDevice) {
+    private fun discoveryFailed(error: Exception): Boolean {
+        val message = error.message?.lowercase().orEmpty()
+        return "service discovery failed" in message
+    }
+
+    /** True when a sealed snapshot or telemetry ack arrived before the socket closed. */
+    private fun serve(gen: Int, link: BluetoothSocket, peer: BluetoothDevice): Boolean {
         main.post {
             if (gen != generation) return@post
             linkAt = SystemClock.elapsedRealtime()
             lastSnapAt = 0L
         }
         linkUp = true
-        passesWithoutLink = 0
         val reader = PhoneDirectWire.FrameReader()
         val buffer = ByteArray(512)
         var reason = "obsolete"
+        var answered = false
         try {
             val input = link.inputStream
             while (gen == generation) {
@@ -312,6 +398,7 @@ class PhoneDirectLink(
                     break
                 }
                 for (payload in reader.feed(buffer, count)) {
+                    if (peerAnswered(payload)) answered = true
                     main.post { if (gen == generation) acceptSnap(payload, peer) }
                 }
                 if (reader.broken) {
@@ -319,16 +406,25 @@ class PhoneDirectLink(
                     break
                 }
             }
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             reason = "io: ${e.message}"
         } finally {
-            Log.d(TAG, "link closed: $reason")
+            Log.d(TAG, "link closed: $reason answered=$answered")
             runCatching { link.close() }
             if (gen == generation) {
                 linkUp = false
                 main.post { if (gen == generation) lastSnapAt = 0L }
             }
         }
+        return answered
+    }
+
+    private fun peerAnswered(value: ByteArray): Boolean {
+        val open = PhoneBleCodec.open(storeKey, value) ?: return false
+        if (open.type == PhoneBleCodec.TYPE_TELEMETRY_ACK) {
+            return PhoneBleCodec.readTelemetryAck(open.body) != null
+        }
+        return PhoneBleCodec.isSnapType(open.type)
     }
 
     private fun acceptSnap(value: ByteArray, peer: BluetoothDevice) {
@@ -341,14 +437,20 @@ class PhoneDirectLink(
             return
         }
         if (!PhoneBleCodec.isSnapType(open.type)) return
-        if (open.counter !in acceptFromCounter..waitingCounter) return
+        if (!PhoneBleLinkPolicy.counterInAcceptWindow(
+                open.counter,
+                PhoneBleLinkPolicy.AcceptWindow(acceptFromCounter, waitingCounter),
+            )
+        ) {
+            return
+        }
         lastSnapAt = SystemClock.elapsedRealtime()
         if (store.directAddress != peer.address) store.directAddress = peer.address
         onSnap(assembler.accept(open.type, open.body))
     }
 
     private fun closeSocket() {
-        runCatching { socket?.close() }
+        sockets.closeUpTo(generation) { runCatching { it.close() } }
     }
 
     private fun openProxies() {
@@ -359,7 +461,12 @@ class PhoneDirectLink(
                     appContext,
                     object : BluetoothProfile.ServiceListener {
                         override fun onServiceConnected(id: Int, proxy: BluetoothProfile) {
-                            if (running) proxies[id] = proxy else closeProxy(id, proxy)
+                            if (!running) {
+                                closeProxy(id, proxy)
+                                return
+                            }
+                            val previous = proxies.put(id, proxy)
+                            if (previous != null && previous !== proxy) closeProxy(id, previous)
                         }
 
                         override fun onServiceDisconnected(id: Int) {
@@ -400,10 +507,15 @@ class PhoneDirectLink(
         return false
     }
 
+    private class ConnectAttempt(
+        val socket: BluetoothSocket?,
+        val discoveryFailed: Boolean,
+        val fastFail: Boolean,
+    )
+
     private companion object {
         const val TAG = "PhoneDirectLink"
         const val RETRY_MS = PhoneBleLinkPolicy.DIRECT_RETRY_MS
-        const val RECONNECT_MS = 1_000L
         const val WATCHDOG_MS = 1_000L
     }
 }

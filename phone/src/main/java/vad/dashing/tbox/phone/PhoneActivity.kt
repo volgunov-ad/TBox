@@ -1,10 +1,15 @@
 package vad.dashing.tbox.phone
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -13,7 +18,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,9 +42,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -55,13 +62,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,6 +85,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import vad.dashing.tbox.phoneble.PhoneBleCodec
+import vad.dashing.tbox.phoneble.PhoneBleLinkPolicy
 import kotlin.math.abs
 
 class PhoneActivity : ComponentActivity() {
@@ -92,7 +105,7 @@ class PhoneActivity : ComponentActivity() {
     }
 }
 
-private enum class PairRequest { NONE, SENT, NO_LINK }
+private enum class PairRequest { NONE, SENT, NO_LINK, CONFIRMED, TIMED_OUT }
 
 /** Same pages, order and 24×24 icons as the web panel. */
 private enum class Page(
@@ -142,9 +155,6 @@ private fun icon(path: String, evenOdd: Boolean = false): ImageVector =
 private fun storedPage(store: PhoneStore): Page =
     Page.entries.firstOrNull { it.name == store.page && it != Page.CONNECT } ?: Page.CLIMATE
 
-/** A paired phone with a live link but no snapshot this long was probably forgotten by the head unit. */
-private const val NO_SNAP_REOPEN_MS = 10_000L
-
 /** Ask again without an answer only after this long: the request or the answer was lost. */
 private const val UNANSWERED_RETRY_MS = 6_000L
 
@@ -173,6 +183,21 @@ private fun PhoneScreen() {
     var page by remember { mutableStateOf(if (store.paired) storedPage(store) else Page.CONNECT) }
     var reopened by remember { mutableStateOf(false) }
     var pairRequest by remember { mutableStateOf(PairRequest.NONE) }
+    var pairSentAt by remember { mutableLongStateOf(0L) }
+    var pairVia by remember { mutableStateOf(ActivePath.NONE) }
+    var screenStarted by remember { mutableStateOf(false) }
+    var canControl by remember { mutableStateOf(false) }
+    var valuesLive by remember { mutableStateOf(false) }
+    var commandBlocked by remember { mutableStateOf(false) }
+    var locationEnabled by remember { mutableStateOf(true) }
+    var bluetoothBlocked by remember { mutableStateOf(false) }
+    var showBgRationale by remember { mutableStateOf(false) }
+    var showForget by remember { mutableStateOf(false) }
+    var autostartBound by remember { mutableStateOf(PhoneSystemHelpers.hasCompanionAssociation(context)) }
+    var clock by remember { mutableLongStateOf(0L) }
+    var directLinkUp by remember { mutableStateOf(false) }
+    var demandMask by remember { mutableIntStateOf(PhoneSessionController.huDemandMask) }
+    val askedBluetooth = remember { mutableStateOf(false) }
     var shareLocation by remember { mutableStateOf(store.shareLocation) }
     var shareGyro by remember { mutableStateOf(store.shareGyro) }
     var shareCompass by remember { mutableStateOf(store.shareCompass) }
@@ -197,10 +222,13 @@ private fun PhoneScreen() {
                 pagesSinceSwitch++
                 directPaired = store.directPaired
                 if (next.volume != null && next.volume > 0) lastVolume = next.volume
+                if (pairRequest == PairRequest.SENT || pairRequest == PairRequest.TIMED_OUT) {
+                    pairRequest = PairRequest.CONFIRMED
+                }
                 if (!paired) {
                     paired = true
                     store.paired = true
-                    pairRequest = PairRequest.NONE
+                    pairRequest = PairRequest.CONFIRMED
                     page = storedPage(store)
                 }
             }
@@ -231,7 +259,15 @@ private fun PhoneScreen() {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
         ready = granted.values.all { it }
+        if (!ready && askedBluetooth.value) {
+            val host = context as ComponentActivity
+            bluetoothBlocked = permissions.none { host.shouldShowRequestPermissionRationale(it) }
+        }
+        askedBluetooth.value = true
     }
+    val enableBluetoothLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { }
     val bgLocLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -243,12 +279,12 @@ private fun PhoneScreen() {
     ) { granted ->
         val fineOk = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             PhoneTelemetryStreamer.hasFineLocationPermission(context)
-        if (fineOk) {
+            if (fineOk) {
             shareLocation = true
             PhoneSessionController.updateTelemetryToggles(context, shareLocation = true)
             hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
             if (Build.VERSION.SDK_INT >= 29 && !hasBgLocation) {
-                bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                showBgRationale = true
             }
         }
     }
@@ -297,34 +333,52 @@ private fun PhoneScreen() {
         requestSnapshot(SystemClock.elapsedRealtime(), newState = true)
     }
 
-    DisposableEffect(ready) {
-        PhoneSessionController.onUiStarted(context, ready)
-        onDispose { PhoneSessionController.onUiStopped(context) }
-    }
     val activity = context as ComponentActivity
     DisposableEffect(activity, ready) {
-        if (!ready) return@DisposableEffect onDispose { }
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                batteryOptDisabled = PhoneSystemHelpers.isIgnoringBatteryOptimizations(context)
-                hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
-                // Long idle / doze often leaves a hung scan, dead GATT, or zombie linkUp
-                // without snaps; kill+relaunch used to clear it — resume kick does the
-                // same without dropping pairing.
-                radio.kickSearch()
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    screenStarted = true
+                    PhoneSessionController.onUiStarted(context, ready)
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    screenStarted = false
+                    // Rotation rebuilds the activity. Tearing the RFCOMM/GATT link down
+                    // here would reconnect on every config change.
+                    if (!activity.isChangingConfigurations) {
+                        PhoneSessionController.onUiStopped(context)
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    batteryOptDisabled = PhoneSystemHelpers.isIgnoringBatteryOptimizations(context)
+                    hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
+                    locationEnabled = locationServiceEnabled(context)
+                    autostartBound = PhoneSystemHelpers.hasCompanionAssociation(context)
+                    if (ready) radio.kickSearch()
+                }
+                else -> Unit
             }
         }
         activity.lifecycle.addObserver(observer)
+        if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            screenStarted = true
+            PhoneSessionController.onUiStarted(context, ready)
+        }
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) {
+        askedBluetooth.value = true
         launcher.launch(permissions)
     }
-    LaunchedEffect(ready) {
-        if (!ready) return@LaunchedEffect
+    LaunchedEffect(ready, screenStarted) {
+        if (!ready || !screenStarted) return@LaunchedEffect
         while (isActive) {
             bluetoothOn = radio.bluetoothOn
+            locationEnabled = locationServiceEnabled(context)
+            directLinkUp = radio.directLinkUp
+            demandMask = PhoneSessionController.huDemandMask
             val now = SystemClock.elapsedRealtime()
+            clock = now
             val linkUp = radio.linkUp
             if (linkUp && !linked) {
                 linkedAt = now
@@ -333,17 +387,33 @@ private fun PhoneScreen() {
             }
             linked = linkUp
             active = radio.active
+            val confirmed = radio.confirmed
+            val age = if (lastSnapAt != 0L) now - lastSnapAt else Long.MAX_VALUE
+            valuesLive = PhoneBleLinkPolicy.controlsLive(confirmed, age)
+            canControl = valuesLive
+            if (canControl) commandBlocked = false
             if (bluetoothOn) radio.start()
             val fresh = lastSnapAt != 0L && now - lastSnapAt < 2_000L
-            // A slow head unit queues requests; wait for the answer before asking again.
             val answered = lastSnapAt >= refreshAt
             val waited = now - refreshAt
             if (linkUp && !fresh && waited >= 2_000L && (answered || waited >= UNANSWERED_RETRY_MS)) {
                 requestSnapshot(now)
             }
-            if (linkUp && snap.gen == 0 && !reopened && now - linkedAt >= NO_SNAP_REOPEN_MS) {
+            if (PhoneBleLinkPolicy.shouldReopenConnectPage(
+                    linkUp = linkUp,
+                    lastSnapAtMs = lastSnapAt,
+                    linkedAtMs = linkedAt,
+                    nowMs = now,
+                    alreadyReopened = reopened,
+                )
+            ) {
                 reopened = true
                 page = Page.CONNECT
+            }
+            if (pairRequest == PairRequest.SENT &&
+                PhoneBleLinkPolicy.pairTimedOut(pairSentAt, now, lastSnapAt)
+            ) {
+                pairRequest = PairRequest.TIMED_OUT
             }
             delay(500)
         }
@@ -351,10 +421,13 @@ private fun PhoneScreen() {
 
     fun send(op: Int, seat: Int, arg: Int) {
         if (!ready) {
-            launcher.launch(permissions)
+            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
             return
         }
-        if (!radio.linkUp) return
+        if (!canControl) {
+            commandBlocked = true
+            return
+        }
         if (op == PhoneBleCodec.OP_MEDIA_PLAY_PAUSE && snap.playing != null) {
             val now = SystemClock.elapsedRealtime()
             snap = snap.copy(
@@ -371,12 +444,13 @@ private fun PhoneScreen() {
         radio.writeSealedUiPacket(
             type = PhoneBleCodec.TYPE_CMD,
             body = PhoneBleCodec.commandBody(op, seat, arg),
+            resetAcceptRange = true,
         )
     }
 
     fun pair() {
         if (!ready) {
-            launcher.launch(permissions)
+            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
             return
         }
         if (!radio.linkUp) {
@@ -384,7 +458,20 @@ private fun PhoneScreen() {
             return
         }
         radio.write(PhoneBleCodec.pairPacket(store.id, store.key, phoneName))
+        pairSentAt = SystemClock.elapsedRealtime()
+        pairVia = when {
+            radio.active != ActivePath.NONE -> radio.active
+            radio.directLinkUp -> ActivePath.DIRECT
+            else -> ActivePath.COMPANION
+        }
         pairRequest = PairRequest.SENT
+    }
+
+    fun requestBackgroundLocation() {
+        showBgRationale = false
+        if (Build.VERSION.SDK_INT >= 29) {
+            bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
     }
 
     fun choosePath(next: PhonePath) {
@@ -397,19 +484,32 @@ private fun PhoneScreen() {
         active = ActivePath.NONE
     }
 
-    val status = when {
-        !ready -> null
-        !bluetoothOn -> stringResource(R.string.bluetooth_off)
-        !linked -> stringResource(
+    val snapAgeMs = if (lastSnapAt == 0L || clock == 0L) Long.MAX_VALUE else (clock - lastSnapAt).coerceAtLeast(0L)
+    val snapAgeSec = if (snapAgeMs == Long.MAX_VALUE) 0 else (snapAgeMs / 1000L).toInt()
+    val confirmedNow = radio.confirmed && lastSnapAt != 0L
+    val statusKind = PhoneBleLinkPolicy.phoneUiStatus(
+        permissionsReady = ready,
+        bluetoothOn = bluetoothOn,
+        linkUp = linked,
+        confirmed = confirmedNow,
+        snapAgeMs = snapAgeMs,
+    )
+    val status = when (statusKind) {
+        PhoneBleLinkPolicy.PhoneUiStatus.NEED_PERMISSION -> null
+        PhoneBleLinkPolicy.PhoneUiStatus.BLUETOOTH_OFF -> stringResource(R.string.bluetooth_off)
+        PhoneBleLinkPolicy.PhoneUiStatus.LOOKING -> stringResource(
             when (path) {
                 PhonePath.AUTO -> R.string.looking_auto
                 PhonePath.DIRECT -> R.string.looking_direct
                 PhonePath.COMPANION -> R.string.looking
             },
         )
-        snap.gen == 0 -> stringResource(R.string.waiting)
-        active == ActivePath.DIRECT -> stringResource(R.string.connected_direct)
-        else -> stringResource(R.string.connected)
+        PhoneBleLinkPolicy.PhoneUiStatus.WAITING -> stringResource(R.string.waiting)
+        PhoneBleLinkPolicy.PhoneUiStatus.NO_ANSWER -> stringResource(R.string.no_answer, snapAgeSec)
+        PhoneBleLinkPolicy.PhoneUiStatus.CONNECTED -> stringResource(
+            if (active == ActivePath.DIRECT) R.string.connected_direct_age else R.string.connected_companion_age,
+            snapAgeSec,
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -418,34 +518,80 @@ private fun PhoneScreen() {
                 .weight(1f)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
         ) {
-            Header(status, snap)
+            Header(status, snap, valuesLive)
+            if (commandBlocked) {
+                Text(
+                    text = stringResource(R.string.no_link_command),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = PhoneColors.accentText,
+                    fontSize = 13.sp,
+                )
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
+                    .alpha(if (page != Page.CONNECT && !valuesLive) 0.45f else 1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (!ready) {
                     Button(
-                        onClick = { launcher.launch(permissions) },
+                        onClick = {
+                            if (bluetoothBlocked) openAppSettings(context) else launcher.launch(permissions)
+                        },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                         shape = RoundedCornerShape(12.dp),
                     ) {
-                        Text(stringResource(R.string.need_permission))
+                        Text(
+                            stringResource(
+                                if (bluetoothBlocked) R.string.permission_settings else R.string.need_permission,
+                            ),
+                        )
+                    }
+                }
+                if (ready && Build.VERSION.SDK_INT <= 30 && !locationEnabled) {
+                    Card {
+                        Label(stringResource(R.string.location_off))
+                        Button(
+                            onClick = { openLocationSettings(context) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Text(stringResource(R.string.location_settings))
+                        }
+                    }
+                }
+                if (ready && !bluetoothOn) {
+                    Button(
+                        onClick = {
+                            enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(stringResource(R.string.bluetooth_enable))
                     }
                 }
                 when (page) {
                     Page.CONNECT -> ConnectPage(
-                        linked = paired && snap.gen != 0,
+                        linked = paired && statusKind == PhoneBleLinkPolicy.PhoneUiStatus.CONNECTED,
+                        linkUp = linked,
+                        active = active,
                         path = path,
                         directPaired = directPaired,
+                        canForget = paired || directPaired,
                         pairRequest = pairRequest,
+                        pairVia = pairVia,
                         shareLocation = shareLocation,
                         shareGyro = shareGyro,
                         shareCompass = shareCompass,
                         hasBgLocation = hasBgLocation,
+                        hasFineLocation = PhoneTelemetryStreamer.hasFineLocationPermission(context),
+                        directLinkUp = directLinkUp,
+                        demandMask = demandMask,
                         batteryOptDisabled = batteryOptDisabled,
+                        autostartBound = autostartBound,
                         onPath = ::choosePath,
                         onPair = ::pair,
                         onToggleLocation = { next ->
@@ -466,7 +612,7 @@ private fun PhoneScreen() {
                                     shareLocation = next,
                                 )
                                 if (next && Build.VERSION.SDK_INT >= 29 && !hasBgLocation) {
-                                    bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                    showBgRationale = true
                                 }
                             }
                         },
@@ -497,13 +643,20 @@ private fun PhoneScreen() {
                         onDisableBatteryOpt = {
                             PhoneSystemHelpers.requestIgnoreBatteryOptimizations(context)
                         },
+                        onUnbindAutostart = {
+                            PhoneSystemHelpers.clearCompanionAssociations(context)
+                            autostartBound = PhoneSystemHelpers.hasCompanionAssociation(context)
+                        },
+                        onForget = { showForget = true },
                     )
                     Page.CLIMATE -> ClimatePage(snap, ::send)
                     Page.SEATS -> SeatsPage(snap, ::send)
                     Page.MUSIC -> MusicPage(snap, positionAt, lastVolume, ::send) { lastVolume = it }
                     Page.BODY -> BodyPage(
                         snap = snap,
-                        oldFirmware = snap.android10 == null && pagesSinceSwitch >= OLD_FIRMWARE_PAGES,
+                        oldFirmware = active == ActivePath.COMPANION &&
+                            snap.android10 == null &&
+                            pagesSinceSwitch >= OLD_FIRMWARE_PAGES,
                         send = ::send,
                     )
                 }
@@ -511,40 +664,105 @@ private fun PhoneScreen() {
         }
         BottomBar(page, ::showPage)
     }
-}
-
-@Composable
-private fun Header(status: String?, snap: PhoneBleCodec.Snapshot) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.title),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = status.orEmpty(),
-                fontSize = 13.sp,
-                color = PhoneColors.muted,
-                maxLines = 2,
-            )
-        }
-        TempChip(stringResource(R.string.outside), formatTenths(snap.outsideTenths))
-        TempChip(stringResource(R.string.inside), formatTenths(snap.insideTenths))
+    if (showBgRationale) {
+        AlertDialog(
+            onDismissRequest = { showBgRationale = false },
+            title = { Text(stringResource(R.string.bg_loc_title)) },
+            text = { Text(stringResource(R.string.bg_loc_body)) },
+            confirmButton = {
+                TextButton(onClick = { requestBackgroundLocation() }) {
+                    Text(stringResource(R.string.bg_loc_allow))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBgRationale = false }) {
+                    Text(stringResource(R.string.bg_loc_later))
+                }
+            },
+        )
+    }
+    if (showForget) {
+        AlertDialog(
+            onDismissRequest = { showForget = false },
+            title = { Text(stringResource(R.string.forget_title)) },
+            text = { Text(stringResource(R.string.forget_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showForget = false
+                    PhoneSessionController.forgetPairing(context)
+                    paired = false
+                    directPaired = false
+                    page = Page.CONNECT
+                    snap = PhoneBleCodec.Snapshot()
+                    lastSnapAt = 0L
+                    pairRequest = PairRequest.NONE
+                }) {
+                    Text(stringResource(R.string.forget_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForget = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 
 @Composable
-private fun TempChip(label: String, value: String) {
+private fun Header(status: String?, snap: PhoneBleCodec.Snapshot, live: Boolean) {
+    val cramped = LocalDensity.current.fontScale > 1.15f
+    val padding = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp)
+    if (cramped) {
+        Column(
+            modifier = Modifier.fillMaxWidth().then(padding),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HeaderTitle(status, Modifier.fillMaxWidth())
+            HeaderChips(snap, live)
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().then(padding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HeaderTitle(status, Modifier.weight(1f))
+            HeaderChips(snap, live)
+        }
+    }
+}
+
+@Composable
+private fun HeaderTitle(status: String?, modifier: Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = stringResource(R.string.title),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = status.orEmpty(),
+            fontSize = 13.sp,
+            color = PhoneColors.muted,
+            maxLines = 2,
+        )
+    }
+}
+
+@Composable
+private fun HeaderChips(snap: PhoneBleCodec.Snapshot, live: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TempChip(stringResource(R.string.outside), formatTenths(snap.outsideTenths), live)
+        TempChip(stringResource(R.string.inside), formatTenths(snap.insideTenths), live)
+    }
+}
+
+@Composable
+private fun TempChip(label: String, value: String, live: Boolean) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -553,6 +771,7 @@ private fun TempChip(label: String, value: String) {
         Column(
             modifier = Modifier
                 .widthIn(min = 76.dp)
+                .alpha(if (live) 1f else 0.45f)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -583,7 +802,11 @@ private fun BottomBar(current: Page, onSelect: (Page) -> Unit) {
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onSelect(entry) }
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
+                            onClick = { onSelect(entry) },
+                        )
                         .heightIn(min = 56.dp)
                         .padding(vertical = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -622,14 +845,22 @@ private fun BottomBar(current: Page, onSelect: (Page) -> Unit) {
 @Composable
 private fun ConnectPage(
     linked: Boolean,
+    linkUp: Boolean,
+    active: ActivePath,
     path: PhonePath,
     directPaired: Boolean,
+    canForget: Boolean,
     pairRequest: PairRequest,
+    pairVia: ActivePath,
     shareLocation: Boolean,
     shareGyro: Boolean,
     shareCompass: Boolean,
     hasBgLocation: Boolean,
+    hasFineLocation: Boolean,
+    directLinkUp: Boolean,
+    demandMask: Int,
     batteryOptDisabled: Boolean,
+    autostartBound: Boolean,
     onPath: (PhonePath) -> Unit,
     onPair: () -> Unit,
     onToggleLocation: (Boolean) -> Unit,
@@ -637,6 +868,8 @@ private fun ConnectPage(
     onToggleCompass: (Boolean) -> Unit,
     onBindAutostart: () -> Unit,
     onDisableBatteryOpt: () -> Unit,
+    onUnbindAutostart: () -> Unit,
+    onForget: () -> Unit,
 ) {
     val companionOnly = path == PhonePath.COMPANION
     val telemetryEnabled = !companionOnly
@@ -644,7 +877,9 @@ private fun ConnectPage(
         SectionTitle(stringResource(R.string.connection))
         if (linked) {
             Text(
-                text = stringResource(R.string.linked),
+                text = stringResource(
+                    if (active == ActivePath.COMPANION) R.string.linked_companion else R.string.linked_direct,
+                ),
                 fontWeight = FontWeight.SemiBold,
                 color = PhoneColors.accentText,
             )
@@ -671,14 +906,29 @@ private fun ConnectPage(
         )
         Button(
             onClick = onPair,
+            enabled = linkUp,
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
             shape = RoundedCornerShape(12.dp),
         ) {
             Text(stringResource(R.string.pair))
         }
         val pairText = when (pairRequest) {
-            PairRequest.NONE -> null
-            PairRequest.SENT -> stringResource(R.string.pair_sent)
+            PairRequest.NONE -> if (!linkUp) {
+                stringResource(
+                    when (path) {
+                        PhonePath.AUTO -> R.string.pair_no_link_auto
+                        PhonePath.DIRECT -> R.string.pair_no_link_direct
+                        PhonePath.COMPANION -> R.string.pair_no_link
+                    },
+                )
+            } else {
+                null
+            }
+            PairRequest.SENT -> stringResource(
+                if (pairVia == ActivePath.COMPANION) R.string.pair_sent_companion else R.string.pair_sent_direct,
+            )
+            PairRequest.CONFIRMED -> stringResource(R.string.pair_confirmed)
+            PairRequest.TIMED_OUT -> stringResource(R.string.pair_timeout)
             PairRequest.NO_LINK -> stringResource(
                 when (path) {
                     PhonePath.AUTO -> R.string.pair_no_link_auto
@@ -688,6 +938,14 @@ private fun ConnectPage(
             )
         }
         if (pairText != null) Label(pairText)
+        if (canForget) {
+            ModeButton(
+                text = stringResource(R.string.forget_car),
+                selected = false,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onForget,
+            )
+        }
     }
 
     Card {
@@ -709,6 +967,7 @@ private fun ConnectPage(
             enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleLocation(!shareLocation) }
+        streamCaption(shareLocation && telemetryEnabled, hasFineLocation, directLinkUp, demandMask, PhoneBleCodec.DEMAND_LOC)
         if (telemetryEnabled && shareLocation && !hasBgLocation) {
             Label(stringResource(R.string.telemetry_bg_loc_hint))
         }
@@ -718,23 +977,35 @@ private fun ConnectPage(
             enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleGyro(!shareGyro) }
+        streamCaption(shareGyro && telemetryEnabled, permitted = true, directLinkUp, demandMask, PhoneBleCodec.DEMAND_YAW)
         ModeButton(
             text = stringResource(R.string.share_compass),
             selected = shareCompass && telemetryEnabled,
             enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleCompass(!shareCompass) }
+        streamCaption(shareCompass && telemetryEnabled, permitted = true, directLinkUp, demandMask, PhoneBleCodec.DEMAND_MAG)
 
         if (telemetryEnabled && (shareLocation || shareGyro || shareCompass)) {
             Divider()
             // Presence-based autostart needs CompanionDeviceService (API 31+).
-            if (Build.VERSION.SDK_INT >= 31) {
-                ModeButton(
-                    text = stringResource(R.string.telemetry_autostart_btn),
-                    selected = false,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onBindAutostart,
-                )
+            if (Build.VERSION.SDK_INT >= 31 && directPaired) {
+                if (autostartBound) {
+                    Label(stringResource(R.string.telemetry_autostart_on))
+                    ModeButton(
+                        text = stringResource(R.string.telemetry_unbind),
+                        selected = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onUnbindAutostart,
+                    )
+                } else {
+                    ModeButton(
+                        text = stringResource(R.string.telemetry_autostart_btn),
+                        selected = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onBindAutostart,
+                    )
+                }
             }
             Label(
                 stringResource(
@@ -866,12 +1137,13 @@ private fun SeatsPage(snap: PhoneBleCodec.Snapshot, send: (Int, Int, Int) -> Uni
             if (rowIndex > 0) Divider()
             Label(stringResource(label))
             val current = snap.seats.getOrNull(seat)
+            val columns = if (LocalDensity.current.fontScale > 1.15f && count > 4) 4 else count
             ButtonRows(
                 options = levels.take(count).mapIndexed { index, (text, accent) ->
                     val value = index + 1
                     Option(stringResource(text), current == value, accent) { send(PhoneBleCodec.OP_SEAT, seat, value) }
                 },
-                columns = count,
+                columns = columns,
                 gap = 5.dp,
             )
         }
@@ -917,7 +1189,7 @@ private fun MusicPage(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            ModeButton("−", false) {
+            ModeButton("−", false, contentDescription = stringResource(R.string.volume_lower)) {
                 val current = snap.volume ?: return@ModeButton
                 val next = (current - 1).coerceIn(0, 31)
                 if (next > 0) onVolumeKept(next)
@@ -930,7 +1202,7 @@ private fun MusicPage(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(min = 40.dp),
             )
-            ModeButton("+", false) {
+            ModeButton("+", false, contentDescription = stringResource(R.string.volume_higher)) {
                 val current = snap.volume ?: return@ModeButton
                 val next = (current + 1).coerceIn(0, 31)
                 onVolumeKept(next)
@@ -1210,6 +1482,7 @@ private fun ModeButton(
     enabled: Boolean = true,
     accent: Accent = Accent.PRIMARY,
     horizontalPadding: Dp = 12.dp,
+    contentDescription: String? = null,
     onClick: () -> Unit,
 ) {
     Button(
@@ -1228,7 +1501,17 @@ private fun ModeButton(
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
     ) {
-        Text(text = text, textAlign = TextAlign.Center, fontSize = 15.sp, maxLines = 2)
+        Text(
+            text = text,
+            textAlign = TextAlign.Center,
+            fontSize = 15.sp,
+            maxLines = 2,
+            modifier = if (contentDescription == null) {
+                Modifier
+            } else {
+                Modifier.clearAndSetSemantics { this.contentDescription = contentDescription }
+            },
+        )
     }
 }
 
@@ -1284,7 +1567,7 @@ private fun Stepper(label: String, value: String, onStep: (Boolean) -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        ModeButton("−", false) { onStep(false) }
+        ModeButton("−", false, contentDescription = stringResource(R.string.step_lower, label)) { onStep(false) }
         Text(
             text = value,
             fontSize = 22.sp,
@@ -1292,8 +1575,52 @@ private fun Stepper(label: String, value: String, onStep: (Boolean) -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(min = 72.dp),
         )
-        ModeButton("+", false) { onStep(true) }
+        ModeButton("+", false, contentDescription = stringResource(R.string.step_higher, label)) { onStep(true) }
     }
+}
+
+@Composable
+private fun streamCaption(
+    on: Boolean,
+    permitted: Boolean,
+    directUp: Boolean,
+    demand: Int,
+    bit: Int,
+) {
+    if (!on) return
+    val text = when {
+        !permitted -> stringResource(R.string.telemetry_state_permission)
+        !directUp -> stringResource(R.string.telemetry_state_nolink)
+        demand and bit == 0 -> stringResource(R.string.telemetry_state_waiting)
+        else -> stringResource(R.string.telemetry_state_sending)
+    }
+    Label(text)
+}
+
+private fun locationServiceEnabled(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT > 30) return true
+    val manager = context.getSystemService(LocationManager::class.java) ?: return true
+    return if (Build.VERSION.SDK_INT >= 28) {
+        manager.isLocationEnabled
+    } else {
+        @Suppress("DEPRECATION")
+        manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+}
+
+private fun openLocationSettings(context: android.content.Context) {
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+    }
+}
+
+private fun openAppSettings(context: android.content.Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null),
+    )
+    runCatching { context.startActivity(intent) }
 }
 
 /** Shows the change at once, so a second tap steps from the new value. Windows, roof and shade follow the car. */
