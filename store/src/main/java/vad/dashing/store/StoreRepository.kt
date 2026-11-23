@@ -1,5 +1,6 @@
 package vad.dashing.store
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -10,6 +11,9 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,12 +84,19 @@ sealed interface StoreListState {
     data class Error(val message: String) : StoreListState
 }
 
+/** Where a downloaded APK goes: the system installer on this device, or public Downloads. */
+enum class DownloadTarget {
+    INSTALL,
+    DOWNLOADS,
+}
+
 sealed interface StoreActionState {
     data object Idle : StoreActionState
     data class Downloading(
         val appId: String,
         val downloadedBytes: Long = 0L,
         val totalBytes: Long? = null,
+        val target: DownloadTarget = DownloadTarget.INSTALL,
     ) : StoreActionState {
         val percent: Int?
             get() = if (totalBytes != null && totalBytes > 0L) {
@@ -95,7 +106,10 @@ sealed interface StoreActionState {
             }
     }
 
-    data class Verifying(val appId: String) : StoreActionState
+    data class Verifying(
+        val appId: String,
+        val target: DownloadTarget = DownloadTarget.INSTALL,
+    ) : StoreActionState
     data class ReadyToInstall(
         val appId: String,
         val apkFile: File,
@@ -107,7 +121,7 @@ sealed interface StoreActionState {
         val downloadsSidecarError: String? = null,
     ) : StoreActionState
 
-    /** Phone-distribution APK saved to public Downloads (not installed on HU). */
+    /** APK saved to public Downloads (phone apps, or any app to install elsewhere). */
     data class SavedToDownloads(
         val appId: String,
         val downloadsPath: String,
@@ -116,6 +130,21 @@ sealed interface StoreActionState {
     ) : StoreActionState
 
     data class Error(val appId: String?, val message: String) : StoreActionState
+
+    val activeAppId: String?
+        get() = when (this) {
+            is Downloading -> appId
+            is Verifying -> appId
+            else -> null
+        }
+}
+
+/** Machine-readable error keys the UI maps to localized strings. */
+object StoreErrors {
+    const val NETWORK_UNAVAILABLE = "network_unavailable"
+    const val PHONE_APK_NOT_FOR_HU = "phone_apk_not_for_hu"
+    const val DOWNLOADS_PERMISSION = "downloads_permission_denied"
+    const val NO_ACTIVITY = "no_activity"
 }
 
 class StoreRepository(
@@ -149,8 +178,8 @@ class StoreRepository(
     private val huKind: HuKind = HuProfile.detect(context.packageManager)
     val hu: HuKind get() = huKind
 
-    private var lastRows: List<StoreAppRow> = emptyList()
-    private var downloadInProgress = false
+    @Volatile private var lastRows: List<StoreAppRow> = emptyList()
+    @Volatile private var downloadInProgress = false
 
     /** UI language of this Store APK (`ru` / `en` product flavor). */
     fun storeUiLang(): String =
@@ -173,7 +202,9 @@ class StoreRepository(
     fun setApkLanguage(language: ApkLanguage) {
         preferences.apkLanguage = language
         _apkLanguage.value = language
-        _actionState.value = StoreActionState.Idle
+        if (_actionState.value.activeAppId == null) {
+            _actionState.value = StoreActionState.Idle
+        }
         reselectFlavors(language.flavor)
     }
 
@@ -187,7 +218,10 @@ class StoreRepository(
         }
         lastRows = updated
         _listState.value = ready.copy(rows = updated)
-        _actionState.value = StoreActionState.Idle
+        val action = _actionState.value
+        if (action.activeAppId == null) {
+            _actionState.value = StoreActionState.Idle
+        }
     }
 
     fun cloud(): StoreCloudFacade = cloud
@@ -207,102 +241,113 @@ class StoreRepository(
         _listState.value = ready.copy(rows = updated)
     }
 
+    /**
+     * Reloads catalog and per-app manifests. The caller cancels a previous refresh
+     * before starting a new one (channel / source switch while loading).
+     */
     suspend fun refreshCatalog() {
-        if (_listState.value is StoreListState.Loading) return
         if (!isNetworkAvailable()) {
-            _listState.value = StoreListState.Error("network_unavailable")
+            _listState.value = StoreListState.Error(StoreErrors.NETWORK_UNAVAILABLE)
             return
         }
         _listState.value = StoreListState.Loading
+        _appChangelogs.value = emptyMap()
         try {
             val channel = _channel.value
             val catalogJson = withContext(Dispatchers.IO) {
                 cloud.fetchText(YandexDiskPath.catalogPath(channel))
             }
             val catalog = StoreCatalog.parse(catalogJson)
-            val storeVersion = currentVersionCode(context.packageName) ?: 0L
-            val rows = catalog.apps.mapNotNull { entry ->
-                if (entry.minStoreVersionCode > storeVersion) return@mapNotNull null
-                val unsupported = !entry.supportsHu(huKind.catalogTag)
-                // Phone APKs are not installed on the HU — skip PackageManager lookup.
-                val installed = if (entry.isPhoneDistribution) {
-                    null
-                } else {
-                    installedInfo(entry.packageName)
-                }
-                if (unsupported) {
-                    return@mapNotNull StoreAppRow(
-                        entry = entry,
-                        installed = installed,
-                        unsupportedOnHu = true,
-                    )
-                }
-                val loaded = withContext(Dispatchers.IO) {
-                    runCatching { loadReleases(channel, entry) }
-                }
-                loaded.fold(
-                    onSuccess = { releases ->
-                        val preferred = _apkLanguage.value.flavor
-                        val selected = when {
-                            releases.any { it.flavor.equals(preferred, true) } -> preferred
-                            else -> AppReleaseManifest(1, releases)
-                                .preferredRelease()?.flavor
-                        }
-                        StoreAppRow(
-                            entry = entry,
-                            remotes = releases,
-                            selectedFlavor = selected,
-                            installed = installed,
-                        )
-                    },
-                    onFailure = { error ->
-                        StoreAppRow(
-                            entry = entry,
-                            installed = installed,
-                            manifestError = error.message ?: error.javaClass.simpleName,
-                        )
-                    },
-                )
+            val storeVersion = BuildConfig.VERSION_CODE.toLong()
+            val entries = catalog.apps.filter { it.minStoreVersionCode <= storeVersion }
+            val rows = coroutineScope {
+                entries.map { entry ->
+                    async(Dispatchers.IO) { buildRow(channel, entry) }
+                }.awaitAll()
             }
             lastRows = rows
             _listState.value = StoreListState.Ready(rows, catalog.publishedAt)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
-            _listState.value = StoreListState.Error(
-                error.message ?: error.javaClass.simpleName,
+            _listState.value = StoreListState.Error(errorText(error))
+        }
+    }
+
+    private fun buildRow(channel: UpdateChannel, entry: StoreCatalogEntry): StoreAppRow {
+        val unsupported = !entry.supportsHu(huKind.catalogTag)
+        // Phone APKs are not installed on the HU — skip PackageManager lookup.
+        val installed = if (entry.isPhoneDistribution) null else installedInfo(entry.packageName)
+        // Releases are loaded for unsupported apps too: they can still be saved to Downloads.
+        return try {
+            val releases = loadReleases(channel, entry)
+            val preferred = _apkLanguage.value.flavor
+            val selected = when {
+                releases.any { it.flavor.equals(preferred, true) } -> preferred
+                else -> AppReleaseManifest(1, releases).preferredRelease()?.flavor
+            }
+            StoreAppRow(
+                entry = entry,
+                remotes = releases,
+                selectedFlavor = selected,
+                installed = installed,
+                unsupportedOnHu = unsupported,
+            )
+        } catch (error: Exception) {
+            StoreAppRow(
+                entry = entry,
+                installed = installed,
+                unsupportedOnHu = unsupported,
+                manifestError = if (unsupported) null else errorText(error),
             )
         }
     }
 
-    suspend fun downloadAndVerify(appId: String) {
+    /**
+     * Downloads and verifies the selected release of [appId].
+     * Phone-distribution apps always go to Downloads; others go to [target].
+     */
+    suspend fun downloadAndVerify(appId: String, target: DownloadTarget = DownloadTarget.INSTALL) {
         if (downloadInProgress) return
-        val row = lastRows.firstOrNull { it.entry.id == appId }
-            ?: return
-        if (row.unsupportedOnHu) return
+        val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
         val release = row.remote ?: return
+        val effectiveTarget = if (row.entry.isPhoneDistribution) DownloadTarget.DOWNLOADS else target
+        if (effectiveTarget == DownloadTarget.INSTALL && row.unsupportedOnHu) return
         if (!isNetworkAvailable()) {
-            _actionState.value = StoreActionState.Error(appId, "network_unavailable")
+            _actionState.value = StoreActionState.Error(appId, StoreErrors.NETWORK_UNAVAILABLE)
             return
         }
+        if (effectiveTarget == DownloadTarget.DOWNLOADS || row.entry.copyApkToDownloadsAppId.isNotBlank()) {
+            if (!DownloadsApkSaver.hasWritePermission(context)) {
+                _actionState.value = StoreActionState.Error(appId, StoreErrors.DOWNLOADS_PERMISSION)
+                return
+            }
+        }
         downloadInProgress = true
-        _actionState.value = StoreActionState.Downloading(appId)
+        _actionState.value = StoreActionState.Downloading(appId, target = effectiveTarget)
+        val channel = _channel.value
+        val destination = apkDestinationFile(row.entry.id, release)
         try {
-            val channel = _channel.value
-            val destination = apkDestinationFile(row.entry.id, release)
             withContext(Dispatchers.IO) {
+                pruneApkCache()
+                val progress = ProgressThrottle()
                 cloud.downloadToFile(
                     diskPath = YandexDiskPath.appApkPath(channel, row.entry.id, release.apkFileName),
                     destination = destination,
                     onProgress = { downloaded, total ->
-                        if (!isActive) return@downloadToFile
-                        _actionState.value = StoreActionState.Downloading(
-                            appId = appId,
-                            downloadedBytes = downloaded,
-                            totalBytes = total ?: release.apkSizeBytes,
-                        )
+                        val totalBytes = total ?: release.apkSizeBytes
+                        if (isActive && progress.shouldEmit(downloaded, totalBytes)) {
+                            _actionState.value = StoreActionState.Downloading(
+                                appId = appId,
+                                downloadedBytes = downloaded,
+                                totalBytes = totalBytes,
+                                target = effectiveTarget,
+                            )
+                        }
                     },
                 )
             }
-            _actionState.value = StoreActionState.Verifying(appId)
+            _actionState.value = StoreActionState.Verifying(appId, effectiveTarget)
             withContext(Dispatchers.IO) {
                 verifyDownloadedApk(destination, row.entry, release)
             }
@@ -310,9 +355,13 @@ class StoreRepository(
                 apkSizeBytes = release.apkSizeBytes
                     ?: destination.length().takeIf { it > 0L },
             )
-            if (row.entry.isPhoneDistribution) {
+            if (effectiveTarget == DownloadTarget.DOWNLOADS) {
                 val saved = withContext(Dispatchers.IO) {
-                    saveApkToDownloads(row.entry, withSize, destination)
+                    try {
+                        saveApkToDownloads(row.entry, withSize, destination)
+                    } finally {
+                        destination.delete()
+                    }
                 }
                 _actionState.value = StoreActionState.SavedToDownloads(
                     appId = appId,
@@ -340,13 +389,10 @@ class StoreRepository(
             _actionState.value = StoreActionState.Idle
             throw error
         } catch (error: Exception) {
-            withContext(Dispatchers.IO) {
+            withContext(NonCancellable + Dispatchers.IO) {
                 clearPartialDownloads(row.entry.id, release)
             }
-            _actionState.value = StoreActionState.Error(
-                appId,
-                error.message ?: error.javaClass.simpleName,
-            )
+            _actionState.value = StoreActionState.Error(appId, errorText(error))
         } finally {
             downloadInProgress = false
         }
@@ -357,22 +403,37 @@ class StoreRepository(
         _actionState.value = StoreActionState.Idle
     }
 
+    fun reportActionError(appId: String?, message: String) {
+        _actionState.value = StoreActionState.Error(appId, message)
+    }
+
+    /** Clears one-shot results (errors, "saved to Downloads"); keeps a prepared install. */
+    fun dismissActionResult() {
+        val state = _actionState.value
+        if (state is StoreActionState.Error || state is StoreActionState.SavedToDownloads) {
+            _actionState.value = StoreActionState.Idle
+        }
+    }
+
     fun installPreparedApk() {
         val state = _actionState.value as? StoreActionState.ReadyToInstall ?: return
         if (state.entry.isPhoneDistribution) {
             _actionState.value = StoreActionState.Error(
                 state.appId,
-                "phone_apk_not_for_hu",
+                StoreErrors.PHONE_APK_NOT_FOR_HU,
             )
+            return
+        }
+        if (!state.apkFile.isFile) {
+            _actionState.value = StoreActionState.Error(state.appId, "APK file is missing, download again")
             return
         }
         try {
             ApkInstaller.install(context, state.apkFile)
+        } catch (error: ActivityNotFoundException) {
+            _actionState.value = StoreActionState.Error(state.appId, StoreErrors.NO_ACTIVITY)
         } catch (error: Exception) {
-            _actionState.value = StoreActionState.Error(
-                state.appId,
-                error.message ?: error.javaClass.simpleName,
-            )
+            _actionState.value = StoreActionState.Error(state.appId, errorText(error))
         }
     }
 
@@ -384,31 +445,52 @@ class StoreRepository(
     suspend fun loadAppChangelog(appId: String) {
         val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
         val current = _appChangelogs.value[appId]
-        if (current is AppChangelogState.Ready || current is AppChangelogState.Loading) return
-        _appChangelogs.value = _appChangelogs.value + (appId to AppChangelogState.Loading)
+        if (current != null && current !is AppChangelogState.Idle) return
+        val channel = _channel.value
+        setChangelog(appId, AppChangelogState.Loading)
         val preferred = storeUiLang()
         val order = if (preferred == "en") listOf("en", "ru") else listOf("ru", "en")
-        val channel = _channel.value
+        var finished = false
         try {
+            var lastError: Exception? = null
             for (lang in order) {
                 val logical = row.entry.resolveChangelogLogicalPath(lang)
                 val path = YandexDiskPath.physicalPath(channel, logical)
-                val text = withContext(Dispatchers.IO) {
-                    runCatching { cloud.fetchText(path).trim() }.getOrNull()
+                val text = try {
+                    withContext(Dispatchers.IO) { cloud.fetchText(path).trim() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    lastError = error
+                    null
                 }
                 if (!text.isNullOrBlank()) {
-                    _appChangelogs.value = _appChangelogs.value + (
-                        appId to AppChangelogState.Ready(text = text, lang = lang)
-                        )
+                    if (_channel.value == channel) {
+                        setChangelog(appId, AppChangelogState.Ready(text = text, lang = lang))
+                    }
+                    finished = true
                     return
                 }
             }
-            _appChangelogs.value = _appChangelogs.value + (appId to AppChangelogState.Absent)
-        } catch (error: Exception) {
-            _appChangelogs.value = _appChangelogs.value + (
-                appId to AppChangelogState.Error(error.message ?: error.javaClass.simpleName)
-                )
+            if (_channel.value == channel) {
+                // A missing file is the normal case; only a network failure is an error.
+                val state = if (lastError != null && !isNetworkAvailable()) {
+                    AppChangelogState.Error(StoreErrors.NETWORK_UNAVAILABLE)
+                } else {
+                    AppChangelogState.Absent
+                }
+                setChangelog(appId, state)
+            }
+            finished = true
+        } finally {
+            if (!finished && _appChangelogs.value[appId] is AppChangelogState.Loading) {
+                _appChangelogs.value = _appChangelogs.value - appId
+            }
         }
+    }
+
+    private fun setChangelog(appId: String, state: AppChangelogState) {
+        _appChangelogs.value = _appChangelogs.value + (appId to state)
     }
 
     fun clearAppChangelog(appId: String) {
@@ -432,13 +514,12 @@ class StoreRepository(
     fun openInstalledApp(packageName: String): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-        return true
+        return runCatching { context.startActivity(intent) }.isSuccess
     }
 
     /** Opens the system uninstall dialog. False if refused (e.g. Store itself). */
     fun uninstallApp(packageName: String): Boolean =
-        ApkUninstaller.uninstall(context, packageName)
+        runCatching { ApkUninstaller.uninstall(context, packageName) }.getOrDefault(false)
 
     fun canInstallPackages(): Boolean = InstallPermissionHelper.canInstallPackages(context)
 
@@ -453,6 +534,13 @@ class StoreRepository(
         }
         lastRows = updated
         _listState.value = ready.copy(rows = updated)
+        val prepared = _actionState.value as? StoreActionState.ReadyToInstall ?: return
+        val installed = updated.firstOrNull { it.entry.id == prepared.appId }?.installed ?: return
+        if (installed.versionCode >= prepared.release.versionCode) {
+            // Installed from the system dialog: the cached APK is no longer needed.
+            prepared.apkFile.delete()
+            _actionState.value = StoreActionState.Idle
+        }
     }
 
     private fun loadReleases(
@@ -521,22 +609,31 @@ class StoreRepository(
     ): SidecarResult {
         val sidecarId = entry.copyApkToDownloadsAppId.trim()
         if (sidecarId.isBlank()) return SidecarResult()
+        var cacheFile: File? = null
         return try {
             val sidecarRow = lastRows.firstOrNull { it.entry.id == sidecarId }
             val sidecarEntry = sidecarRow?.entry
                 ?: throw IOException("Catalog entry not found: $sidecarId")
             val release = sidecarRow.remote
                 ?: loadRelease(channel, sidecarEntry, _apkLanguage.value.flavor)
-            val cacheFile = apkDestinationFile(sidecarEntry.id, release)
+            val file = apkDestinationFile(sidecarEntry.id, release)
+            cacheFile = file
             cloud.downloadToFile(
                 diskPath = YandexDiskPath.appApkPath(channel, sidecarEntry.id, release.apkFileName),
-                destination = cacheFile,
+                destination = file,
             )
-            verifyDownloadedApk(cacheFile, sidecarEntry, release)
-            val saved = saveApkToDownloads(sidecarEntry, release, cacheFile)
+            verifyDownloadedApk(file, sidecarEntry, release)
+            val saved = saveApkToDownloads(sidecarEntry, release, file)
             SidecarResult(path = saved.absolutePath)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
-            SidecarResult(error = error.message ?: error.javaClass.simpleName)
+            SidecarResult(error = errorText(error))
+        } finally {
+            cacheFile?.let { file ->
+                file.delete()
+                File(file.parentFile, "${file.name}.part").delete()
+            }
         }
     }
 
@@ -565,10 +662,25 @@ class StoreRepository(
         }
     }
 
+    private fun apkCacheRoot(): File = File(context.cacheDir, "store/apk")
+
     private fun apkDestinationFile(appId: String, release: AppReleaseInfo): File {
-        val dir = File(context.cacheDir, "store/$appId")
+        val dir = File(apkCacheRoot(), appId)
         dir.mkdirs()
         return File(dir, release.apkFileName)
+    }
+
+    /**
+     * Only one download runs at a time and a new one replaces the prepared APK,
+     * so older cached APKs (and the pre-0.1.2 `store/<appId>` layout) are dropped.
+     */
+    private fun pruneApkCache() {
+        apkCacheRoot().deleteRecursively()
+        File(context.cacheDir, "store").listFiles()?.forEach { child ->
+            if (child.isDirectory && child.name != "icons" && child.name != "apk") {
+                child.deleteRecursively()
+            }
+        }
     }
 
     private fun clearPartialDownloads(appId: String, release: AppReleaseInfo) {
@@ -578,6 +690,7 @@ class StoreRepository(
     }
 
     private fun installedInfo(packageName: String): InstalledAppInfo? {
+        if (packageName.isBlank()) return null
         return runCatching {
             val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.packageManager.getPackageInfo(
@@ -601,13 +714,36 @@ class StoreRepository(
         }.getOrNull()
     }
 
-    private fun currentVersionCode(packageName: String): Long? =
-        installedInfo(packageName)?.versionCode
-
     private fun isNetworkAvailable(): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return true
         val network = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(network) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun errorText(error: Throwable): String =
+        error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName
+}
+
+/** Limits progress updates to whole-percent steps (or 256 KiB when size is unknown). */
+internal class ProgressThrottle {
+    private var lastPercent = -1
+    private var lastBytes = -1L
+
+    fun shouldEmit(downloaded: Long, total: Long?): Boolean {
+        if (total != null && total > 0L) {
+            val percent = ((downloaded * 100L) / total).toInt()
+            if (percent == lastPercent) return false
+            lastPercent = percent
+            return true
+        }
+        if (lastBytes >= 0L && downloaded - lastBytes < UNKNOWN_SIZE_STEP) return false
+        lastBytes = downloaded
+        return true
+    }
+
+    private companion object {
+        const val UNKNOWN_SIZE_STEP = 256L * 1024L
     }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep in sync with background / primary in ui/theme/Theme.kt. -->
+    <color name="store_window_background">#FFEEF1F6</color>
+    <color name="store_accent">#FF1A73E8</color>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TboxStore" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/store_window_background</item>
+        <item name="android:colorPrimary">@color/store_accent</item>
+        <item name="android:colorAccent">@color/store_accent</item>
+    </style>
+</resources>

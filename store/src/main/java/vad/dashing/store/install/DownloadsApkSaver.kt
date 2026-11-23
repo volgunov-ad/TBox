@@ -68,10 +68,14 @@ object DownloadsApkSaver {
             resolver.delete(uri, null, null)
             throw error
         }
-        // Best-effort path for UI hint (MediaStore may not expose a stable path).
+        // MediaStore renames on collision ("name (1).apk"); show the name it actually used.
+        val savedName = runCatching {
+            resolver.query(uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)
+                ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: displayName
         @Suppress("DEPRECATION")
         val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        return File(downloads, displayName)
+        return File(downloads, savedName)
     }
 
     @Suppress("DEPRECATION")

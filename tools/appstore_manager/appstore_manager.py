@@ -9,6 +9,8 @@ catalog.meta.json + version.json + catalog.json.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -56,6 +58,14 @@ from appstore_catalog import (  # noqa: E402
     write_catalog,
 )
 
+# Fixed vocabularies of catalog.meta.json; free text here used to produce silent typos.
+CHOICES: dict[str, tuple[str, ...]] = {
+    "origin": ("first-party", "third-party"),
+    "category": ("app", "tool", "oneshot"),
+    "installMode": ("hu", "phone"),
+    "verified": ("true", "false"),
+}
+
 
 class AppStoreManagerApp:
     def __init__(self, root: Tk) -> None:
@@ -70,9 +80,14 @@ class AppStoreManagerApp:
         self.status = StringVar(value="Укажите папку AppStore (sync с облаком)")
         self.records: list[AppRecord] = []
         self.selected_id: str | None = None
+        self._loaded_snapshot: tuple | None = None
+        self._current_channel = self.channel.get()
 
         self._build_ui()
         self._set_form_enabled(False)
+        self.root.bind_all("<Control-s>", lambda _e: self.save_meta())
+        self.root.bind_all("<Control-S>", lambda _e: self.save_meta())
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _build_ui(self) -> None:
         top = ttk.Frame(self.root, padding=8)
@@ -88,8 +103,8 @@ class AppStoreManagerApp:
             state="readonly",
         )
         channel.pack(side=LEFT)
-        channel.bind("<<ComboboxSelected>>", lambda _e: self.reload())
-        ttk.Button(top, text="Обновить", command=self.reload).pack(side=LEFT, padx=8)
+        channel.bind("<<ComboboxSelected>>", lambda _e: self.on_channel_changed())
+        ttk.Button(top, text="Обновить", command=self.user_reload).pack(side=LEFT, padx=8)
         ttk.Button(top, text="Добавить…", command=self.add_dialog).pack(side=LEFT)
         ttk.Button(top, text="Пересобрать catalog.json", command=self.rebuild_catalog).pack(
             side=LEFT,
@@ -107,16 +122,17 @@ class AppStoreManagerApp:
         body.add(left, weight=1)
         body.add(right, weight=2)
 
-        cols = ("id", "title", "version", "apk")
+        cols = ("id", "title", "version", "state")
         self.tree = ttk.Treeview(left, columns=cols, show="headings", selectmode="browse")
         self.tree.heading("id", text="id")
         self.tree.heading("title", text="Название")
         self.tree.heading("version", text="Версия")
-        self.tree.heading("apk", text="APK")
+        self.tree.heading("state", text="Состояние")
         self.tree.column("id", width=120, stretch=False)
         self.tree.column("title", width=180)
         self.tree.column("version", width=90, stretch=False)
-        self.tree.column("apk", width=80, stretch=False)
+        self.tree.column("state", width=130, stretch=False)
+        self.tree.tag_configure("problem", foreground="#B3261E")
         scroll = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side=LEFT, fill=BOTH, expand=True)
@@ -131,19 +147,19 @@ class AppStoreManagerApp:
         notebook.add(changelog_tab, text="Changelog (карточка)")
 
         self.fields: dict[str, StringVar] = {}
+        self._editable_widgets: list = []
         rows = [
             ("id", "id"),
             ("packageName", "packageName"),
             ("title", "Название"),
-            ("summary", "Описание"),
             ("publisher", "Издатель"),
-            ("origin", "origin (first-party|third-party)"),
+            ("origin", "Происхождение"),
             ("hu", "ГУ (a9,a10)"),
-            ("category", "category (app|tool|oneshot)"),
-            ("verified", "verified (true|false)"),
+            ("category", "Категория"),
+            ("installMode", "Куда ставится"),
+            ("verified", "Проверено"),
             ("reviewNotes", "Заметки проверки"),
             ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
-            ("installMode", "installMode (hu|phone)"),
             ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
@@ -158,17 +174,26 @@ class AppStoreManagerApp:
             ttk.Label(row, text=label, width=36).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
-            state = DISABLED if key in readonly else NORMAL
-            entry = ttk.Entry(row, textvariable=var, state=state)
+            if key in CHOICES:
+                entry = ttk.Combobox(row, textvariable=var, values=CHOICES[key], state="readonly")
+            else:
+                entry = ttk.Entry(row, textvariable=var, state=DISABLED if key in readonly else NORMAL)
             entry.pack(side=LEFT, fill=X, expand=True)
-            setattr(self, f"_entry_{key}", entry)
+            if key not in readonly:
+                self._editable_widgets.append(entry)
+
+        summary_box = ttk.LabelFrame(form, text="Описание (блок «О приложении» в магазине)", padding=4)
+        summary_box.pack(fill=BOTH, expand=True, pady=(6, 2))
+        self.summary_text = ScrolledText(summary_box, height=5, wrap="word", state=DISABLED)
+        self.summary_text.pack(fill=BOTH, expand=True)
 
         btns = ttk.Frame(form)
         btns.pack(fill=X, pady=10)
-        ttk.Button(btns, text="Сохранить описание", command=self.save_meta).pack(side=LEFT)
+        ttk.Button(btns, text="Сохранить (Ctrl+S)", command=self.save_meta).pack(side=LEFT)
         ttk.Button(btns, text="Заменить APK…", command=self.replace_apk).pack(side=LEFT, padx=8)
-        ttk.Button(btns, text="Иконка…", command=self.replace_icon).pack(side=LEFT, padx=8)
-        ttk.Button(btns, text="Удалить приложение…", command=self.delete_selected).pack(side=LEFT)
+        ttk.Button(btns, text="Иконка…", command=self.replace_icon).pack(side=LEFT)
+        ttk.Button(btns, text="Открыть папку", command=self.open_folder).pack(side=LEFT, padx=8)
+        ttk.Button(btns, text="Удалить приложение…", command=self.delete_selected).pack(side=RIGHT)
 
         ttk.Label(
             changelog_tab,
@@ -205,41 +230,79 @@ class AppStoreManagerApp:
 
     def _set_form_enabled(self, enabled: bool) -> None:
         state = NORMAL if enabled else DISABLED
-        for key, entry_name in (
-            ("packageName", "_entry_packageName"),
-            ("title", "_entry_title"),
-            ("summary", "_entry_summary"),
-            ("publisher", "_entry_publisher"),
-            ("origin", "_entry_origin"),
-            ("hu", "_entry_hu"),
-            ("category", "_entry_category"),
-            ("verified", "_entry_verified"),
-            ("reviewNotes", "_entry_reviewNotes"),
-            ("copyApkToDownloadsAppId", "_entry_copyApkToDownloadsAppId"),
-            ("installMode", "_entry_installMode"),
-            ("signingCertSha256", "_entry_signingCertSha256"),
-            ("changelog", "_entry_changelog"),
-        ):
-            getattr(self, entry_name).configure(state=state)
-        # versionCode / versionName всегда из манифеста APK — только просмотр
-        self._entry_versionCode.configure(state=DISABLED)
-        self._entry_versionName.configure(state=DISABLED)
-        for widget in self.changelog_texts.values():
+        for widget in self._editable_widgets:
+            if isinstance(widget, ttk.Combobox):
+                widget.configure(state="readonly" if enabled else DISABLED)
+            else:
+                widget.configure(state=state)
+        for widget in (self.summary_text, *self.changelog_texts.values()):
             widget.configure(state=state)
 
-    def _set_changelog_text(self, lang: str, body: str) -> None:
-        widget = self.changelog_texts[lang]
+    @staticmethod
+    def _set_text(widget: ScrolledText, body: str) -> None:
         was = str(widget.cget("state"))
         widget.configure(state=NORMAL)
         widget.delete("1.0", END)
         if body:
             widget.insert("1.0", body)
         widget.configure(state=was)
+        widget.edit_reset()
+
+    def _set_changelog_text(self, lang: str, body: str) -> None:
+        self._set_text(self.changelog_texts[lang], body)
 
     def _get_changelog_text(self, lang: str) -> str:
         return self.changelog_texts[lang].get("1.0", "end-1c")
 
+    def _form_snapshot(self) -> tuple:
+        return (
+            tuple(var.get() for var in self.fields.values()),
+            self.summary_text.get("1.0", "end-1c"),
+            tuple(self._get_changelog_text(lang) for lang in ("ru", "en")),
+        )
+
+    def _is_dirty(self) -> bool:
+        return self.selected_id is not None and self._form_snapshot() != self._loaded_snapshot
+
+    def _confirm_discard(self) -> bool:
+        """True when it is safe to leave the current form (saved, discarded, or clean)."""
+        if not self._is_dirty():
+            return True
+        answer = messagebox.askyesnocancel(
+            "Несохранённые изменения",
+            f"Сохранить изменения в «{self.selected_id}»?",
+        )
+        if answer is None:
+            return False
+        if answer:
+            return self.save_meta(reload_after=False)
+        return True
+
+    def on_close(self) -> None:
+        if self._confirm_discard():
+            self.root.destroy()
+
+    def open_folder(self) -> None:
+        folder = self._selected_folder()
+        if folder is None:
+            try:
+                folder = self._current_apps_dir()
+            except Exception as exc:
+                messagebox.showerror("Ошибка", str(exc))
+                return
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(folder)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(folder)])
+            else:
+                subprocess.Popen(["xdg-open", str(folder)])
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
     def choose_root(self) -> None:
+        if not self._confirm_discard():
+            return
         path = filedialog.askdirectory(title="Папка AppStore (или release/apps)")
         if not path:
             return
@@ -254,6 +317,8 @@ class AppStoreManagerApp:
                 root = chosen.parent
                 self.channel.set(chosen.name)
             self.appstore_root = root
+            self._current_channel = self.channel.get()
+            self.selected_id = None
             channels = list_channel_apps_dirs(root)
             if not channels:
                 # Single apps dir
@@ -293,18 +358,31 @@ class AppStoreManagerApp:
                     version = ", ".join(parts)
                 elif record.release:
                     version = f"{record.release.versionName} ({record.release.versionCode})"
-                apk = "да" if record.apk_path else "нет"
-                mark = " !" if record.missing_package or not record.has_version_json else ""
+                problems = []
+                if not record.apk_path:
+                    problems.append("нет APK")
+                if not record.has_version_json:
+                    problems.append("нет version.json")
+                if record.missing_package:
+                    problems.append("нет packageName")
+                if problems:
+                    state = ", ".join(problems)
+                elif (record.meta.installMode or "hu") == "phone":
+                    state = "телефон"
+                else:
+                    state = "ок"
                 self.tree.insert(
                     "",
                     END,
                     iid=record.meta.id,
-                    values=(record.meta.id + mark, record.meta.title, version, apk),
+                    values=(record.meta.id, record.meta.title, version, state),
+                    tags=("problem",) if problems else (),
                 )
             self.status.set(f"Приложений: {len(self.records)}")
             if self.selected_id and self.tree.exists(self.selected_id):
                 self.tree.selection_set(self.selected_id)
-                self.on_select()
+                self.tree.see(self.selected_id)
+                self._fill_form(self.selected_id)
             else:
                 self.selected_id = None
                 self._clear_form()
@@ -312,17 +390,38 @@ class AppStoreManagerApp:
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))
 
+    def user_reload(self) -> None:
+        if self._confirm_discard():
+            self.reload()
+
+    def on_channel_changed(self) -> None:
+        if not self._confirm_discard():
+            self.channel.set(self._current_channel)
+            return
+        self._current_channel = self.channel.get()
+        self.selected_id = None
+        self.reload()
+
     def _clear_form(self) -> None:
         for var in self.fields.values():
             var.set("")
+        self._set_text(self.summary_text, "")
         for lang in self.changelog_texts:
             self._set_changelog_text(lang, "")
+        self._loaded_snapshot = None
 
     def on_select(self, _event=None) -> None:
         sel = self.tree.selection()
-        if not sel:
+        if not sel or sel[0] == self.selected_id:
             return
-        app_id = sel[0]
+        if not self._confirm_discard():
+            # Put the selection back on the app whose edits are still in the form.
+            if self.selected_id and self.tree.exists(self.selected_id):
+                self.tree.selection_set(self.selected_id)
+            return
+        self._fill_form(sel[0])
+
+    def _fill_form(self, app_id: str) -> None:
         record = next((r for r in self.records if r.meta.id == app_id), None)
         if record is None:
             return
@@ -332,7 +431,7 @@ class AppStoreManagerApp:
         self.fields["id"].set(m.id)
         self.fields["packageName"].set(m.packageName)
         self.fields["title"].set(m.title)
-        self.fields["summary"].set(m.summary)
+        self._set_text(self.summary_text, m.summary)
         self.fields["publisher"].set(m.publisher)
         self.fields["origin"].set(m.origin)
         self.fields["hu"].set(",".join(m.hu))
@@ -370,6 +469,7 @@ class AppStoreManagerApp:
             self.fields["iconInfo"].set("нет (будет буква / иконка установленного APK)")
         for lang in ("ru", "en"):
             self._set_changelog_text(lang, read_changelog(record.folder, lang))
+        self._loaded_snapshot = self._form_snapshot()
 
     def _meta_from_form(self) -> AppMeta:
         hu = [x.strip() for x in self.fields["hu"].get().split(",") if x.strip()]
@@ -384,7 +484,7 @@ class AppStoreManagerApp:
             id=self.fields["id"].get().strip(),
             packageName=self.fields["packageName"].get().strip(),
             title=self.fields["title"].get().strip(),
-            summary=self.fields["summary"].get().strip(),
+            summary=self.summary_text.get("1.0", "end-1c").strip(),
             publisher=self.fields["publisher"].get().strip() or "TBox",
             origin=self.fields["origin"].get().strip() or "first-party",
             hu=hu or ["a9", "a10"],
@@ -418,12 +518,15 @@ class AppStoreManagerApp:
                 f"Changelog сохранён ({', '.join(flags) if flags else 'пустые файлы'}): "
                 f"{self.selected_id}",
             )
+            if self._loaded_snapshot is not None:
+                current = self._form_snapshot()
+                self._loaded_snapshot = (*self._loaded_snapshot[:2], current[2])
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))
 
-    def save_meta(self) -> None:
+    def save_meta(self, reload_after: bool = True) -> bool:
         if not self.selected_id:
-            return
+            return False
         try:
             meta = self._meta_from_form()
             if meta.id != self.selected_id:
@@ -435,12 +538,16 @@ class AppStoreManagerApp:
                     write_changelog(folder, lang, self._get_changelog_text(lang))
             write_catalog(self._current_apps_dir())
             self.status.set(f"Сохранено: {meta.id} (описание + changelog.ru/en)")
-            self.reload()
+            self._loaded_snapshot = self._form_snapshot()
+            if reload_after:
+                self.reload()
+            return True
         except Exception as exc:
             messagebox.showerror("Ошибка", str(exc))
+            return False
 
     def replace_apk(self) -> None:
-        if not self.selected_id:
+        if not self.selected_id or not self._confirm_discard():
             return
         path = filedialog.askopenfilename(
             title="Выберите APK",
@@ -539,7 +646,7 @@ class AppStoreManagerApp:
         return result["value"]
 
     def replace_icon(self) -> None:
-        if not self.selected_id:
+        if not self.selected_id or not self._confirm_discard():
             return
         path = filedialog.askopenfilename(
             title="Иконка (PNG / WebP / JPEG)",
@@ -581,6 +688,8 @@ class AppStoreManagerApp:
             messagebox.showerror("Ошибка", str(exc))
 
     def add_dialog(self) -> None:
+        if not self._confirm_discard():
+            return
         try:
             apps_dir = self._current_apps_dir()
         except Exception as exc:
@@ -708,7 +817,38 @@ class AppStoreManagerApp:
         ttk.Button(dlg, text="Создать", command=submit).pack(pady=10)
 
 
+def _enable_windows_dpi_awareness() -> None:
+    """Without this Windows bitmap-scales the window on 125–200 % displays (blurry text)."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def _apply_style(root: Tk) -> None:
+    style = ttk.Style(root)
+    if "vista" in style.theme_names():
+        style.theme_use("vista")
+    from tkinter import font as tkfont
+
+    base = tkfont.nametofont("TkDefaultFont")
+    if base.cget("size") < 10:
+        for name in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont"):
+            tkfont.nametofont(name).configure(size=10)
+    # Row height follows the font, otherwise rows overlap on HiDPI.
+    line = tkfont.nametofont("TkDefaultFont").metrics("linespace")
+    style.configure("Treeview", rowheight=int(line * 1.5))
+
+
 def main() -> int:
+    _enable_windows_dpi_awareness()
     try:
         root = Tk()
     except Exception as exc:
@@ -720,9 +860,7 @@ def main() -> int:
         )
         return 1
     try:
-        style = ttk.Style()
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
+        _apply_style(root)
         AppStoreManagerApp(root)
         root.mainloop()
         return 0

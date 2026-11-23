@@ -16,8 +16,8 @@ android {
         minSdk = 28
         targetSdk = 36
         // Keep in sync with store/Changelog.dm (bump both on every Disk publish).
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Dedicated AppStore shares (release/ + dev/ apps trees). Not the Monitor OTA keys.
         buildConfigField(
@@ -86,6 +86,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":adbcore"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
