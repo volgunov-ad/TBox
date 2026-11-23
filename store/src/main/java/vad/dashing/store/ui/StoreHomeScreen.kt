@@ -1250,7 +1250,7 @@ private fun ColumnScope.CompileSection(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (state == CompileState.Checking || state == CompileState.Compiling) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
         }
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
     }
@@ -1297,7 +1297,7 @@ private fun ChangelogSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
                     Text(
                         stringResource(R.string.store_changelog_loading),
                         style = MaterialTheme.typography.bodyMedium,
