@@ -11,7 +11,7 @@
  * language suffix inside versionName (1.2.1-ru).
  */
 
-def apkSlug = project.ext.get("apkSlug") as String
+def apkSlug = project.ext.has("apkSlug") ? project.ext.get("apkSlug") as String : null
 if (!apkSlug) {
     throw new GradleException("${project.path}: set extra[\"apkSlug\"] before applying gradle/apk-release.gradle")
 }

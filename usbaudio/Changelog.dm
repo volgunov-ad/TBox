@@ -5,4 +5,4 @@
 Имя APK: `usbaudio-<versionName>-<debug|release>.apk`.
 
 0.1.1
-1. Одноразовое включение звука через USB-карту на головном устройстве Android 10: конфиг с модулем usb записывается в `/system/etc/audio_policy_configuration.xml` (снятие защиты записи eMMC, как в «Расширение /data»). Имя файла производителя убирается. Временный bind-overlay с автоприменением при загрузке остаётся в TBox Monitor.
+1. Одноразовое включение звука через USB-карту на головном устройстве Android 10: конфиг с модулем usb записывается в `/system/etc/audio_policy_configuration.xml` (снятие защиты записи eMMC, как в «Расширение /data»). Файл `/vendor/etc/audio_policy_configuration.xml` удаляется, чтобы audioserver читал конфиг из `/system`. Временный bind-overlay с автоприменением при загрузке остаётся в TBox Monitor.
