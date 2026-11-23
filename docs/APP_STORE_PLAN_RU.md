@@ -360,7 +360,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ## 11. Версии first-party приложений
 
-Одно правило на каждое приложение. Общая подпись и имя APK — `gradle/apk-release.gradle`. Каталог — `tools/app_releases.py`, проверка — `python tools/check_app_versions.py`.
+Одно правило на каждое приложение. Общая подпись и имя APK — `gradle/apk-release.gradle`. Каталог — `tools/app_releases.py`, проверка — `python tools/check_app_versions.py` (с `--base origin/preRelease` ещё и рост `versionCode`; на PR её запускает workflow «App versions»).
 
 | Приложение | Версия | Журнал | Имя APK |
 |------------|--------|--------|---------|

@@ -60,7 +60,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 Debug и release подписываются `keystore/debug.keystore` из репозитория — облачная сборка ставится поверх уже установленного приложения.
 
-Имя APK: `tbox-monitor-<версия>-<ru|en>-<debug|release>.apk`. У остальных приложений префикса `tbox-` в имени файла нет (`store-…`, `camd-…`, `mqtt-…`). У каждого свой `Changelog.dm`. Проверка: `python tools/check_app_versions.py`. Сборка одного приложения в папку вне репозитория: `python tools/build_app_release.py --module <имя> --output-dir <папка>`.
+Имя APK: `tbox-monitor-<версия>-<ru|en>-<debug|release>.apk`. У остальных приложений префикса `tbox-` в имени файла нет (`store-…`, `camd-…`, `mqtt-…`). У каждого свой `Changelog.dm`. Проверка: `python tools/check_app_versions.py --base origin/preRelease` (журнал совпадает с `versionName`, `versionCode` не ниже, чем в `preRelease`, и вырос при новой `versionName`). Её же запускает workflow «App versions» на PR в `preRelease`/`master`. Сборка одного приложения в папку вне репозитория: `python tools/build_app_release.py --module <имя> --output-dir <папка>`.
 
 === APK из GitHub Actions
 
