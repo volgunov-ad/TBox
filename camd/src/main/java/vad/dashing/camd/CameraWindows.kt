@@ -711,6 +711,7 @@ class CameraWindows(private val context: Context) {
 
     private fun arm(script: String, nonce: String) = synchronized(armLock) {
         val autorun = File(DaemonScripts.AUTORUN)
+        waitForeignAutorun(autorun)
         autorun.writeText(script)
         exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
         File(DaemonScripts.AUTORUN_FLAG).createNewFile()
@@ -725,6 +726,15 @@ class CameraWindows(private val context: Context) {
             Thread.sleep(200)
         }
         throw IllegalStateException("mb_daemon не ответил")
+    }
+
+    private fun waitForeignAutorun(autorun: File) {
+        val deadline = System.currentTimeMillis() + DaemonScripts.FOREIGN_AUTORUN_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val text = if (autorun.exists()) runCatching { autorun.readText() }.getOrDefault("") else null
+            if (!DaemonScripts.isForeignAutorun(text)) return
+            Thread.sleep(200)
+        }
     }
 
     private fun waitBeat() {

@@ -21,6 +21,11 @@ public class BootReceiver extends BroadcastReceiver {
     private static final String PROP = "vendor.autorun.sdcard.logfile";
     private static final String SCRIPT = "/sdcard/autorun.sh";
     private static final String FLAG = "/sdcard/autorun.flag";
+    /**
+     * autorun.sh is shared with the DCL launcher, dcl_install and camd; mb_daemon deletes it
+     * after running it. Overwriting a pending or running foreign script loses or corrupts it.
+     */
+    private static final long FOREIGN_WAIT_MS = 10_000L;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -56,6 +61,7 @@ public class BootReceiver extends BroadcastReceiver {
         String script = "#!/system/bin/sh\n"
                 + "CLASSPATH=" + dex.getAbsolutePath()
                 + " app_process /system/bin UnlockUsb > /data/local/tmp/unlockusb_boot.txt 2>&1\n";
+        waitForeignAutorun(context.getPackageName());
         FileOutputStream scriptOut = new FileOutputStream(SCRIPT);
         try {
             scriptOut.write(script.getBytes("UTF-8"));
@@ -68,6 +74,36 @@ public class BootReceiver extends BroadcastReceiver {
         Thread.sleep(300);
         exec(new String[]{"setprop", PROP, FLAG});
         Log.i(TAG, "autorun armed");
+    }
+
+    /** Bounded: a script nobody triggered is never deleted. Our own leftover is overwritten. */
+    private static void waitForeignAutorun(String ownMarker) throws InterruptedException {
+        File autorun = new File(SCRIPT);
+        long deadline = System.currentTimeMillis() + FOREIGN_WAIT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            if (!autorun.exists() || readText(autorun).contains(ownMarker)) return;
+            Thread.sleep(200);
+        }
+        Log.w(TAG, "foreign autorun.sh still pending, overwriting");
+    }
+
+    private static String readText(File file) {
+        try {
+            InputStream in = new java.io.FileInputStream(file);
+            try {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                }
+                return out.toString("UTF-8");
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static void copyAsset(Context context, String name, File dest) throws Exception {

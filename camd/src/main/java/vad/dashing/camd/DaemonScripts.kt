@@ -13,4 +13,16 @@ object DaemonScripts {
     const val AUTORUN_PROP = "vendor.autorun.sdcard.logfile"
     /** 8765 is TBox Monitor, 8766 is TBox MQTT local status. */
     const val API_PORT = 8770
+
+    /**
+     * mb_daemon deletes autorun.sh after running it, so an existing file is a script of another
+     * app (DCL, dcl_install, UsbMount) still waiting or running. The shell reads it while it runs:
+     * overwriting it in place would drop or corrupt that script. Bounded: a script nobody
+     * triggered is never deleted.
+     */
+    const val FOREIGN_AUTORUN_WAIT_MS = 10_000L
+
+    /** Our own leftover (mb_daemon did not answer last time) is safe to overwrite at once. */
+    fun isForeignAutorun(text: String?): Boolean =
+        text != null && !text.contains(GrabberScripts.ARM)
 }
