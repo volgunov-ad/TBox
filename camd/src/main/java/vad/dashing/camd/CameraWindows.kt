@@ -170,8 +170,11 @@ class CameraWindows(private val context: Context) {
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(context)
 
+    /** Slider values not yet written to prefs; readers see them before the debounced save. */
+    private val pendingLens = ConcurrentHashMap<Int, CamdLensCorrection>()
+
     fun lensCorrection(inputId: Int): CamdLensCorrection =
-        CamdLensCorrectionStore.load(prefs, inputId)
+        pendingLens[inputId] ?: CamdLensCorrectionStore.load(prefs, inputId)
 
     fun presets(cameraId: Int? = null): List<CamdPreset> {
         val all = CamdPresetStore.all(prefs)
@@ -200,7 +203,18 @@ class CameraWindows(private val context: Context) {
     fun setLensCorrection(inputId: Int, value: CamdLensCorrection): CamdLensCorrection = synchronized(lock) {
         if (CamdSources.isStock(inputId)) return CamdLensCorrection.IDENTITY
         val clamped = CamdLensCorrection.clamp(value)
-        CamdLensCorrectionStore.save(prefs, inputId, clamped)
+        // Sliders fire on every move: the window follows at once, prefs are written once
+        // the value settles.
+        pendingLens[inputId] = clamped
+        val token = lensSaveToken(inputId)
+        main.removeCallbacksAndMessages(token)
+        main.postAtTime(
+            {
+                pendingLens.remove(inputId)?.let { CamdLensCorrectionStore.save(prefs, inputId, it) }
+            },
+            token,
+            android.os.SystemClock.uptimeMillis() + LENS_SAVE_DELAY_MS,
+        )
         val live = views[inputId]
         if (live != null) {
             main.post { live.setLensCorrection(clamped) }
@@ -290,9 +304,27 @@ class CameraWindows(private val context: Context) {
         }
     }
 
-    fun exportSettings(): String = CamdBackup.exportJson(prefs)
+    private val lensSaveTokens = ConcurrentHashMap<Int, Any>()
 
-    fun importSettings(text: String): CamdImportSummary? = CamdBackup.importJson(prefs, text)
+    private fun lensSaveToken(inputId: Int): Any = lensSaveTokens.getOrPut(inputId) { Any() }
+
+    /** Writes debounced slider values now (export, backup, preset prefill). */
+    private fun flushPendingLens() {
+        pendingLens.keys.toList().forEach { inputId ->
+            main.removeCallbacksAndMessages(lensSaveToken(inputId))
+            pendingLens.remove(inputId)?.let { CamdLensCorrectionStore.save(prefs, inputId, it) }
+        }
+    }
+
+    fun exportSettings(): String {
+        flushPendingLens()
+        return CamdBackup.exportJson(prefs)
+    }
+
+    fun importSettings(text: String): CamdImportSummary? {
+        flushPendingLens()
+        return CamdBackup.importJson(prefs, text)
+    }
 
     fun exportPresets(): String = CamdBackup.exportPresetsJson(prefs)
 
@@ -330,7 +362,7 @@ class CameraWindows(private val context: Context) {
         if (targets.isEmpty()) return@synchronized
         val lens = when {
             CamdSources.isStock(preset.cameraId) -> CamdLensCorrection.IDENTITY
-            preset.defaultCorrection -> CamdLensCorrectionStore.load(prefs, preset.cameraId)
+            preset.defaultCorrection -> lensCorrection(preset.cameraId)
             else -> preset.correction
         }
         val crop = if (preset.crop.isIdentity()) CamdCrop.IDENTITY else preset.crop
@@ -529,7 +561,7 @@ class CameraWindows(private val context: Context) {
                 val lens = if (stockView != null) {
                     CamdLensCorrection.IDENTITY
                 } else {
-                    command.lensOverride ?: CamdLensCorrectionStore.load(prefs, inputId)
+                    command.lensOverride ?: lensCorrection(inputId)
                 }
                 if (existing != null) {
                     place(existing.params, command)
@@ -902,5 +934,6 @@ class CameraWindows(private val context: Context) {
         const val TAP_TO_CLOSE_KEY = "tap_to_close"
         const val RECORDER_INPUTS_KEY = "recorder_inputs"
         private const val OVERLAY_LOG_TAG = "CamdOverlay"
+        private const val LENS_SAVE_DELAY_MS = 300L
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -40,16 +41,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import vad.dashing.camd.ui.theme.CamdTheme
 import java.io.File
 import java.text.SimpleDateFormat
@@ -252,6 +257,7 @@ class MainActivity : ComponentActivity() {
                         onLensReset = controller::resetLens,
                         onOpenAsIs = controller::openAsIs,
                         onClose = controller::close,
+                        onCloseAll = controller::closeAll,
                         onOpenPreset = controller::openPreset,
                         onClosePreset = controller::closeCamera,
                         onEditPreset = controller::startEditPreset,
@@ -296,6 +302,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (::controller.isInitialized) controller.setVisible(true)
+    }
+
+    override fun onStop() {
+        if (::controller.isInitialized) controller.setVisible(false)
+        super.onStop()
     }
 
     override fun onResume() {
@@ -410,8 +426,21 @@ class CamdController(
     private val io = Executors.newSingleThreadExecutor()
     private val previewHandler = Handler(Looper.getMainLooper())
     private var previewRunnable: Runnable? = null
+
+    /** Polling only while the screen is visible: each pass spawns getprop and re-reads prefs. */
+    @Volatile
+    private var visible = true
+    private val pollWake = Object()
     private val poll = Thread {
         while (!Thread.currentThread().isInterrupted) {
+            if (!visible) {
+                try {
+                    synchronized(pollWake) { pollWake.wait(5_000) }
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                continue
+            }
             if (!_state.value.busy) {
                 // All displayed settings are re-read every second so changes made
                 // elsewhere (TBox Monitor AVM toggle, import, another UI instance)
@@ -449,6 +478,11 @@ class CamdController(
 
     init {
         refreshSettings()
+    }
+
+    fun setVisible(value: Boolean) {
+        visible = value
+        if (value) synchronized(pollWake) { pollWake.notifyAll() }
     }
 
     fun shutdown() {
@@ -565,7 +599,7 @@ class CamdController(
                 it.copy(
                     busy = false,
                     keepAvmStopped = actual,
-                    message = result,
+                    message = CamdUiText.describeResult(result),
                     status = status,
                 )
             }
@@ -658,7 +692,7 @@ class CamdController(
         val message = if (result.contains("overlay_permission")) {
             "Не удалось выдать показ поверх других окон."
         } else {
-            result
+            CamdUiText.describeResult(result)
         }
         _state.update {
             it.copy(busy = false, message = message, status = status, log = log)
@@ -676,7 +710,18 @@ class CamdController(
             val status = windows.status()
             val log = engine.logTail()
             _state.update {
-                it.copy(busy = false, message = result, status = status, log = log)
+                it.copy(busy = false, message = CamdUiText.describeResult(result), status = status, log = log)
+            }
+        }
+    }
+
+    fun closeAll() {
+        io.execute {
+            _state.update { it.copy(busy = true, message = "Закрываю все окна…") }
+            val result = windows.closeAll()
+            val status = windows.status()
+            _state.update {
+                it.copy(busy = false, message = CamdUiText.describeResult(result), status = status)
             }
         }
     }
@@ -923,6 +968,7 @@ private fun CamdScreen(
     onLensReset: () -> Unit,
     onOpenAsIs: () -> Unit,
     onClose: () -> Unit,
+    onCloseAll: () -> Unit,
     onOpenPreset: (String) -> Unit,
     onClosePreset: (Int) -> Unit,
     onEditPreset: (CamdPreset) -> Unit,
@@ -1000,6 +1046,7 @@ private fun CamdScreen(
                 onLensReset = onLensReset,
                 onOpenAsIs = onOpenAsIs,
                 onClose = onClose,
+                onCloseAll = onCloseAll,
             )
             CamdTab.SETTINGS -> SettingsTab(
                 state = state,
@@ -1063,17 +1110,14 @@ private fun CamdScreen(
             )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        // Diagnostics (raw command results, service status, grabber log tail) live
-        // on the Cameras tab only; other tabs keep plain feedback messages.
-        val showMessage = state.message.isNotBlank() &&
-            (state.tab == CamdTab.CAMERAS || !state.message.startsWith("state="))
-        if (showMessage) {
+        // Diagnostics (service status, grabber log tail) live on the Cameras tab only.
+        if (state.message.isNotBlank()) {
             Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         }
         if (state.tab == CamdTab.CAMERAS) {
             if (state.status.isNotBlank()) {
                 Text(
-                    state.status,
+                    CamdUiText.describeStatus(state.status),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1152,8 +1196,10 @@ private fun CamerasTab(
     onLensReset: () -> Unit,
     onOpenAsIs: () -> Unit,
     onClose: () -> Unit,
+    onCloseAll: () -> Unit,
 ) {
     val input = remember(state.inputId) { CamdSources.camera(state.inputId) }
+    val openIds = remember(state.status) { CamdUiText.openWindowIds(state.status) }
     Text(
         "Одно окно на камеру. Одиночное нажатие плитки в TBox Monitor открывает его, двойное закрывает. " +
             "Повторное открытие только двигает окно.",
@@ -1168,9 +1214,21 @@ private fun CamerasTab(
             FilterChip(
                 selected = camera.id == state.inputId,
                 onClick = { onInput(camera.id) },
-                label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) }
+                label = {
+                    Text(
+                        if (camera.id in openIds) "● ${camera.title}" else camera.title,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                },
             )
         }
+    }
+    if (openIds.isNotEmpty()) {
+        Text(
+            "● — окно этой камеры сейчас на экране",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
     if (input?.heldByAvm == true && !state.keepAvmStopped) {
         Text(
@@ -1213,6 +1271,9 @@ private fun CamerasTab(
         }
         Button(onClick = onClose, enabled = !state.busy) {
             Text("Закрыть выбранную", style = MaterialTheme.typography.labelLarge)
+        }
+        Button(onClick = onCloseAll, enabled = !state.busy && openIds.isNotEmpty()) {
+            Text("Закрыть все", style = MaterialTheme.typography.labelLarge)
         }
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1308,6 +1369,15 @@ private fun RecorderTab(
         },
         onCheckedChange = onToggle,
     )
+    // Results of the switch, SOS and repair show right under it: the tab is long and the
+    // bottom of it is usually off screen when the button is pressed.
+    if (recorderState.message.isNotBlank()) {
+        Text(
+            recorderState.message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
     Text(
         "Пока включён регистратор, штатный AVM принудительно отключён: его нельзя включить " +
             "ни здесь, ни из TBox Monitor, ни командой — до выключения записи.",
@@ -1391,10 +1461,24 @@ private fun RecorderTab(
         }
     }
     val quotaText = "Максимальный размер видео, ГБ (сейчас ${recorderState.quotaGb} ГБ)"
+    // Local text so the field can be emptied while typing; only a valid number is saved
+    // (clamped to 1–512 by the controller, which then resets the text to the saved value).
+    var quotaInput by remember(recorderState.quotaGb) { mutableStateOf(recorderState.quotaGb.toString()) }
     OutlinedTextField(
-        value = recorderState.quotaGb.toString(),
-        onValueChange = { raw -> raw.toIntOrNull()?.let(onQuota) },
+        value = quotaInput,
+        onValueChange = { raw ->
+            val digits = raw.filter { it.isDigit() }.take(4)
+            quotaInput = digits
+            digits.toIntOrNull()?.takeIf { it > 0 }?.let(onQuota)
+        },
         label = { Text(quotaText) },
+        supportingText = if (quotaInput.toIntOrNull()?.takeIf { it > 0 } == null) {
+            { Text("Введите число от 1 до 512") }
+        } else {
+            null
+        },
+        isError = quotaInput.toIntOrNull()?.takeIf { it > 0 } == null,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         singleLine = true,
         enabled = !recorderState.enabled,
         modifier = Modifier.fillMaxWidth(),
@@ -1477,10 +1561,12 @@ private fun RecorderTab(
     }
     Button(
         onClick = onEmergencySave,
-        enabled = recorderState.runState == RecorderController.RunState.RECORDING &&
-            !recorderState.message.startsWith("Аварийное сохранение"),
+        enabled = recorderState.runState == RecorderController.RunState.RECORDING && !recorderState.sosRunning,
     ) {
-        Text("Аварийно сохранить", style = MaterialTheme.typography.labelLarge)
+        Text(
+            if (recorderState.sosRunning) "Сохраняю…" else "Аварийно сохранить",
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
@@ -1496,24 +1582,21 @@ private fun RecorderTab(
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Button(onClick = onRepair) {
-        Text("Восстановить битые", style = MaterialTheme.typography.labelLarge)
+    Button(onClick = onRepair, enabled = !recorderState.repairRunning) {
+        Text(
+            if (recorderState.repairRunning) "Восстанавливаю…" else "Восстановить битые",
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
-        "Занято ${recorderState.usedBytes / (1024 * 1024)} МБ из ${recorderState.quotaGb} ГБ. " +
+        "Занято ${String.format(Locale.US, "%.1f", recorderState.usedBytes / 1_000_000_000.0)} ГБ " +
+            "из ${recorderState.quotaGb} ГБ. " +
             "Сегменты по ${recorderState.segmentSec} сек (moov пишется при закрытии), при превышении квоты старейшие удаляются. " +
             "Запись идёт с коррекциями камеры (вкладка «Камеры»), без поворотов и вырезок пресетов.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    if (recorderState.message.isNotBlank()) {
-        Text(
-            recorderState.message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
     if (showFolderDialog) {
         RecorderFolderDialog(
             initial = recorderState.folder,
@@ -1596,8 +1679,15 @@ private fun RecorderFolderDialog(
     var current by remember {
         mutableStateOf(initial.takeIf { it.isNotBlank() }?.let { File(it) } ?: File("/sdcard"))
     }
-    val directories = remember(current) {
-        current.listFiles()?.filter { it.isDirectory && it.canRead() }?.sortedBy { it.name.lowercase() } ?: emptyList()
+    // Listing a slow USB stick must not freeze the dialog: read off the main thread.
+    val directories by produceState(initialValue = emptyList<File>(), current) {
+        value = withContext(Dispatchers.IO) {
+            current.listFiles()?.filter { it.isDirectory && it.canRead() }?.sortedBy { it.name.lowercase() }
+                ?: emptyList()
+        }
+    }
+    val storageRoots by produceState(initialValue = emptyList<File>()) {
+        value = withContext(Dispatchers.IO) { roots() }
     }
     var newFolderName by remember { mutableStateOf("") }
     // Cleared on every navigation — the message belongs to the directory it failed in.
@@ -1624,7 +1714,7 @@ private fun RecorderFolderDialog(
                         Text(".. наверх", style = MaterialTheme.typography.labelLarge)
                     }
                 }
-                roots().forEach { root ->
+                storageRoots.forEach { root ->
                     if (root.absolutePath != current.absolutePath) {
                         TextButton(onClick = { current = root }) {
                             Text("→ ${root.absolutePath}", style = MaterialTheme.typography.labelLarge)
