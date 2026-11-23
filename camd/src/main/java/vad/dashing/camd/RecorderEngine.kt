@@ -102,15 +102,17 @@ internal class RecorderEngine(
                 }
                 try {
                     recordSegment(segment, gl)
+                } catch (error: InterruptedException) {
+                    // Stop request: recordSegment's finally already closed (or removed) the
+                    // segment; deleting here would drop the last finished video.
+                    throw error
                 } catch (error: Throwable) {
                     // A corrupted segment (muxer failure, IO error) must not kill the
-                    // recording thread: the broken file is removed by recordSegment's
-                    // finally, the loop starts the next segment after a short backoff
-                    // so the skip reason stays visible in the UI.
-                    if (running) {
-                        onSegmentError("камера $inputId: сегмент пропущен — ${error.message ?: error.javaClass.simpleName}")
-                    }
-                    runCatching { segment.delete() }
+                    // recording thread: recordSegment's finally either closes the file
+                    // with a moov or removes it, the loop starts the next segment after
+                    // a short backoff so the skip reason stays visible in the UI.
+                    if (!running) break
+                    onSegmentError("камера $inputId: сегмент пропущен — ${error.message ?: error.javaClass.simpleName}")
                     sleep(3_000)
                 }
             }
@@ -363,20 +365,39 @@ internal class RecorderEngine(
         )
         val configs = arrayOfNulls<EGLConfig>(1)
         val count = IntArray(1)
-        if (!EGL14.eglChooseConfig(display, attribs, 0, configs, 0, 1, count, 0) || count[0] == 0) return null
-        val config = configs[0] ?: return null
+        val config = configs.takeIf {
+            EGL14.eglChooseConfig(display, attribs, 0, it, 0, 1, count, 0) && count[0] > 0
+        }?.get(0)
+        if (config == null) {
+            EGL14.eglTerminate(display)
+            return null
+        }
         val context = EGL14.eglCreateContext(
             display, config, EGL14.EGL_NO_CONTEXT,
             intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0,
         )
-        if (context == null || context == EGL14.EGL_NO_CONTEXT) return null
+        if (context == null || context == EGL14.EGL_NO_CONTEXT) {
+            EGL14.eglTerminate(display)
+            return null
+        }
         val pbuffer = EGL14.eglCreatePbufferSurface(
             display, config,
             intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE), 0,
         )
-        EGL14.eglMakeCurrent(display, pbuffer, pbuffer, context)
-        val program = buildProgram()
-        if (program == 0) return null
+        val program = if (pbuffer != null && pbuffer != EGL14.EGL_NO_SURFACE &&
+            EGL14.eglMakeCurrent(display, pbuffer, pbuffer, context)
+        ) {
+            buildProgram()
+        } else {
+            0
+        }
+        if (program == 0) {
+            EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+            if (pbuffer != null && pbuffer != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(display, pbuffer)
+            EGL14.eglDestroyContext(display, context)
+            EGL14.eglTerminate(display)
+            return null
+        }
         val texture = IntArray(1)
         GLES20.glGenTextures(1, texture, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
@@ -449,6 +470,7 @@ internal class RecorderEngine(
         runCatching {
             GLES20.glDeleteTextures(1, intArrayOf(gl.texture), 0)
             if (gl.program != 0) GLES20.glDeleteProgram(gl.program)
+            EGL14.eglMakeCurrent(gl.display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             EGL14.eglDestroySurface(gl.display, gl.pbuffer)
             EGL14.eglDestroyContext(gl.display, gl.context)
             EGL14.eglTerminate(gl.display)

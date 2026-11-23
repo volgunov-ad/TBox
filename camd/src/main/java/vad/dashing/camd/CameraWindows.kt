@@ -43,6 +43,9 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
+    /** mb_daemon runs one shared autorun.sh: a second writer would replace the first script. */
+    private val armLock = Any()
+
     /** Loaded once on the first stock OPEN; null when the HU has no calibration dir. */
     private val stockCalibration: CamdCalibration? by lazy {
         runCatching { CamdCalibration.load(File(CamdCalibration.DIR)) }.getOrNull()
@@ -167,8 +170,11 @@ class CameraWindows(private val context: Context) {
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(context)
 
+    /** Slider values not yet written to prefs; readers see them before the debounced save. */
+    private val pendingLens = ConcurrentHashMap<Int, CamdLensCorrection>()
+
     fun lensCorrection(inputId: Int): CamdLensCorrection =
-        CamdLensCorrectionStore.load(prefs, inputId)
+        pendingLens[inputId] ?: CamdLensCorrectionStore.load(prefs, inputId)
 
     fun presets(cameraId: Int? = null): List<CamdPreset> {
         val all = CamdPresetStore.all(prefs)
@@ -197,7 +203,18 @@ class CameraWindows(private val context: Context) {
     fun setLensCorrection(inputId: Int, value: CamdLensCorrection): CamdLensCorrection = synchronized(lock) {
         if (CamdSources.isStock(inputId)) return CamdLensCorrection.IDENTITY
         val clamped = CamdLensCorrection.clamp(value)
-        CamdLensCorrectionStore.save(prefs, inputId, clamped)
+        // Sliders fire on every move: the window follows at once, prefs are written once
+        // the value settles.
+        pendingLens[inputId] = clamped
+        val token = lensSaveToken(inputId)
+        main.removeCallbacksAndMessages(token)
+        main.postAtTime(
+            {
+                pendingLens.remove(inputId)?.let { CamdLensCorrectionStore.save(prefs, inputId, it) }
+            },
+            token,
+            android.os.SystemClock.uptimeMillis() + LENS_SAVE_DELAY_MS,
+        )
         val live = views[inputId]
         if (live != null) {
             main.post { live.setLensCorrection(clamped) }
@@ -287,9 +304,27 @@ class CameraWindows(private val context: Context) {
         }
     }
 
-    fun exportSettings(): String = CamdBackup.exportJson(prefs)
+    private val lensSaveTokens = ConcurrentHashMap<Int, Any>()
 
-    fun importSettings(text: String): CamdImportSummary? = CamdBackup.importJson(prefs, text)
+    private fun lensSaveToken(inputId: Int): Any = lensSaveTokens.getOrPut(inputId) { Any() }
+
+    /** Writes debounced slider values now (export, backup, preset prefill). */
+    private fun flushPendingLens() {
+        pendingLens.keys.toList().forEach { inputId ->
+            main.removeCallbacksAndMessages(lensSaveToken(inputId))
+            pendingLens.remove(inputId)?.let { CamdLensCorrectionStore.save(prefs, inputId, it) }
+        }
+    }
+
+    fun exportSettings(): String {
+        flushPendingLens()
+        return CamdBackup.exportJson(prefs)
+    }
+
+    fun importSettings(text: String): CamdImportSummary? {
+        flushPendingLens()
+        return CamdBackup.importJson(prefs, text)
+    }
 
     fun exportPresets(): String = CamdBackup.exportPresetsJson(prefs)
 
@@ -327,7 +362,7 @@ class CameraWindows(private val context: Context) {
         if (targets.isEmpty()) return@synchronized
         val lens = when {
             CamdSources.isStock(preset.cameraId) -> CamdLensCorrection.IDENTITY
-            preset.defaultCorrection -> CamdLensCorrectionStore.load(prefs, preset.cameraId)
+            preset.defaultCorrection -> lensCorrection(preset.cameraId)
             else -> preset.correction
         }
         val crop = if (preset.crop.isIdentity()) CamdCrop.IDENTITY else preset.crop
@@ -451,7 +486,7 @@ class CameraWindows(private val context: Context) {
         if (!should) return
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
-            val busy = listOf(4, 5, 8, 9).any { File(GrabberScripts.frame(it)).exists() }
+            val busy = KnownInputs.all.any { it.heldByAvm && File(GrabberScripts.frame(it.id)).exists() }
             if (!busy) break
             Thread.sleep(100)
         }
@@ -526,7 +561,7 @@ class CameraWindows(private val context: Context) {
                 val lens = if (stockView != null) {
                     CamdLensCorrection.IDENTITY
                 } else {
-                    command.lensOverride ?: CamdLensCorrectionStore.load(prefs, inputId)
+                    command.lensOverride ?: lensCorrection(inputId)
                 }
                 if (existing != null) {
                     place(existing.params, command)
@@ -638,7 +673,8 @@ class CameraWindows(private val context: Context) {
             }
         }
         if (!latch.await(2, TimeUnit.SECONDS)) {
-            overlayOps.cancelIfCurrent(inputId, token)
+            // The token stays current: the late Runnable still removes the window unless a
+            // newer OPEN/CLOSE took over, so a slow main thread cannot leave it on screen.
             val count = OverlayLatchMetrics.onHideTimeout()
             Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token count=$count")
             result.ok = false
@@ -673,7 +709,7 @@ class CameraWindows(private val context: Context) {
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
 
-    private fun arm(script: String, nonce: String) {
+    private fun arm(script: String, nonce: String) = synchronized(armLock) {
         val autorun = File(DaemonScripts.AUTORUN)
         autorun.writeText(script)
         exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
@@ -685,7 +721,7 @@ class CameraWindows(private val context: Context) {
         val marker = File(GrabberScripts.ARM)
         while (System.currentTimeMillis() < deadline) {
             val text = runCatching { if (marker.canRead()) marker.readText() else "" }.getOrDefault("")
-            if (text.contains(nonce)) return
+            if (text.contains(nonce)) return@synchronized
             Thread.sleep(200)
         }
         throw IllegalStateException("mb_daemon не ответил")
@@ -767,6 +803,7 @@ class CameraWindows(private val context: Context) {
             )
             caption.text = "жду кадр ${input.id}"
             caption.setTextColor(Color.WHITE)
+            caption.setShadowLayer(8f, 0f, 0f, Color.BLACK)
             caption.textSize = 18f
             caption.setPadding(16, 16, 16, 16)
             root.addView(caption, FrameLayout.LayoutParams(
@@ -790,7 +827,12 @@ class CameraWindows(private val context: Context) {
                 context.resources.displayMetrics
             ).toInt()
             val closeParams = FrameLayout.LayoutParams(px, px, Gravity.END or Gravity.TOP)
-            closeParams.setMargins(0, 8, 8, 0)
+            val margin = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                8f,
+                context.resources.displayMetrics,
+            ).toInt()
+            closeParams.setMargins(0, margin, margin, 0)
             root.addView(closeButton, closeParams)
             // Tap anywhere in the window (the ✕ consumes its own touches first).
             root.setOnClickListener {
@@ -824,6 +866,14 @@ class CameraWindows(private val context: Context) {
                 shape,
                 stockView,
                 inputId = id,
+                onStall = { stalled ->
+                    if (stalled) {
+                        caption.text = "нет сигнала ${input.id}"
+                        caption.visibility = View.VISIBLE
+                    } else {
+                        caption.visibility = View.GONE
+                    }
+                },
             ) {
                 caption.visibility = View.GONE
             }
@@ -884,5 +934,6 @@ class CameraWindows(private val context: Context) {
         const val TAP_TO_CLOSE_KEY = "tap_to_close"
         const val RECORDER_INPUTS_KEY = "recorder_inputs"
         private const val OVERLAY_LOG_TAG = "CamdOverlay"
+        private const val LENS_SAVE_DELAY_MS = 300L
     }
 }

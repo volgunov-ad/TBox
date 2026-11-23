@@ -39,6 +39,8 @@ internal class UyvyRenderer(
     private val stockView: CamdStockView? = null,
     /** API / window source id for WARN logs on GL/render failure (P2-2). */
     private val inputId: Int = -1,
+    /** true when frames stopped arriving after the first one, false when they resume. */
+    private val onStall: (Boolean) -> Unit = {},
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
@@ -74,6 +76,10 @@ internal class UyvyRenderer(
     @Volatile
     private var settingsVersion = 0L
     private var thread: Thread? = null
+
+    /** Set when the view gave up its SurfaceTexture while the GL thread was still alive. */
+    @Volatile
+    private var releaseOnExit: SurfaceTexture? = null
 
     fun setRotation(degrees: Int) {
         rotation = ((degrees % 360) + 360) % 360
@@ -146,7 +152,14 @@ internal class UyvyRenderer(
         token += 1
         running = false
         joinThread()
-        return thread?.isAlive != true
+        if (thread?.isAlive != true) return true
+        // Returning false hands ownership to us: the GL thread releases it on exit.
+        releaseOnExit = surface
+        if (thread?.isAlive != true && releaseOnExit === surface) {
+            releaseOnExit = null
+            return true
+        }
+        return false
     }
 
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
@@ -283,11 +296,15 @@ internal class UyvyRenderer(
         var uploadedWidth = 0
         var uploadedHeight = 0
         var sawFrame = false
+        var stalled = false
+        var lastFrameMs = 0L
         var idle = 0
         var lastSettingsVersion = settingsVersion
+        if (program == 0) warnGl("shader build failed")
         try {
             while (running && myToken == token && program != 0) {
                 if (!windowAttached) {
+                    lastFrameMs = System.currentTimeMillis()
                     idle = 0
                     Thread.sleep(16)
                     continue
@@ -305,6 +322,10 @@ internal class UyvyRenderer(
                 }
                 val published = readUyvySlot(buffer)
                 if (published == null || published.seq == lastSeq) {
+                    if (sawFrame && !stalled && System.currentTimeMillis() - lastFrameMs > STALL_MS) {
+                        stalled = true
+                        main.post { onStall(true) }
+                    }
                     if (lastSettingsVersion != settingsVersion) {
                         lastSettingsVersion = settingsVersion
                         if (!redrawCurrentFrame(display, surface, published, drawCurrent)) {
@@ -359,6 +380,11 @@ internal class UyvyRenderer(
                 drawCurrent(published)
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
+                lastFrameMs = System.currentTimeMillis()
+                if (stalled) {
+                    stalled = false
+                    main.post { onStall(false) }
+                }
                 if (!sawFrame) {
                     sawFrame = true
                     main.post { onFirstFrame() }
@@ -378,6 +404,10 @@ internal class UyvyRenderer(
             EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
             window.release()
+            releaseOnExit?.takeIf { it === surfaceTexture }?.let { pending ->
+                releaseOnExit = null
+                runCatching { pending.release() }
+            }
         }
     }
 
@@ -517,6 +547,7 @@ internal class UyvyRenderer(
 
     internal companion object {
         private const val TAG = "CamdGl"
+        private const val STALL_MS = 3_000L
 
         const val VERTEX = """
             attribute vec2 aPos;

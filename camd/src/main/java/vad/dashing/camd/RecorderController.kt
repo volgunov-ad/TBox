@@ -6,6 +6,7 @@ import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.io.File
 
 /**
@@ -30,6 +31,8 @@ class RecorderController(
         val sosFolder: String = "",
         val sosPrevious: Int = DEFAULT_SOS_PREVIOUS,
         val segmentSec: Int = DEFAULT_SEGMENT_SEC,
+        val sosRunning: Boolean = false,
+        val repairRunning: Boolean = false,
     )
 
     private val prefs: SharedPreferences =
@@ -38,6 +41,7 @@ class RecorderController(
     val state: StateFlow<UiState> = _state.asStateFlow()
     private val engines = HashMap<Int, RecorderEngine>()
     private var watcher: Thread? = null
+    @Volatile
     private var enabledNow = false
 
     /** Single-flight guard for the emergency save (see [requestEmergencySave]). */
@@ -78,14 +82,14 @@ class RecorderController(
     fun setFolder(path: String) {
         if (enabledNow) return
         prefs.edit().putString(PREF_FOLDER, path).apply()
-        _state.value = _state.value.copy(folder = path, message = "")
+        _state.update { it.copy(folder = path, message = "") }
     }
 
     fun setQuota(gb: Int) {
         if (enabledNow) return
         val clamped = gb.coerceIn(1, 512)
         prefs.edit().putInt(PREF_QUOTA_GB, clamped).apply()
-        _state.value = _state.value.copy(quotaGb = clamped)
+        _state.update { it.copy(quotaGb = clamped) }
     }
 
     /** Segment length selector; engine re-reads it per segment, so this applies from the next segment. */
@@ -94,20 +98,20 @@ class RecorderController(
         val ms = sec * 1000L
         val clampedSec = (RecorderFiles.SEGMENT_OPTIONS_MS.firstOrNull { it >= ms } ?: RecorderFiles.SEGMENT_MS).toInt() / 1000
         prefs.edit().putInt(PREF_SEGMENT_SEC, clampedSec).apply()
-        _state.value = _state.value.copy(segmentSec = clampedSec)
+        _state.update { it.copy(segmentSec = clampedSec) }
     }
 
     /** Emergency-save destination; can be changed anytime, even while recording. */
     fun setSosFolder(path: String) {
         prefs.edit().putString(PREF_SOS_FOLDER, path).apply()
-        _state.value = _state.value.copy(sosFolder = path)
+        _state.update { it.copy(sosFolder = path) }
     }
 
     /** Shared 0–5 count of extra previous segments saved for every recording camera. */
     fun setSosPrevious(count: Int) {
         val clamped = count.coerceIn(0, 5)
         prefs.edit().putInt(PREF_SOS_PREVIOUS, clamped).apply()
-        _state.value = _state.value.copy(sosPrevious = clamped)
+        _state.update { it.copy(sosPrevious = clamped) }
     }
 
     /**
@@ -121,7 +125,7 @@ class RecorderController(
         if (repairRunning) return "state=repair busy"
         val folder = currentFolder()
         if (folder == null || !folder.isDirectory) {
-            _state.value = _state.value.copy(message = "Восстановление: папка записи не задана или недоступна")
+            _state.update { it.copy(message = "Восстановление: папка записи не задана или недоступна") }
             return "state=error error=no_folder"
         }
         val skipNames = synchronized(engines) {
@@ -129,11 +133,12 @@ class RecorderController(
         }
         val candidates = SegmentRepair.repairCandidates(folder, skipNames)
         if (candidates.isEmpty()) {
-            _state.value = _state.value.copy(message = "Восстановление: битых сегментов не найдено")
+            _state.update { it.copy(message = "Восстановление: битых сегментов не найдено") }
             return "OK state=repair none"
         }
         repairRunning = true
-        _state.value = _state.value.copy(message = "Восстановление: разбираю ${candidates.size} файл(ов)…")
+        _state.update { it.copy(repairRunning = true) }
+        _state.update { it.copy(message = "Восстановление: разбираю ${candidates.size} файл(ов)…") }
         Thread({
             try {
                 val outcomes = candidates.mapNotNull { candidate ->
@@ -149,25 +154,30 @@ class RecorderController(
                 val ok = outcomes.count { it.ok }
                 val failed = outcomes.filterNot { it.ok }
                     .joinToString("; ") { "${it.file.name}: ${it.detail}" }
-                _state.value = _state.value.copy(
-                    message = buildString {
-                        append("Восстановление: готово ")
-                        append(ok)
-                        append(" из ")
-                        append(outcomes.size)
-                        if (failed.isNotEmpty()) {
-                            append(" — не удалось: ")
-                            append(failed)
-                        }
-                    },
-                )
+                _state.update {
+                    it.copy(
+                        message = buildString {
+                            append("Восстановление: готово ")
+                            append(ok)
+                            append(" из ")
+                            append(outcomes.size)
+                            if (failed.isNotEmpty()) {
+                                append(" — не удалось: ")
+                                append(failed)
+                            }
+                        },
+                    )
+                }
             } catch (error: Throwable) {
                 Log.i(LOG_TAG, "repair ошибка: ${error.message ?: error.javaClass.simpleName}")
-                _state.value = _state.value.copy(
-                    message = "Восстановление: ошибка ${error.message ?: error.javaClass.simpleName}",
-                )
+                _state.update {
+                    it.copy(
+                        message = "Восстановление: ошибка ${error.message ?: error.javaClass.simpleName}",
+                    )
+                }
             } finally {
                 repairRunning = false
+                _state.update { it.copy(repairRunning = false) }
             }
         }, "camd-rec-repair").apply { isDaemon = true; start() }
         return "OK state=repair started"
@@ -180,13 +190,13 @@ class RecorderController(
             current.remove(inputId)
         } else {
             if (current.size >= MAX_CAMERAS) {
-                _state.value = _state.value.copy(message = "Не больше $MAX_CAMERAS камер одновременно — столько держат аппаратные энкодеры")
+                _state.update { it.copy(message = "Не больше $MAX_CAMERAS камер одновременно — столько держат аппаратные энкодеры") }
                 return
             }
             current.add(inputId)
         }
         prefs.edit().putStringSet(PREF_INPUTS, current.map { it.toString() }.toSet()).apply()
-        _state.value = _state.value.copy(inputs = current, message = "")
+        _state.update { it.copy(inputs = current, message = "") }
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -210,12 +220,12 @@ class RecorderController(
             RecorderEnableApi.Action.ERROR_NO_CAMERAS,
             RecorderEnableApi.Action.ERROR_NO_FOLDER,
             -> {
-                _state.value = state.copy(message = plan.message.orEmpty())
+                _state.update { it.copy(message = plan.message.orEmpty()) }
             }
             RecorderEnableApi.Action.IDEMPOTENT_ON -> Unit
             RecorderEnableApi.Action.TURN_ON -> {
                 prefs.edit().putBoolean(PREF_ENABLED, true).apply()
-                _state.value = _state.value.copy(enabled = true, message = "Включаю запись…")
+                _state.update { it.copy(enabled = true, message = "Включаю запись…") }
                 if (!enabledNow) {
                     Thread({ startRecording() }, "camd-rec-start").apply { isDaemon = true; start() }
                 }
@@ -228,7 +238,7 @@ class RecorderController(
                         start()
                     }
                 } else {
-                    _state.value = _state.value.copy(enabled = false)
+                    _state.update { it.copy(enabled = false) }
                 }
             }
         }
@@ -265,12 +275,13 @@ class RecorderController(
             RecorderSosApi.Action.ERROR_NOT_RECORDING,
             RecorderSosApi.Action.ERROR_NO_SOS_FOLDER,
             -> {
-                _state.value = _state.value.copy(message = plan.message.orEmpty())
+                _state.update { it.copy(message = plan.message.orEmpty()) }
             }
             RecorderSosApi.Action.BUSY -> Unit
             RecorderSosApi.Action.START -> {
                 sosRunning = true
-                _state.value = _state.value.copy(message = "Аварийное сохранение: закрываю текущие сегменты…")
+                _state.update { it.copy(sosRunning = true) }
+                _state.update { it.copy(message = "Аварийное сохранение: закрываю текущие сегменты…") }
                 Log.i(LOG_TAG, "SOS: старт")
                 Thread({ performEmergencySave() }, "camd-rec-sos").apply { isDaemon = true; start() }
             }
@@ -284,11 +295,11 @@ class RecorderController(
                 engines.entries.filter { it.value.isAlive }.associate { it.key to it.value }
             }
             if (armedEngines.isEmpty()) {
-                _state.value = _state.value.copy(message = "Аварийное сохранение: нет активных камер записи")
+                _state.update { it.copy(message = "Аварийное сохранение: нет активных камер записи") }
                 return
             }
             val source = currentFolder() ?: run {
-                _state.value = _state.value.copy(message = "Аварийное сохранение: папка записи не задана")
+                _state.update { it.copy(message = "Аварийное сохранение: папка записи не задана") }
                 return
             }
             // Counters before the close request: a later increment means "current segment closed".
@@ -306,9 +317,11 @@ class RecorderController(
                 engine.closedSegmentCount() > before.getValue(input)
             }
             if (savedCurrent.isEmpty()) {
-                _state.value = _state.value.copy(
-                    message = "Аварийное сохранение: камеры не закрыли сегменты — попробуйте ещё раз",
-                )
+                _state.update {
+                    it.copy(
+                        message = "Аварийное сохранение: камеры не закрыли сегменты — попробуйте ещё раз",
+                    )
+                }
                 return
             }
             val sosRoot = File(_state.value.sosFolder)
@@ -316,35 +329,47 @@ class RecorderController(
             val eventFolder = File(sosRoot, RecorderFiles.sosFolderName())
             if (!eventFolder.isDirectory && eventFolder.parentFile?.isDirectory == true) eventFolder.mkdirs()
             if (!RecorderFiles.isWritable(eventFolder)) {
-                _state.value = _state.value.copy(
-                    message = "Аварийное сохранение: папка недоступна — ${eventFolder.absolutePath}",
-                )
+                _state.update {
+                    it.copy(
+                        message = "Аварийное сохранение: папка недоступна — ${eventFolder.absolutePath}",
+                    )
+                }
                 return
             }
             val sosPrevious = _state.value.sosPrevious
             val perCamera = savedCurrent.map { (input, engine) ->
                 val current = engine.lastClosedSegmentFile()
+                val inFlight = setOfNotNull(engine.currentSegmentFile()?.name)
                 // Copy the just-closed segment first, then the requested previous ones.
                 val segments = buildList {
                     if (current != null && current.isFile) add(current)
-                    addAll(RecorderFiles.sosSegmentsForCamera(source, input, sosPrevious + 1))
-                }.filter { it.isFile }.distinctBy { it.absolutePath }.take(sosPrevious + 1)
+                    addAll(
+                        RecorderFiles.sosSegmentsForCamera(
+                            source, input, sosPrevious + 1, newest = current, exclude = inFlight,
+                        ).asReversed(),
+                    )
+                }.filter { it.isFile && it.name !in inFlight }.distinctBy { it.absolutePath }.take(sosPrevious + 1)
                 val copied = segments.count { segment ->
                     RecorderFiles.copyFile(segment, File(eventFolder, segment.name))
                 }
                 "cam$input: $copied/${sosPrevious + 1}"
             }
             Log.i(LOG_TAG, "SOS: ${eventFolder.absolutePath} (${perCamera.joinToString(" ")})")
-            _state.value = _state.value.copy(
-                message = "Аварийно сохранено: ${perCamera.joinToString(", ")} → ${eventFolder.absolutePath}",
-            )
+            _state.update {
+                it.copy(
+                    message = "Аварийно сохранено: ${perCamera.joinToString(", ")} → ${eventFolder.absolutePath}",
+                )
+            }
         } catch (error: Throwable) {
             Log.i(LOG_TAG, "SOS ошибка: ${error.message ?: error.javaClass.simpleName}")
-            _state.value = _state.value.copy(
-                message = "Аварийное сохранение: ошибка ${error.message ?: error.javaClass.simpleName}",
-            )
+            _state.update {
+                it.copy(
+                    message = "Аварийное сохранение: ошибка ${error.message ?: error.javaClass.simpleName}",
+                )
+            }
         } finally {
             sosRunning = false
+            _state.update { it.copy(sosRunning = false) }
         }
     }
 
@@ -370,15 +395,17 @@ class RecorderController(
         synchronized(this) {
             if (!enabledNow) return
             enabledNow = false
-            stopEngines()
             watcher?.interrupt()
             watcher = null
+            stopEngines()
             windows.setRecorderActive(false)
             Log.i(LOG_TAG, "выключение ГУ: сегменты завершены, переключатель сохранён")
-            _state.value = _state.value.copy(
-                runState = RunState.STOPPED,
-                message = "Выключение ГУ — запись завершена",
-            )
+            _state.update {
+                it.copy(
+                    runState = RunState.STOPPED,
+                    message = "Выключение ГУ — запись завершена",
+                )
+            }
         }
     }
 
@@ -403,10 +430,12 @@ class RecorderController(
                 enabledNow = false
                 windows.setRecorderActive(false)
                 windows.releaseRecorderInputs()
-                _state.value = _state.value.copy(
-                    enabled = false,
-                    message = "Не удалось запустить граббер: ${error.message ?: error.javaClass.simpleName}",
-                )
+                _state.update {
+                    it.copy(
+                        enabled = false,
+                        message = "Не удалось запустить граббер: ${error.message ?: error.javaClass.simpleName}",
+                    )
+                }
                 return
             }
             startEngines(inputs)
@@ -414,10 +443,12 @@ class RecorderController(
                 LOG_TAG,
                 "запись стартовала: ${inputs.sorted().joinToString(" ") { "cam$it" }}",
             )
-            _state.value = _state.value.copy(
-                runState = RunState.RECORDING,
-                message = "Запись идёт: ${inputs.sorted().joinToString(" ") { "cam$it" }} → ${_state.value.folder}",
-            )
+            _state.update {
+                it.copy(
+                    runState = RunState.RECORDING,
+                    message = "Запись идёт: ${inputs.sorted().joinToString(" ") { "cam$it" }} → ${it.folder}",
+                )
+            }
             startWatcher(inputs)
         }
     }
@@ -440,10 +471,12 @@ class RecorderController(
                     onSegmentError = { message ->
                         // A corrupted segment: recording keeps going with the next one,
                         // so the run state stays RECORDING — only surface the reason.
-                        _state.value = _state.value.copy(
-                            runState = RunState.RECORDING,
-                            message = message,
-                        )
+                        _state.update {
+                            it.copy(
+                                runState = RunState.RECORDING,
+                                message = message,
+                            )
+                        }
                     },
                     onError = { message ->
                         updateRunState(RunState.WAITING_MEDIA, message)
@@ -460,20 +493,22 @@ class RecorderController(
         synchronized(this) {
             if (!enabledNow) return
             enabledNow = false
-            stopEngines()
             watcher?.interrupt()
             watcher = null
+            stopEngines()
             windows.setRecorderActive(false)
             windows.releaseRecorderInputs()
             val prevKeep = prefs.getBoolean(PREF_PREV_KEEP, false)
             prefs.edit().putBoolean(PREF_PREV_KEEP, false).apply()
             windows.restoreAvmAfterRecorder(prevKeep)
             prefs.edit().putBoolean(PREF_ENABLED, false).apply()
-            _state.value = _state.value.copy(
-                enabled = false,
-                runState = RunState.STOPPED,
-                message = message,
-            )
+            _state.update {
+                it.copy(
+                    enabled = false,
+                    runState = RunState.STOPPED,
+                    message = message,
+                )
+            }
         }
     }
 
@@ -491,7 +526,10 @@ class RecorderController(
             while (enabledNow) {
                 recountBytes()
                 // Restart engines that died; parked (waiting-media) ones stay alive.
+                // enabledNow is re-checked under the lock: stopEngines() may have cleared
+                // the map while this pass was counting bytes.
                 synchronized(engines) {
+                    if (!enabledNow || Thread.currentThread().isInterrupted) return@Thread
                     inputs.forEach { inputId ->
                         val engine = engines[inputId]
                         if (engine == null || !engine.isAlive) startEngines(setOf(inputId))
@@ -517,10 +555,12 @@ class RecorderController(
         // needs more headroom than the default one.
         val reserve = RecorderFiles.segmentEstimateBytes(segmentLengthMs()) * 2
         if (!RecorderFiles.enforceQuota(folder, quota, reserve)) {
-            _state.value = _state.value.copy(
-                runState = RunState.OVERFLOW,
-                message = "Нет места: квота ${_state.value.quotaGb} ГБ исчерпана, удалять старые сегменты нечего",
-            )
+            _state.update {
+                it.copy(
+                    runState = RunState.OVERFLOW,
+                    message = "Нет места: квота ${it.quotaGb} ГБ исчерпана, удалять старые сегменты нечего",
+                )
+            }
             return null
         }
         // An emergency save closes segments mid-second and the engine starts the next
@@ -539,7 +579,7 @@ class RecorderController(
         val folder = currentFolder() ?: return
         if (!folder.isDirectory) return
         val used = RecorderFiles.totalBytes(folder)
-        _state.value = _state.value.copy(usedBytes = used)
+        _state.update { it.copy(usedBytes = used) }
     }
 
     /** Persisted segment length in ms (0.8.6), applied per segment by the engines. */
@@ -552,9 +592,13 @@ class RecorderController(
      * stays visible while the engine re-polls every 5 s; RECORDING always wins back.
      */
     private fun updateRunState(runState: RunState, message: String) {
-        val current = _state.value
-        if (runState == RunState.WAITING_MEDIA && current.runState == RunState.OVERFLOW) return
-        _state.value = current.copy(runState = runState, message = message)
+        _state.update { current ->
+            if (runState == RunState.WAITING_MEDIA && current.runState == RunState.OVERFLOW) {
+                current
+            } else {
+                current.copy(runState = runState, message = message)
+            }
+        }
     }
 
     companion object {

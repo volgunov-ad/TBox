@@ -3,6 +3,7 @@ package vad.dashing.camd
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,14 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 private const val CAMD_LOG_TAG = "CamdService"
 
@@ -21,6 +30,9 @@ class CamdService : Service() {
             CamdRuntime.recorder?.finalizeNow()
         }
     }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var notificationJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,6 +56,7 @@ class CamdService : Service() {
         // stop() → closeAll → hide posts to main and awaits. Must not run on the main
         // thread or the latch deadlocks (posted Runnable never runs).
         Thread({ CamdRuntime.stop() }, "camd-runtime-stop").apply { isDaemon = true }.start()
+        scope.cancel()
         runCatching { unregisterReceiver(shutdownReceiver) }
         super.onDestroy()
     }
@@ -53,12 +66,7 @@ class CamdService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(CHANNEL, "Камеры ГУ", NotificationManager.IMPORTANCE_LOW)
         manager.createNotificationChannel(channel)
-        val notification = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("Камеры ГУ")
-            .setContentText("Окна камер открыты")
-            .setOngoing(true)
-            .build()
+        val notification = buildNotification(RecorderController.RunState.STOPPED, emptySet())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
@@ -69,12 +77,67 @@ class CamdService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         CamdRuntime.start(this)
+        if (intent?.action == ACTION_SOS) {
+            Thread({ CamdRuntime.recorder?.requestEmergencySave() }, "camd-notif-sos")
+                .apply { isDaemon = true }
+                .start()
+        }
+        observeRecorder(manager)
         return START_STICKY
+    }
+
+    /** Keeps the ongoing notification in step with the dashcam (recording, waiting, no space). */
+    private fun observeRecorder(manager: NotificationManager) {
+        val recorder = CamdRuntime.recorder ?: return
+        if (notificationJob?.isActive == true) return
+        notificationJob = scope.launch {
+            recorder.state
+                .map { it.runState to if (it.enabled) it.inputs else emptySet() }
+                .distinctUntilChanged()
+                .collect { (runState, inputs) ->
+                    manager.notify(NOTIFICATION_ID, buildNotification(runState, inputs))
+                }
+        }
+    }
+
+    private fun buildNotification(runState: RecorderController.RunState, inputs: Set<Int>): Notification {
+        val cameras = inputs.sorted().joinToString(" ") { "cam$it" }
+        val text = when (runState) {
+            RecorderController.RunState.RECORDING -> "Идёт запись: $cameras"
+            RecorderController.RunState.WAITING_MEDIA -> "Регистратор ждёт носитель"
+            RecorderController.RunState.OVERFLOW -> "Регистратор: нет места"
+            RecorderController.RunState.STOPPED -> "Окна камер и регистратор"
+        }
+        val openApp = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val builder = Notification.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentTitle("Камеры ГУ")
+            .setContentText(text)
+            .setContentIntent(openApp)
+            .setOngoing(true)
+        if (runState == RecorderController.RunState.RECORDING) {
+            val sos = PendingIntent.getService(
+                this,
+                1,
+                Intent(this, CamdService::class.java).setAction(ACTION_SOS),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            builder.addAction(
+                Notification.Action.Builder(null, "Аварийно сохранить", sos).build(),
+            )
+        }
+        return builder.build()
     }
 
     private companion object {
         const val CHANNEL = "camd"
         const val NOTIFICATION_ID = 1
+        const val ACTION_SOS = "vad.dashing.camd.SOS"
     }
 }
 
@@ -124,25 +187,35 @@ object CamdRuntime {
      * Idempotent. Called from [CamdService.onDestroy].
      */
     fun stop() {
-        synchronized(lock) {
+        // Detach under the lock so a quick restart builds a fresh runtime instead of
+        // seeing the one that is being torn down; the slow teardown runs outside.
+        val detached = synchronized(lock) {
             Log.i(TAG, "runtime stop")
-            runCatching { apiServer?.stop() }
-            runCatching { recorder?.finalizeNow() }
-            runCatching { windows?.shutdown() }
+            val snapshot = Triple(apiServer, recorder, windows)
             apiServer = null
             recorder = null
             windows = null
             engine = null
+            snapshot
         }
+        val (api, rec, win) = detached
+        runCatching { api?.stop() }
+        runCatching { rec?.finalizeNow() }
+        runCatching { win?.shutdown() }
     }
 
-    fun engine(context: android.content.Context): CamdEngine {
+    fun engine(context: android.content.Context): CamdEngine = synchronized(lock) {
         start(context)
-        return checkNotNull(engine)
+        checkNotNull(engine)
     }
 
-    fun windows(context: android.content.Context): CameraWindows {
+    fun windows(context: android.content.Context): CameraWindows = synchronized(lock) {
         start(context)
-        return checkNotNull(windows)
+        checkNotNull(windows)
+    }
+
+    fun recorder(context: android.content.Context): RecorderController = synchronized(lock) {
+        start(context)
+        checkNotNull(recorder)
     }
 }

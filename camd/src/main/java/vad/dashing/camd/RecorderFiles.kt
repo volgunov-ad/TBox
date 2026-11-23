@@ -43,6 +43,22 @@ object RecorderFiles {
 
     fun isOwnSegment(file: File): Boolean = SEGMENT_REGEX.matches(file.name)
 
+    /** Repair leftovers: `.broken.mp4` (unrepairable evidence) and `.fixed.mp4` (rename failed). */
+    val REPAIR_LEFTOVER_REGEX =
+        Regex("cam(\\d+)_(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})(?:_(\\d+))?\\.(?:broken|fixed)\\.mp4")
+
+    private fun isQuotaFile(file: File): Boolean =
+        isOwnSegment(file) || REPAIR_LEFTOVER_REGEX.matches(file.name)
+
+    /** Everything the quota owns (segments and repair leftovers), oldest first. */
+    fun listQuotaFiles(dir: File): List<File> =
+        dir.listFiles()?.filter { it.isFile && isQuotaFile(it) }?.sortedWith(
+            compareBy(
+                { matchTimestamp(it) },
+                { it.name },
+            ),
+        ) ?: emptyList()
+
     /** Own segments sorted oldest first (the name embeds the start timestamp). */
     fun listSegments(dir: File): List<File> =
         dir.listFiles()?.filter { it.isFile && isOwnSegment(it) }?.sortedWith(
@@ -53,11 +69,13 @@ object RecorderFiles {
         ) ?: emptyList()
 
     private fun matchTimestamp(file: File): String {
-        val match = SEGMENT_REGEX.find(file.name) ?: return ""
+        val match = SEGMENT_REGEX.matchEntire(file.name)
+            ?: REPAIR_LEFTOVER_REGEX.matchEntire(file.name)
+            ?: return ""
         return match.groupValues[2]
     }
 
-    fun totalBytes(dir: File): Long = listSegments(dir).sumOf { it.length() }
+    fun totalBytes(dir: File): Long = listQuotaFiles(dir).sumOf { it.length() }
 
     /**
      * Deletes own oldest segments until the folder fits [quotaBytes] and the volume
@@ -73,14 +91,13 @@ object RecorderFiles {
         delete: (File) -> Boolean = { it.delete() },
     ): Boolean {
         if (quotaBytes <= 0) return false
-        val segments = listSegments(dir).toMutableList()
-        var stuckBytes = 0L
-        fun fits(): Boolean =
-            segments.sumOf { it.length() } + stuckBytes <= quotaBytes && dir.usableSpace >= reserveBytes
+        val segments = ArrayDeque(listQuotaFiles(dir).map { it to it.length() })
+        // Undeletable files stay in the total: their bytes keep counting against the quota.
+        var totalBytes = segments.sumOf { it.second }
+        fun fits(): Boolean = totalBytes <= quotaBytes && dir.usableSpace >= reserveBytes
         while (!fits() && segments.isNotEmpty()) {
-            val candidate = segments.removeAt(0)
-            if (!candidate.exists() || delete(candidate)) continue
-            stuckBytes += candidate.length()
+            val (candidate, length) = segments.removeFirst()
+            if (!candidate.exists() || delete(candidate)) totalBytes -= length
         }
         return fits()
     }
@@ -108,14 +125,30 @@ object RecorderFiles {
         SEGMENT_REGEX.find(file.name)?.groupValues?.get(1)?.toIntOrNull()
 
     /**
-     * Latest [count] own segments of one camera ([inputId]), newest first.
-     * All finished files from [listSegments]; the in-flight segment is closed by the
-     * engine before this runs ([RecorderEngine.requestCloseNow]).
+     * Latest [count] own segments of one camera ([inputId]), oldest first.
+     * By the time an emergency save copies files the engine has already opened the next
+     * segment (no moov yet), so [newest] bounds the selection to the just-closed file
+     * and [exclude] drops any in-flight names.
      */
-    fun sosSegmentsForCamera(dir: File, inputId: Int, count: Int): List<File> {
+    fun sosSegmentsForCamera(
+        dir: File,
+        inputId: Int,
+        count: Int,
+        newest: File? = null,
+        exclude: Set<String> = emptySet(),
+    ): List<File> {
         if (count <= 0) return emptyList()
-        return listSegments(dir).filter { segmentInput(it) == inputId }.takeLast(count)
+        val bound = newest?.takeIf { isOwnSegment(it) }?.let { segmentOrderKey(it) }
+        return listSegments(dir)
+            .filter { segmentInput(it) == inputId && it.name !in exclude }
+            .filter { bound == null || compareKeys(segmentOrderKey(it), bound) <= 0 }
+            .takeLast(count)
     }
+
+    private fun segmentOrderKey(file: File): Pair<String, String> = matchTimestamp(file) to file.name
+
+    private fun compareKeys(a: Pair<String, String>, b: Pair<String, String>): Int =
+        compareValuesBy(a, b, { it.first }, { it.second })
 
     /** Best-effort file copy; an existing destination is skipped, failures remove the partial copy. */
     fun copyFile(source: File, destination: File): Boolean = try {

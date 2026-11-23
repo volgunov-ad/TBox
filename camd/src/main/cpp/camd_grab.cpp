@@ -23,6 +23,8 @@
 #define QCARCAM_VERSION 0x00000404u
 #define FRAME_TIMEOUT_NS 15000000ull
 #define MAX_CAMERAS 8
+#define STALL_REOPEN_MS 10000
+#define STALL_RETRY_MS 5000
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
 #define BEAT "/data/local/tmp/camd-grab.beat"
@@ -103,6 +105,7 @@ struct Camera {
     qcarcam_buffers_t list;
     void* shared;
     int sharedBytes;
+    long long last_frame_ms;
 };
 
 static fn_initialize p_initialize = nullptr;
@@ -118,6 +121,7 @@ static Camera* open_cameras[10];
 static long long next_try[10];
 
 static int map_shared(Camera* camera);
+static long long now_ms(void);
 
 static int camera_size(int id, int* width, int* height) {
     if (id == 0) { *width = 1488; *height = 616; return 1; }
@@ -265,6 +269,7 @@ static Camera* open_camera(int id) {
         return nullptr;
     }
     camera->started = 1;
+    camera->last_frame_ms = now_ms();
     if (map_shared(camera) != 0) {
         fprintf(stderr, "uyvy map %d failed errno=%d\n", id, errno);
         release_camera(camera);
@@ -332,6 +337,7 @@ static int grab(Camera* camera) {
     __sync_synchronize();
     hdr[4] = hdr[4] + 1u;
     camera->seq += 1;
+    camera->last_frame_ms = now_ms();
     return 1;
 }
 
@@ -446,6 +452,18 @@ int main(void) {
         int got = 0;
         for (int id = 0; id < 10; id++) {
             if (open_cameras[id] && open_cameras[id]->handle && grab(open_cameras[id])) got = 1;
+        }
+        // An input that went silent (stock AVM grabbed it back, ais_server restart) is
+        // reopened instead of leaving the window on its last frame forever.
+        now = now_ms();
+        for (int id = 0; id < 10; id++) {
+            Camera* camera = open_cameras[id];
+            if (!camera || now - camera->last_frame_ms < STALL_REOPEN_MS) continue;
+            fprintf(stderr, "stall %d: no frames for %lld ms, reopen\n", id, now - camera->last_frame_ms);
+            ALOGI("stall %d: reopen", id);
+            release_camera(camera);
+            open_cameras[id] = nullptr;
+            next_try[id] = now + STALL_RETRY_MS;
         }
         long long idle_us = (got || count > 0) ? 4000 : 200000;
         usleep((useconds_t)idle_us);
