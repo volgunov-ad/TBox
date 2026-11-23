@@ -7,9 +7,8 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.catalog.YandexDiskPath
@@ -19,25 +18,31 @@ import vad.dashing.store.disk.UpdateChannel
 /**
  * Loads catalog icons from cloud (Yandex → Mail.ru) into [cacheDir]/store/icons],
  * with a fallback to the installed application icon when the package is present.
+ * Bitmaps are downsampled to [MAX_ICON_PX]: the UI never draws icons larger than that.
  */
 class StoreIconLoader(
     private val context: Context,
     private val cloud: StoreCloudFacade,
 ) {
     private val memory = LinkedHashMap<String, Bitmap>(32, 0.75f, true)
-    private val mutex = Mutex()
 
     suspend fun load(
         entry: StoreCatalogEntry,
         channel: UpdateChannel,
     ): Bitmap? {
         val cacheKey = "${channel.storageValue}:${entry.id}:${entry.iconUrl}"
-        mutex.withLock {
+        synchronized(memory) {
             memory[cacheKey]?.let { return it }
         }
         val remote = if (entry.hasExplicitIcon()) {
             withContext(Dispatchers.IO) {
-                runCatching { downloadRemote(entry, channel) }.getOrNull()
+                try {
+                    downloadRemote(entry, channel)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
             }
         } else {
             null
@@ -45,8 +50,8 @@ class StoreIconLoader(
         val bitmap = remote
             ?: withContext(Dispatchers.IO) { installedIcon(entry.packageName) }
         if (bitmap != null) {
-            mutex.withLock {
-                while (memory.size >= 64) {
+            synchronized(memory) {
+                while (memory.size >= MAX_MEMORY_ENTRIES) {
                     val iterator = memory.entries.iterator()
                     if (!iterator.hasNext()) break
                     iterator.next()
@@ -59,7 +64,7 @@ class StoreIconLoader(
     }
 
     fun clearMemory() {
-        memory.clear()
+        synchronized(memory) { memory.clear() }
     }
 
     private suspend fun downloadRemote(
@@ -70,15 +75,35 @@ class StoreIconLoader(
         val path = YandexDiskPath.physicalPath(channel, logical)
         val fileName = path.substringAfterLast('/').ifBlank { "icon.png" }
         val dest = iconCacheFile(channel, entry.id, fileName)
-        if (!dest.exists() || dest.length() <= 0L) {
+        val cached = dest.isFile && dest.length() > 0L
+        val stale = cached && System.currentTimeMillis() - dest.lastModified() > ICON_TTL_MS
+        if (!cached || stale) {
             try {
                 cloud.downloadToFile(path, dest)
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
-                dest.delete()
-                return null
+                // A stale icon is still better than a letter placeholder.
+                if (!cached) return null
             }
         }
-        return BitmapFactory.decodeFile(dest.absolutePath)
+        val bitmap = decodeSampled(dest)
+        if (bitmap == null) dest.delete()
+        return bitmap
+    }
+
+    private fun decodeSampled(file: File): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= MAX_ICON_PX &&
+            bounds.outHeight / (sample * 2) >= MAX_ICON_PX
+        ) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return BitmapFactory.decodeFile(file.absolutePath, options)
     }
 
     private fun iconCacheFile(channel: UpdateChannel, appId: String, fileName: String): File {
@@ -99,12 +124,18 @@ class StoreIconLoader(
         if (drawable is BitmapDrawable && drawable.bitmap != null) {
             return drawable.bitmap
         }
-        val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
-        val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+        val width = drawable.intrinsicWidth.takeIf { it > 0 }?.coerceAtMost(MAX_ICON_PX) ?: 96
+        val height = drawable.intrinsicHeight.takeIf { it > 0 }?.coerceAtMost(MAX_ICON_PX) ?: 96
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)
         return bitmap
+    }
+
+    private companion object {
+        const val MAX_ICON_PX = 256
+        const val MAX_MEMORY_ENTRIES = 64
+        const val ICON_TTL_MS = 24L * 60L * 60L * 1000L
     }
 }

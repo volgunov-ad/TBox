@@ -24,10 +24,12 @@ object HuProfile {
         }
     }
 
+    // DCL Install hides the stock launcher (`pm hide`); hidden packages only match with
+    // MATCH_UNINSTALLED_PACKAGES, otherwise an A9 with DCL would read as "unknown".
     private fun isPackagePresent(packageManager: PackageManager, packageName: String): Boolean =
         runCatching {
             @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, 0)
+            packageManager.getPackageInfo(packageName, PackageManager.MATCH_UNINSTALLED_PACKAGES)
             true
         }.getOrDefault(false)
 }
