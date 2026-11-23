@@ -37,9 +37,9 @@ object CamdShell {
         val output: Future<String> = drainer.submit<String> {
             process.inputStream.bufferedReader().readText()
         }
+        var finished = false
         try {
             if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
-                process.destroy()
                 throw CommandException("timeout ${cmd[0]}")
             }
             val text = runCatching { output.get(2, TimeUnit.SECONDS) }.getOrDefault("")
@@ -47,10 +47,14 @@ object CamdShell {
             if (code != 0) {
                 throw CommandException("${cmd[0]} завершился $code $text".trim())
             }
+            finished = true
             return text.trim()
-        } catch (error: CommandException) {
-            output.cancel(true)
-            throw error
+        } finally {
+            if (!finished) {
+                // Timeout, failure or an interrupted caller: never leave the child behind.
+                process.destroy()
+                output.cancel(true)
+            }
         }
     }
 }

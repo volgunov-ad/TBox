@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        recorder = CamdRuntime.recorder ?: RecorderController(applicationContext, CamdRuntime.windows(this))
+        recorder = CamdRuntime.recorder(this)
         accessibilityHelper = AccessibilityAutoGrant(
             windows = CamdRuntime.windows(this),
             onGranted = { runOnUiThread { refreshAccessibilityStatus() } },

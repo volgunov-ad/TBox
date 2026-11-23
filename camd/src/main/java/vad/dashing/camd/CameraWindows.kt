@@ -43,6 +43,9 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
+    /** mb_daemon runs one shared autorun.sh: a second writer would replace the first script. */
+    private val armLock = Any()
+
     /** Loaded once on the first stock OPEN; null when the HU has no calibration dir. */
     private val stockCalibration: CamdCalibration? by lazy {
         runCatching { CamdCalibration.load(File(CamdCalibration.DIR)) }.getOrNull()
@@ -451,7 +454,7 @@ class CameraWindows(private val context: Context) {
         if (!should) return
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
-            val busy = listOf(4, 5, 8, 9).any { File(GrabberScripts.frame(it)).exists() }
+            val busy = KnownInputs.all.any { it.heldByAvm && File(GrabberScripts.frame(it.id)).exists() }
             if (!busy) break
             Thread.sleep(100)
         }
@@ -638,7 +641,8 @@ class CameraWindows(private val context: Context) {
             }
         }
         if (!latch.await(2, TimeUnit.SECONDS)) {
-            overlayOps.cancelIfCurrent(inputId, token)
+            // The token stays current: the late Runnable still removes the window unless a
+            // newer OPEN/CLOSE took over, so a slow main thread cannot leave it on screen.
             val count = OverlayLatchMetrics.onHideTimeout()
             Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token count=$count")
             result.ok = false
@@ -673,7 +677,7 @@ class CameraWindows(private val context: Context) {
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
 
-    private fun arm(script: String, nonce: String) {
+    private fun arm(script: String, nonce: String) = synchronized(armLock) {
         val autorun = File(DaemonScripts.AUTORUN)
         autorun.writeText(script)
         exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
@@ -685,7 +689,7 @@ class CameraWindows(private val context: Context) {
         val marker = File(GrabberScripts.ARM)
         while (System.currentTimeMillis() < deadline) {
             val text = runCatching { if (marker.canRead()) marker.readText() else "" }.getOrDefault("")
-            if (text.contains(nonce)) return
+            if (text.contains(nonce)) return@synchronized
             Thread.sleep(200)
         }
         throw IllegalStateException("mb_daemon не ответил")
@@ -767,6 +771,7 @@ class CameraWindows(private val context: Context) {
             )
             caption.text = "жду кадр ${input.id}"
             caption.setTextColor(Color.WHITE)
+            caption.setShadowLayer(8f, 0f, 0f, Color.BLACK)
             caption.textSize = 18f
             caption.setPadding(16, 16, 16, 16)
             root.addView(caption, FrameLayout.LayoutParams(
@@ -790,7 +795,12 @@ class CameraWindows(private val context: Context) {
                 context.resources.displayMetrics
             ).toInt()
             val closeParams = FrameLayout.LayoutParams(px, px, Gravity.END or Gravity.TOP)
-            closeParams.setMargins(0, 8, 8, 0)
+            val margin = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                8f,
+                context.resources.displayMetrics,
+            ).toInt()
+            closeParams.setMargins(0, margin, margin, 0)
             root.addView(closeButton, closeParams)
             // Tap anywhere in the window (the ✕ consumes its own touches first).
             root.setOnClickListener {
@@ -824,6 +834,14 @@ class CameraWindows(private val context: Context) {
                 shape,
                 stockView,
                 inputId = id,
+                onStall = { stalled ->
+                    if (stalled) {
+                        caption.text = "нет сигнала ${input.id}"
+                        caption.visibility = View.VISIBLE
+                    } else {
+                        caption.visibility = View.GONE
+                    }
+                },
             ) {
                 caption.visibility = View.GONE
             }

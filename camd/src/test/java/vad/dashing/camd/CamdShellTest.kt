@@ -69,6 +69,30 @@ class CamdShellTest {
     }
 
     @Test
+    fun destroysTheChildWhenTheCallerIsInterrupted() {
+        val process = object : Process() {
+            var destroyed = false
+            override fun getOutputStream(): OutputStream = object : OutputStream() {
+                override fun write(b: Int) = Unit
+            }
+            override fun getInputStream(): InputStream = ByteArrayInputStream(ByteArray(0))
+            override fun getErrorStream(): InputStream = ByteArrayInputStream(ByteArray(0))
+            override fun waitFor(): Int = throw InterruptedException()
+            override fun waitFor(timeout: Long, unit: TimeUnit): Boolean = throw InterruptedException()
+            override fun exitValue(): Int = 0
+            override fun destroy() {
+                destroyed = true
+            }
+        }
+        try {
+            CamdShell.exec(arrayOf("slow")) { process }
+            fail("interrupt expected")
+        } catch (_: InterruptedException) {
+            assertTrue(process.destroyed)
+        }
+    }
+
+    @Test
     fun wrapsStartFailures() {
         try {
             CamdShell.exec(arrayOf("nope")) { throw IOException("device missing") }
