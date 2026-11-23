@@ -1,10 +1,11 @@
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+extra["apkSlug"] = "store"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
 
 android {
     namespace = "vad.dashing.store"
@@ -38,15 +39,6 @@ android {
         )
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     flavorDimensions += "language"
     productFlavors {
         create("ru") {
@@ -66,17 +58,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
-        }
-    }
-
-    applicationVariants.all {
-        outputs.all {
-            (this as BaseVariantOutputImpl).outputFileName =
-                "tbox-store-${versionName}-${buildType.name}.apk"
         }
     }
 

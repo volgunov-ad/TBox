@@ -1,0 +1,44 @@
+/**
+ * Shared release APK name and the repo debug keystore.
+ *
+ * The module sets extra["apkSlug"] before applying this script.
+ * versionCode, versionName, flavors, minify and native build stay in the module.
+ * Release is signed with keystore/debug.keystore so a cloud APK installs over
+ * an existing head-unit build. Do not point this at another key.
+ *
+ * File name: <slug>-<versionName>-<buildType>.apk.
+ * Only Monitor uses a tbox- prefix (tbox-monitor). Flavor builds include the
+ * language suffix inside versionName (1.2.1-ru).
+ */
+
+def apkSlug = project.ext.has("apkSlug") ? project.ext.get("apkSlug") as String : null
+if (!apkSlug) {
+    throw new GradleException("${project.path}: set extra[\"apkSlug\"] before applying gradle/apk-release.gradle")
+}
+
+def androidExt = project.extensions.getByName("android")
+
+androidExt.signingConfigs.getByName("debug").with {
+    storeFile = rootProject.file("keystore/debug.keystore")
+    storePassword = "android"
+    keyAlias = "androiddebugkey"
+    keyPassword = "android"
+}
+androidExt.buildTypes.getByName("release").signingConfig =
+    androidExt.signingConfigs.getByName("debug")
+
+androidExt.applicationVariants.all { variant ->
+    def apkBaseName = "${apkSlug}-${variant.versionName}-${variant.buildType.name}"
+    variant.outputs.all { output ->
+        output.outputFileName = "${apkBaseName}.apk"
+    }
+    if (variant.buildType.minifyEnabled) {
+        def mappingName = "${apkBaseName}-mapping.txt"
+        def copyMapping = tasks.register("copy${variant.name.capitalize()}Mapping", Copy) {
+            from(variant.mappingFileProvider)
+            into(layout.buildDirectory.dir("outputs/release-mapping"))
+            rename { mappingName }
+        }
+        variant.assembleProvider.configure { finalizedBy(copyMapping) }
+    }
+}

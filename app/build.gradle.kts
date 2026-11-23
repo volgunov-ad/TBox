@@ -1,4 +1,3 @@
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -7,6 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+extra["apkSlug"] = "tbox-monitor"
+apply(from = rootProject.file("gradle/apk-release.gradle"))
 
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
@@ -82,15 +84,6 @@ android {
             versionNameSuffix = "-en"
         }
     }
-    signingConfigs {
-        // Same debug key on PC and Cursor Cloud so APKs install over each other.
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
     buildTypes {
         release {
             proguardFiles(
@@ -99,26 +92,10 @@ android {
             )
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
             isShrinkResources = false
-        }
-    }
-    applicationVariants.all {
-        val apkBaseName = "tbox-monitor-$versionName-${buildType.name}"
-        outputs.all {
-            (this as BaseVariantOutputImpl).outputFileName = "$apkBaseName.apk"
-        }
-        if (buildType.isMinifyEnabled) {
-            val mappingName = "$apkBaseName-mapping.txt"
-            val copyMapping = tasks.register<Copy>("copy${name.replaceFirstChar { it.uppercase() }}Mapping") {
-                from(mappingFileProvider)
-                into(layout.buildDirectory.dir("outputs/release-mapping"))
-                rename { mappingName }
-            }
-            assembleProvider.configure { finalizedBy(copyMapping) }
         }
     }
     compileOptions {

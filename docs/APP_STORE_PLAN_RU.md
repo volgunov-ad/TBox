@@ -358,20 +358,24 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 ---
 
-## 11. Версии Dashing Store
+## 11. Версии first-party приложений
 
-| Что | Где |
-|-----|-----|
-| `versionName` / `versionCode` | `store/build.gradle.kts` (`defaultConfig`) |
-| Журнал изменений | [`store/Changelog.dm`](../store/Changelog.dm) (формат как у корневого `Changelog.dm`) |
-| Id в каталоге | `tbox-store` → `apps/tbox-store/version.json` на AppStore share |
-| Имя APK | `tbox-store-<versionName>-<debug\|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`) |
+Одно правило на каждое приложение. Общая подпись и имя APK — `gradle/apk-release.gradle`. Каталог — `tools/app_releases.py`, проверка — `python tools/check_app_versions.py` (с `--base origin/preRelease` ещё и рост `versionCode`; на PR её запускает workflow «App versions»).
+
+| Приложение | Версия | Журнал | Имя APK |
+|------------|--------|--------|---------|
+| TBox Monitor | `app/build.gradle.kts` | [`Changelog.dm`](../Changelog.dm) | `tbox-monitor-<versionName>-<debug\|release>.apk` |
+| Dashing Store | `store/build.gradle.kts` | [`store/Changelog.dm`](../store/Changelog.dm) | `store-<versionName>-<debug\|release>.apk` |
+| Остальные Gradle-модули | `<модуль>/build.gradle.kts` | `<модуль>/Changelog.dm` | `<модуль>-<versionName>-<debug\|release>.apk` |
+| Установка DCL | `tools/dcl_install/AndroidManifest.xml` | [`tools/dcl_install/Changelog.dm`](../tools/dcl_install/Changelog.dm) | `DclInstall.apk` (`build.ps1`) |
+
+У Monitor и Store `versionName` в имени файла уже содержит суффикс `-ru` / `-en`. Префикс `tbox-` только у Monitor. Id карточки магазина по-прежнему `tbox-store` (это не имя APK).
 
 Правила:
 
-1. Перед публикацией на Диск: поднять **versionCode** (+1), обновить **versionName** (semver), дописать блок сверху в `store/Changelog.dm`.
-2. Собрать ru и en, в Windows-менеджере «Заменить APK…» для `tbox-store` оба flavor — Store на ГУ увидит обновление по `versionCode`.
-3. Первый учтённый выпуск: **0.1.0** (`versionCode` 1).
+1. Перед публикацией на Диск: поднять **versionCode** (+1), обновить **versionName** (semver), дописать блок сверху в `Changelog.dm` этого приложения. `python tools/check_app_versions.py` должен пройти.
+2. Собрать release: `python tools/build_app_release.py --module store --output-dir <папка вне репо>` (для Monitor и Store по умолчанию ru и en). В Windows-менеджере «Заменить APK…» для `tbox-store` оба flavor — Store на ГУ увидит обновление по `versionCode`.
+3. Первый учтённый выпуск Store: **0.1.0** (`versionCode` 1). Уже выданные `versionCode` не перенумеровываются.
 
 ---
 

@@ -3,6 +3,7 @@
 Версии APK: `versionName` / `versionCode` в `store/build.gradle.kts`.
 При каждой публикации на AppStore (Яндекс / Mail.ru) поднимать **versionCode**
 на 1 и править **versionName** (semver); сюда — блок с тем же номером сверху.
+Имя APK: `store-<versionName>-<debug|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`).
 Каталог: id `tbox-store`, самообновление с карточки магазина.
 
 0.1.1

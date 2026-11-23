@@ -1,0 +1,67 @@
+# App versions and release tooling, no Gradle.
+#
+# - versionName is the top block of each app's Changelog.dm
+# - every application module is listed in tools/app_releases.py with its apkSlug
+# - versionCode never goes down; a new versionName needs a higher versionCode
+#   (pull request: against the target branch; push: against the previous commit)
+# - unit tests of tools/check_app_versions.py, build_app_release.py,
+#   build_ota_release.py and the app store catalog
+
+name: App versions
+
+on:
+  pull_request:
+    branches:
+      - preRelease
+      - master
+  push:
+    branches:
+      - preRelease
+
+concurrency:
+  group: app-versions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Versions and changelogs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH="${{ github.base_ref }}"
+            git fetch --no-tags --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+            echo "ref=origin/${BRANCH}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.event.before }}"
+            echo "ref=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ steps.base.outputs.ref }}" ]; then
+            python tools/check_app_versions.py --base "${{ steps.base.outputs.ref }}"
+          else
+            python tools/check_app_versions.py
+          fi
+
+      - name: Tool tests
+        working-directory: tools
+        run: python -m unittest -v test_check_app_versions test_build_app_release test_build_ota_release test_appstore_catalog

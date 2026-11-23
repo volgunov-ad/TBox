@@ -44,13 +44,15 @@ Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are
 Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian) and `en` (English). See `README.md` for the full list.
 
 ```
-./gradlew assembleRuDebug    # Russian debug APK
-./gradlew assembleEnDebug    # English debug APK
-./gradlew assembleRuRelease  # Russian release APK
-./gradlew assembleEnRelease  # English release APK
+./gradlew :app:assembleRuDebug    # Russian debug APK
+./gradlew :app:assembleEnDebug    # English debug APK
+./gradlew :app:assembleRuRelease  # Russian release APK
+./gradlew :app:assembleEnRelease  # English release APK
 ```
 
 Debug and release APKs are signed with the repo keystore `keystore/debug.keystore` (the machine `~/.android/debug.keystore` from 2025-03-22). Cloud and local builds share this signature, so a cloud APK installs over an existing HU install. Do not replace this file.
+
+The shared script `gradle/apk-release.gradle` sets that keystore and the APK file name for every application module. Only Monitor keeps the `tbox-` prefix (`tbox-monitor-<version>-<ru|en>-<type>.apk`). Other modules are `<module>-<version>-<type>.apk` (`store-…`, `camd-…`, `mqtt-…`). Each app has its own `Changelog.dm`; `python tools/check_app_versions.py` checks that the top header matches `versionName` and that every application module in `settings.gradle.kts` is listed in `tools/app_releases.py` with its `apkSlug`; `--base origin/preRelease` also fails when `versionCode` goes down or `versionName` changes without a higher `versionCode`. The **App versions** workflow (`.github/workflows/app-versions.yml`) runs it with the tool tests on pull requests to `preRelease`/`master` and on push to `preRelease`. One release build, copied outside the repo: `python tools/build_app_release.py --module <name> --output-dir <dir>`. Unqualified `assembleRuRelease` also matches `:store`.
 
 ### Testing
 
@@ -87,6 +89,7 @@ Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via G
 ```
 ./gradlew :voice:fetchTtsModel :voice:fetchSttModel   # optional manual
 ./gradlew :voice:assembleDebug
+./gradlew :voice:assembleRelease
 ./gradlew :voice:testDebugUnitTest
 ```
 
@@ -99,16 +102,19 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 ```
 ./gradlew :mqtt:testDebugUnitTest
 ./gradlew :mqtt:assembleDebug
+./gradlew :mqtt:assembleRelease
 ```
 
 ### App Store APK (`:store`)
 
-Separate app **Dashing Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Versions: `store/build.gradle.kts` + [store/Changelog.dm](store/Changelog.dm) (bump `versionCode` on every Disk publish). Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
+Separate app **Dashing Store** (`vad.dashing.store`): catalog and sideload installer for ecosystem + verified third-party APKs. Primary: Yandex Disk AppStore (`https://disk.yandex.ru/d/KDaHLxbFtPAjYA`, `/release/apps/…` / `/dev/apps/…`). Mirror: Mail.ru Cloud (`https://cloud.mail.ru/public/voi3/4Lx1RhqV9`, same layout; Store falls back Yandex→Mail.ru). Plan: [docs/APP_STORE_PLAN_RU.md](docs/APP_STORE_PLAN_RU.md). Versions: `store/build.gradle.kts` + [store/Changelog.dm](store/Changelog.dm) (bump `versionCode` on every Disk publish). APK file name is `store-<version>-<ru|en>-<debug|release>.apk`; the catalog id stays `tbox-store`. Catalog CLI: `tools/build_apps_catalog.py`. Windows GUI to fill the sync folder: `tools/appstore_manager/` (`Запуск.cmd`, [ИНСТРУКЦИЯ.md](tools/appstore_manager/ИНСТРУКЦИЯ.md)).
 
 ```
 ./gradlew :store:testRuDebugUnitTest
 ./gradlew :store:assembleRuDebug
 ./gradlew :store:assembleEnDebug
+./gradlew :store:assembleRuRelease
+./gradlew :store:assembleEnRelease
 python tools/test_appstore_catalog.py
 ```
 
@@ -133,6 +139,7 @@ Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 H
 ./gradlew :adbcore:testDebugUnitTest
 ./gradlew :dataresize:testDebugUnitTest
 ./gradlew :dataresize:assembleDebug
+./gradlew :dataresize:assembleRelease
 ```
 
 ### USB Audio APK (`:usbaudio`)
@@ -142,6 +149,7 @@ Separate app **USB-аудио ГУ** (`vad.dashing.usbaudio`) for A10 HUs: the p
 ```
 ./gradlew :usbaudio:testDebugUnitTest
 ./gradlew :usbaudio:assembleDebug
+./gradlew :usbaudio:assembleRelease
 ```
 
 ### Firewall Unlock APK (`:fwunlock`)
@@ -151,6 +159,7 @@ Separate app **Файрвол ГУ** (`vad.dashing.fwunlock`) for A10 HUs: perma
 ```
 ./gradlew :fwunlock:testDebugUnitTest
 ./gradlew :fwunlock:assembleDebug
+./gradlew :fwunlock:assembleRelease
 ```
 
 ### Window Patch APK (`:winpatch`)
@@ -160,6 +169,7 @@ Separate app **AA/CarPlay окна ГУ** (`vad.dashing.winpatch`) for A10 HUs: 
 ```
 ./gradlew :winpatch:testDebugUnitTest
 ./gradlew :winpatch:assembleDebug
+./gradlew :winpatch:assembleRelease
 ```
 
 ### Mengbo Camera Preview Test APK (`:camview`)
@@ -168,6 +178,7 @@ Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing
 
 ```
 ./gradlew :camview:assembleDebug
+./gradlew :camview:assembleRelease
 ```
 
 ### Camera window app (`:camd`)

@@ -1,4 +1,8 @@
-# Changelog
+# Changelog — TBox Monitor (`:app`, `vad.dashing.tbox`)
+
+Журнал изменений TBox Monitor. Версии APK: `versionName` / `versionCode` в `app/build.gradle.kts`.
+При публикации поднять **versionCode** на 1 и править **versionName** (semver); сюда — блок с тем же номером сверху.
+Имя APK: `tbox-monitor-<versionName>-<debug|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`).
 
 1.2.1
 1. Плитка «SOS регистратора» (секция «Система»): разовый тап — сохранить текущий сегмент записи в папку SOS регистратора «Камер ГУ» (REC SOS). По центру — SOS; тосты: сохранение запущено / уже идёт / регистратор выключен / нет папки SOS. Нужны «Камеры ГУ» не ниже 0.8.6.
