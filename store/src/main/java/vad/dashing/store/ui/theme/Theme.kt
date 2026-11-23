@@ -78,19 +78,19 @@ private val DarkColors = darkColorScheme(
     onErrorContainer = Color(0xFFF9DEDC),
 )
 
-// Head-unit reading distance: body 20sp, controls 20sp, titles 22–30sp.
+// Head-unit reading distance: body 22–24sp, controls 22sp, titles 26–34sp.
 private val AppTypography = Typography(
-    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 30.sp, lineHeight = 38.sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 32.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 24.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 28.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 18.sp, lineHeight = 25.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 19.sp, lineHeight = 24.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 20.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 18.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 34.sp, lineHeight = 42.sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 30.sp, lineHeight = 38.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 33.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 31.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp),
+    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 33.sp),
+    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 22.sp, lineHeight = 30.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 27.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 25.sp),
+    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 23.sp),
 )
 
 val Typography.tboxBody: TextStyle get() = bodyLarge
@@ -100,9 +100,9 @@ val Typography.tboxHeadline: TextStyle get() = headlineSmall
 
 /** Shared control sizes so buttons, chips and icon buttons line up across screens. */
 object StoreDimens {
-    val ButtonHeight = 56.dp
-    val CompactButtonHeight = 48.dp
-    val ChipHeight = 48.dp
+    val ButtonHeight = 64.dp
+    val CompactButtonHeight = 56.dp
+    val ChipHeight = 52.dp
     val IconButton = 56.dp
     val ScreenPadding = 20.dp
     val CardCorner = 20.dp
