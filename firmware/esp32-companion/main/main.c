@@ -358,7 +358,7 @@ void app_main(void)
             if (!sent_hello && !ota_busy) {
                 protocol_send_hello();
                 protocol_send_gpio(gpio_io_read_inputs(), now_ms);
-                protocol_send_relay(gpio_io_get_relays());
+                protocol_send_relay(gpio_io_get_relays(), gpio_io_latched(), gpio_io_pulse_mask());
                 sent_hello = true;
             }
             // No heartbeat during OTA. A blocked USB callback cannot drain TX,
@@ -383,7 +383,7 @@ void app_main(void)
         if (!ota_erasing) {
             gpio_io_poll(now_ms, ota_busy ? NULL : gpio_event);
             if (gpio_io_take_relay_dirty() && !ota_busy) {
-                protocol_send_relay(gpio_io_get_relays());
+                protocol_send_relay(gpio_io_get_relays(), gpio_io_latched(), gpio_io_pulse_mask());
             }
             if (!ota_busy && now_ms - last_gpio_ms >= 1000) {
                 protocol_send_gpio(gpio_io_read_inputs(), now_ms);

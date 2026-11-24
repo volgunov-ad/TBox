@@ -666,6 +666,11 @@ sealed interface AutomationTrigger {
         val expectedState: String,
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+        /**
+         * Paired BLE relay id when [signal] is ESP_BLE_RELAY_0 or ESP_BLE_RELAY_1.
+         * Blank keeps the index fallback.
+         */
+        val relayId: String = "",
     ) : AutomationTrigger
 
     data class Geofence(
@@ -717,6 +722,8 @@ sealed interface AutomationCondition {
         val signal: AutomationSignalId,
         val source: AutomationSignalSource,
         val expectedState: String,
+        /** Paired BLE relay id for ESP_BLE_RELAY_0/1. Blank keeps the index fallback. */
+        val relayId: String = "",
     ) : AutomationCondition
 
     data class TriggeredBy(
@@ -1103,6 +1110,10 @@ data class AutomationSignalKey(
      * Compared case-insensitively via normalized lowercase form from the codec/UI.
      */
     val mac: String? = null,
+    /**
+     * Paired BLE relay id for ESP_BLE_RELAY_0/1. Null keeps the index fallback.
+     */
+    val relayId: String? = null,
 )
 
 /** Non-blank MAC only for [AutomationSignalId.ESP_BLE_BATTERY]; otherwise null. */

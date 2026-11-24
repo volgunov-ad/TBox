@@ -98,16 +98,24 @@ static void build_pair(void)
     memcpy(s_pair_pkt + 21, name, name_len);
 }
 
+/** Identity of this pointer marks a state write, as opposed to a PAIR write. */
+static uint8_t s_write_state_arg;
+static bool s_have_gen;
+static uint8_t s_applied_gen;
+
 static int write_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
                     struct ble_gatt_attr *attr, void *arg)
 {
     (void)conn_handle;
     (void)attr;
-    (void)arg;
     if (error->status != 0) {
         ESP_LOGW(TAG, "write status=%d", error->status);
-        s_state_pending = true;
+        if (arg == &s_write_state_arg) s_state_pending = true;
+        return 0;
     }
+    /* A keepalive 0x31 the companion accepted is liveness. The companion
+     * does not send a periodic 0x30, so waiting for one drops a quiet link. */
+    if (arg == &s_write_state_arg) s_last_sealed_ms = now_ms();
     return 0;
 }
 
@@ -120,7 +128,8 @@ static void send_state(void)
     body[0] = relay_logic_mask();
     body[1] = (uint8_t)((s_cmd_echo ? 0x01 : 0) |
                         (relay_logic_take_restored() ? 0x02 : 0) |
-                        (relay_logic_pulse_active() ? 0x04 : 0));
+                        (relay_logic_pulse_active() ? 0x04 : 0) |
+                        (relay_logic_take_self_opened() ? 0x08 : 0));
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000ULL);
     body[2] = (uint8_t)up;
     body[3] = (uint8_t)(up >> 8);
@@ -129,7 +138,8 @@ static void send_state(void)
                      relay_store_next_tx(), body, pkt);
     s_cmd_echo = false;
     relay_state_unlock();
-    int rc = ble_gattc_write_flat(s_conn, s_chr_write, pkt, RELAY_PKT_LEN, write_cb, NULL);
+    int rc = ble_gattc_write_flat(s_conn, s_chr_write, pkt, RELAY_PKT_LEN,
+                                  write_cb, &s_write_state_arg);
     if (rc != 0) {
         ESP_LOGW(TAG, "state rc=%d", rc);
         s_state_pending = true;
@@ -498,13 +508,23 @@ void relay_ble_handle_cmd(const uint8_t pkt[24])
     }
     /* Channel bit 0 clear must not cancel a running pulse. */
     if ((body[0] & 0x01) != 0) {
-        uint16_t pulse_ms = (uint16_t)(body[2] | ((uint16_t)body[3] << 8));
-        uint8_t actual = relay_logic_apply(body[1] & 0x01, pulse_ms);
-        s_gen_echo = body[4];
-        s_cmd_echo = true;
-        s_state_pending = true;
-        ESP_LOGI(TAG, "cmd counter=%lu states=%d pulse=%u mask=%d",
-                 (unsigned long)counter, body[1] & 1, pulse_ms, actual);
+        /* A retry reuses the generation and gets a new counter. Echo it,
+         * but do not pulse or latch a second time. */
+        if (s_have_gen && body[4] == s_applied_gen) {
+            s_gen_echo = body[4];
+            s_cmd_echo = true;
+            s_state_pending = true;
+        } else {
+            uint16_t pulse_ms = (uint16_t)(body[2] | ((uint16_t)body[3] << 8));
+            uint8_t actual = relay_logic_apply(body[1] & 0x01, pulse_ms);
+            s_applied_gen = body[4];
+            s_have_gen = true;
+            s_gen_echo = body[4];
+            s_cmd_echo = true;
+            s_state_pending = true;
+            ESP_LOGI(TAG, "cmd counter=%lu states=%d pulse=%u mask=%d",
+                     (unsigned long)counter, body[1] & 1, pulse_ms, actual);
+        }
     }
     relay_state_unlock();
 }

@@ -113,9 +113,14 @@ class EspCompanionManager(
     private val bridgeAckWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980BridgeAck>?>(null)
     private val canLightAckWaiter = AtomicReference<CompletableDeferred<EspMessage.CanAck>?>(null)
     private val relayDevAckWaiter = AtomicReference<CompletableDeferred<EspMessage.BleAck>?>(null)
+    private val relayDevMutex = Mutex()
+    private val relayDevReq = AtomicInteger(0)
+    @Volatile private var waitingRelayReq = 0
     @Volatile private var um980BridgeActive: Boolean = false
     private val canLightRefCount = AtomicInteger(0)
     @Volatile private var canLightBridgeOn: Boolean = false
+    /** OTA pauses the CAN-light bridge without forgetting who acquired it. */
+    @Volatile private var canLightSuspendedForOta: Boolean = false
     private val canLightDecoder = EspOtaFrameDecoder()
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
@@ -279,19 +284,22 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeRelaySet(normalized))
     }
 
+    /** Latch the user asked for. The echo's driven mask also includes a pulse. */
+    private fun latchedWiredMask(): Int =
+        desiredWiredMask ?: EspCompanionRepository.relayMask.value
+
     fun toggleRelay(channel: Int) {
         if (channel !in 0..7) return
         cancelRelayPulse(channel)
         val bit = 1 shl channel
-        val next = EspCompanionRepository.relayMask.value xor bit
-        setRelayMask(next)
+        setRelayMask(latchedWiredMask() xor bit)
     }
 
     fun setRelayChannel(channel: Int, on: Boolean) {
         if (channel !in 0..7) return
         cancelRelayPulse(channel)
         val bit = 1 shl channel
-        val cur = EspCompanionRepository.relayMask.value
+        val cur = latchedWiredMask()
         val next = if (on) cur or bit else cur and bit.inv()
         setRelayMask(next)
     }
@@ -834,7 +842,7 @@ class EspCompanionManager(
         val cur = EspCompanionRepository.bleRelayMask(id)
         val next = if (on) cur or bit else cur and bit.inv()
         Log.i(TAG, "relayDevSet id=$id mask=$next")
-        writeLine(EspCompanionProtocol.encodeRelayDevSet(id, next, 0))
+        enqueueRelayDevSet(id, next, 0)
     }
 
     fun toggleBleRelay(idOrIndex: Any) {
@@ -857,7 +865,7 @@ class EspCompanionManager(
         val bit = bleRelayChannelBit
         val cur = EspCompanionRepository.bleRelayMask(key)
         val next = if (on) cur or bit else cur and bit.inv()
-        return awaitRelayDevAck(EspCompanionProtocol.encodeRelayDevSet(key, next, 0))
+        return awaitRelayDevAck(key, next, 0)
     }
 
     suspend fun pulseBleRelayAwait(id: String, durationMs: Long): BleRelaySendResult {
@@ -865,20 +873,44 @@ class EspCompanionManager(
         val key = id.trim().lowercase()
         if (key.isEmpty()) return BleRelaySendResult.NoRelay
         val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
-        return awaitRelayDevAck(EspCompanionProtocol.encodeRelayDevSet(key, 1, pulse))
+        return awaitRelayDevAck(key, 1, pulse)
     }
 
-    private suspend fun awaitRelayDevAck(line: String): BleRelaySendResult {
-        val waiter = CompletableDeferred<EspMessage.BleAck>()
-        relayDevAckWaiter.getAndSet(waiter)?.cancel()
-        writeLine(line)
-        val ack = withTimeoutOrNull(1_500L) { waiter.await() } ?: return BleRelaySendResult.Offline
-        return when {
-            ack.ok -> BleRelaySendResult.Queued
-            ack.err == "offline" -> BleRelaySendResult.Offline
-            ack.err == "no relay" || ack.err == "missing id" || ack.err == "bad id" ->
-                BleRelaySendResult.NoRelay
-            else -> BleRelaySendResult.Failed
+    private fun nextRelayReq(): Int {
+        val n = relayDevReq.updateAndGet { (it + 1) and 0x7fffffff }
+        return if (n == 0) 1 else n
+    }
+
+    /** UI writes wait out an automation that is already waiting for its own ack. */
+    private fun enqueueRelayDevSet(id: String, mask: Int, pulseMs: Int) {
+        scope.launch {
+            relayDevMutex.withLock {
+                val req = nextRelayReq()
+                writeLine(EspCompanionProtocol.encodeRelayDevSet(id, mask, pulseMs, req))
+            }
+        }
+    }
+
+    private suspend fun awaitRelayDevAck(id: String, mask: Int, pulseMs: Int): BleRelaySendResult {
+        return relayDevMutex.withLock {
+            val req = nextRelayReq()
+            val waiter = CompletableDeferred<EspMessage.BleAck>()
+            waitingRelayReq = req
+            relayDevAckWaiter.set(waiter)
+            writeLine(EspCompanionProtocol.encodeRelayDevSet(id, mask, pulseMs, req))
+            try {
+                val ack = withTimeoutOrNull(1_500L) { waiter.await() }
+                    ?: return@withLock BleRelaySendResult.Offline
+                when {
+                    ack.ok -> BleRelaySendResult.Queued
+                    ack.err == "offline" -> BleRelaySendResult.Offline
+                    ack.err == "no relay" || ack.err == "missing id" || ack.err == "bad id" ->
+                        BleRelaySendResult.NoRelay
+                    else -> BleRelaySendResult.Failed
+                }
+            } finally {
+                relayDevAckWaiter.compareAndSet(waiter, null)
+            }
         }
     }
 
@@ -892,7 +924,7 @@ class EspCompanionManager(
         if (id.isEmpty()) return
         val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
         Log.i(TAG, "relayDevSet pulse id=$id ${pulse}ms")
-        writeLine(EspCompanionProtocol.encodeRelayDevSet(id, 1, pulse))
+        enqueueRelayDevSet(id, 1, pulse)
     }
 
     fun sendPhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot) {
@@ -916,6 +948,7 @@ class EspCompanionManager(
 
     private fun syncCanLightBridge() {
         val want = canLightRefCount.get() > 0 &&
+            !canLightSuspendedForOta &&
             EspCompanionRepository.deviceInfo.value.can &&
             !um980BridgeActive &&
             !EspCompanionRepository.otaBusy.value &&
@@ -1042,9 +1075,10 @@ class EspCompanionManager(
             return Result.failure(IllegalStateException(err))
         }
         if (um980BridgeActive) endUm980Bridge()
-        val savedCanLight = canLightRefCount.get()
-        if (canLightBridgeOn || savedCanLight > 0) {
-            canLightRefCount.set(0)
+        if (canLightBridgeOn || canLightRefCount.get() > 0) {
+            canLightSuspendedForOta = true
+        }
+        if (canLightBridgeOn) {
             val waiter = CompletableDeferred<EspMessage.CanAck>()
             canLightAckWaiter.set(waiter)
             canLightBridgeOn = false
@@ -1194,10 +1228,8 @@ class EspCompanionManager(
             sess.endCriticalIo()
             otaInbox.set(null)
             channel.close()
-            if (savedCanLight > 0) {
-                canLightRefCount.set(savedCanLight)
-                syncCanLightBridge()
-            }
+            canLightSuspendedForOta = false
+            syncCanLightBridge()
         }
     }
 
@@ -1332,7 +1364,10 @@ class EspCompanionManager(
                 Log.d(TAG, "gpioEvent ch=${msg.channel} level=${msg.level}")
                 EspCompanionRepository.applyGpioEvent(msg.channel, msg.level)
             }
-            is EspMessage.Relay -> EspCompanionRepository.updateRelayMask(msg.mask)
+            is EspMessage.Relay -> {
+                EspCompanionRepository.updateRelayMask(msg.mask)
+                msg.latched?.let { desiredWiredMask = it }
+            }
             is EspMessage.Um980Rsp -> {
                 // Count as link liveness: older FW suppresses hb while collecting UART replies.
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -1536,7 +1571,10 @@ class EspCompanionManager(
             }
             is EspMessage.BleAck -> {
                 if (msg.phase == "relayDevSet") {
-                    relayDevAckWaiter.getAndSet(null)?.complete(msg)
+                    val waiter = relayDevAckWaiter.get()
+                    if (waiter != null && (msg.req == null || msg.req == waitingRelayReq)) {
+                        if (relayDevAckWaiter.compareAndSet(waiter, null)) waiter.complete(msg)
+                    }
                 }
                 when (msg.phase) {
                     "relayDevSet" -> {

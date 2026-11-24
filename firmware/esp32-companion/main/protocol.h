@@ -38,7 +38,8 @@ void protocol_send_gps(int fix, double lat, double lon, double alt,
                        float hrms, float vrms, float diff_age);
 void protocol_send_gpio(uint16_t mask, uint32_t ms);
 void protocol_send_gpio_event(int ch, int level, uint32_t ms);
-void protocol_send_relay(uint8_t mask);
+/** mask is the driven output; latched is the held state; pulse bits are timed. */
+void protocol_send_relay(uint8_t mask, uint8_t latched, uint8_t pulse);
 void protocol_send_um980_rsp(const char *cmd, const char *const *lines, int line_count, bool ok);
 void protocol_send_um980_baud(int baud, bool ok);
 void protocol_send_reboot_ack(void);
@@ -80,6 +81,8 @@ void protocol_send_ble_btn(const char *mac, int btn, const char *act,
 void protocol_send_ble_status(void);
 void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms);
 void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
+/** Same as protocol_send_ble_ack, plus "req" when the host sent one (req < 0 omits it). */
+void protocol_send_ble_ack_req(const char *phase, bool ok, const char *err, int req);
 
 /** Phone companion. USB carries id, name and kind, never the key. kind 1 = relay. */
 void protocol_send_phone_pair(const char *id_hex, const char *name, int kind, int rssi);

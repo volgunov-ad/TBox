@@ -199,6 +199,10 @@ object AutomationCodec {
                 .put("expectedState", trigger.expectedState)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
+                .apply {
+                    val relayId = trigger.relayId.trim().lowercase()
+                    if (relayId.isNotEmpty()) put("relayId", relayId)
+                }
 
             is AutomationTrigger.Geofence -> JSONObject()
                 .put(KEY_TYPE, "geofence")
@@ -348,6 +352,7 @@ object AutomationCodec {
                             stored
                         }
                     },
+                    relayId = json.optString("relayId", "").trim().lowercase(),
                 )
             }
 
@@ -413,6 +418,10 @@ object AutomationCodec {
                 .put("signal", condition.signal.storageKey)
                 .put("source", condition.source.storageKey)
                 .put("expectedState", condition.expectedState)
+                .apply {
+                    val relayId = condition.relayId.trim().lowercase()
+                    if (relayId.isNotEmpty()) put("relayId", relayId)
+                }
 
             is AutomationCondition.TriggeredBy -> JSONObject()
                 .put(KEY_TYPE, "triggered_by")
@@ -488,6 +497,7 @@ object AutomationCodec {
                         signal = signal,
                         source = source,
                         expectedState = expectedState,
+                        relayId = json.optString("relayId", "").trim().lowercase(),
                     ),
                 )
             }

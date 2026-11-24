@@ -9,6 +9,7 @@ package vad.dashing.tbox.automation
 internal object EspBleRelayActionEncoding {
     private val idOnly = Regex("^[0-9a-fA-F]{8}$")
     private val packed = Regex("""id=([0-9a-fA-F]{8})(?:\s+ms=(\d+))?""")
+    private val packedPartial = Regex("""id=([0-9a-fA-F]{0,8})(?:\s+ms=(\d*))?""")
 
     fun idOf(action: AutomationAction.Builtin): String {
         val raw = action.stringValue.trim()
@@ -18,10 +19,19 @@ internal object EspBleRelayActionEncoding {
         return if (idOnly.matches(raw)) raw.lowercase() else ""
     }
 
+    /** What the editor shows. A short id is kept so typing is not wiped. */
+    fun idText(action: AutomationAction.Builtin): String {
+        val raw = action.stringValue.trim()
+        if (action.type == AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE) {
+            return packedPartial.find(raw)?.groupValues?.get(1)?.lowercase().orEmpty()
+        }
+        return raw.lowercase()
+    }
+
     fun pulseText(action: AutomationAction.Builtin): String {
         val raw = action.stringValue.trim()
-        val fromPack = packed.find(raw)?.groupValues?.getOrNull(2).orEmpty()
-        if (fromPack.isNotEmpty()) return fromPack
+        val partial = packedPartial.find(raw)
+        if (partial != null) return partial.groupValues.getOrNull(2).orEmpty()
         if (idOnly.matches(raw)) return ""
         return raw
     }
@@ -31,15 +41,14 @@ internal object EspBleRelayActionEncoding {
 
     fun pack(type: AutomationBuiltinActionType, id: String, pulseText: String): String {
         val hex = id.trim().lowercase()
-        val valid = idOnly.matches(hex)
         if (type != AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE) {
-            return if (valid) hex else ""
+            return hex
         }
         val ms = pulseText.trim()
         return when {
-            valid && ms.isNotEmpty() -> "id=$hex ms=$ms"
-            valid -> "id=$hex"
-            else -> ms
+            hex.isEmpty() -> ms
+            ms.isEmpty() -> "id=$hex"
+            else -> "id=$hex ms=$ms"
         }
     }
 }

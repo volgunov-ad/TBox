@@ -264,7 +264,10 @@ static void abort_binary_session(const char *why)
 
 void protocol_poll(uint32_t now_ms)
 {
-    if ((s_ota_bin_mode || s_bridge_bin_mode) && s_bin_rx_ms != 0 &&
+    /* UM980 XMODEM waits 10–20 s between blocks. That session ends on an
+     * explicit end or DTR drop, not on this idle timer. The erase itself
+     * also exceeds BIN_IDLE_MS, so skip the check while it is running. */
+    if (s_ota_bin_mode && !s_ota_erasing && s_bin_rx_ms != 0 &&
         (uint32_t)(now_ms - s_bin_rx_ms) > BIN_IDLE_MS) {
         abort_binary_session("timeout");
     }
@@ -639,18 +642,30 @@ void protocol_send_phone_snap_req(void)
 
 void protocol_send_ble_ack(const char *phase, bool ok, const char *err)
 {
-    char buf[160];
-    if (err && err[0]) {
+    protocol_send_ble_ack_req(phase, ok, err, -1);
+}
+
+void protocol_send_ble_ack_req(const char *phase, bool ok, const char *err, int req)
+{
+    char buf[192];
+    const char *phase_s = phase ? phase : "";
+    const char *ok_s = ok ? "true" : "false";
+    if (req >= 0 && err && err[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\",\"req\":%d}\n",
+                 phase_s, ok_s, err, req);
+    } else if (req >= 0) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s,\"req\":%d}\n",
+                 phase_s, ok_s, req);
+    } else if (err && err[0]) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\"}\n",
-                 phase ? phase : "",
-                 ok ? "true" : "false",
-                 err);
+                 phase_s, ok_s, err);
     } else {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s}\n",
-                 phase ? phase : "",
-                 ok ? "true" : "false");
+                 phase_s, ok_s);
     }
     cdc_write_str(buf);
 }
@@ -745,10 +760,12 @@ void protocol_send_gpio_event(int ch, int level, uint32_t ms)
     cdc_write_str(buf);
 }
 
-void protocol_send_relay(uint8_t mask)
+void protocol_send_relay(uint8_t mask, uint8_t latched, uint8_t pulse)
 {
-    char buf[80];
-    snprintf(buf, sizeof(buf), "{\"v\":1,\"t\":\"relay\",\"mask\":%u}\n", (unsigned)mask);
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"relay\",\"mask\":%u,\"latched\":%u,\"pulse\":%u}\n",
+             (unsigned)mask, (unsigned)latched, (unsigned)pulse);
     cdc_write_str(buf);
 }
 
@@ -1262,8 +1279,14 @@ static bool json_top_string(const char *line, const char *key, char *out, size_t
         }
         if (c == '"') {
             if (depth == 1 && strncmp(p + 1, key, key_len) == 0 && p[1 + key_len] == '"') {
-                const char *v = strchr(p + 2 + key_len, ':');
-                if (!v) return false;
+                /* The next non-space after the key must be ':'. A string
+                 * value equal to the key is not a key. */
+                const char *v = p + 2 + key_len;
+                while (*v == ' ') v++;
+                if (*v != ':') {
+                    in_str = true;
+                    continue;
+                }
                 v++;
                 while (*v == ' ') v++;
                 if (*v != '"') return false;
@@ -1506,8 +1529,11 @@ static void handle_line(const char *line)
         char id[12];
         bool has_id = extract_json_string(line, "id", id, sizeof(id)) && id[0] != '\0';
         bool all = extract_json_bool(line, "all", false);
+        bool found_req = false;
+        uint32_t req = extract_json_u32(line, "req", &found_req);
+        int ack_req = found_req ? (int)req : -1;
         if (!has_id && !all) {
-            protocol_send_ble_ack("relayDevSet", false, "missing id");
+            protocol_send_ble_ack_req("relayDevSet", false, "missing id", ack_req);
             return;
         }
         uint32_t mask = extract_json_u32(line, "mask", NULL);
@@ -1523,7 +1549,7 @@ static void handle_line(const char *line)
             ok = true;
             err = "queued";
         }
-        protocol_send_ble_ack("relayDevSet", ok, err);
+        protocol_send_ble_ack_req("relayDevSet", ok, err, ack_req);
         protocol_send_ble_status();
         return;
     }
@@ -1636,7 +1662,7 @@ static void handle_line(const char *line)
         uint32_t ch = extract_json_u32(line, "ch", &found_ch);
         if (found_pulse && pulse > 0 && found_ch && ch < 8 && s_relay_cb) {
             s_relay_cb((uint8_t)(1u << ch), (uint16_t)(pulse & 0xFFFF));
-            protocol_send_relay(gpio_io_get_relays());
+            protocol_send_relay(gpio_io_get_relays(), gpio_io_latched(), gpio_io_pulse_mask());
             return;
         }
         const char *p = strstr(line, "\"mask\"");
@@ -1651,7 +1677,7 @@ static void handle_line(const char *line)
         if (s_relay_cb) {
             s_relay_cb((uint8_t)(mask & 0xFF), 0);
         }
-        protocol_send_relay(gpio_io_get_relays());
+        protocol_send_relay(gpio_io_get_relays(), gpio_io_latched(), gpio_io_pulse_mask());
     }
 }
 

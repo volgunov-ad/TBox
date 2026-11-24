@@ -623,6 +623,32 @@ class EspCompanionProtocolTest {
     }
 
     @Test
+    fun relayEchoKeepsLatchedApartFromTheDrivenMask() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"relay","mask":3,"latched":2,"pulse":1}""",
+        ) as EspMessage.Relay
+        assertEquals(3, msg.mask)
+        assertEquals(2, msg.latched)
+        assertEquals(1, msg.pulse)
+        val old = EspCompanionProtocol.parseLine("""{"v":1,"t":"relay","mask":1}""") as EspMessage.Relay
+        assertEquals(null, old.latched)
+    }
+
+    @Test
+    fun relayDevSetCarriesReqAndAckEchoesIt() {
+        val line = EspCompanionProtocol.encodeRelayDevSet("aabbccdd", 1, 0, req = 7)
+        assertTrue(line.contains("\"req\":7"))
+        val ack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleAck","phase":"relayDevSet","ok":true,"err":"queued","req":7}""",
+        ) as EspMessage.BleAck
+        assertEquals(7, ack.req)
+        val legacy = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleAck","phase":"relayDevSet","ok":true,"err":"queued"}""",
+        ) as EspMessage.BleAck
+        assertEquals(null, legacy.req)
+    }
+
+    @Test
     fun firmwareCompareGatesPulseAndBlindOta() {
         assertTrue(EspCompanionProtocol.firmwareAtLeast("0.14.0", 0, 14, 0))
         assertFalse(EspCompanionProtocol.firmwareAtLeast("0.13.2", 0, 14, 0))

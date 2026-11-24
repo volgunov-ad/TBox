@@ -1224,6 +1224,7 @@
     <string name="esp_phone_kind_relay">Relay</string>
     <string name="esp_ble_relay_forget_title">Forget this relay?</string>
     <string name="esp_ble_relay_forget_message">The relay is opened first. To pair it again, hold the button on the board for 5 seconds.</string>
+    <string name="esp_ble_relay_forget_offline">The relay is offline, so it stays as it is. To pair it again, hold the button on the board for 5 seconds.</string>
     <string name="esp_ble_relay_missing">Relay missing</string>
     <string name="esp_ble_relay_unknown">No data</string>
     <string name="esp_protocol_unsupported">Companion firmware speaks protocol v%1$d; this app expects v1</string>

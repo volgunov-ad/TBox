@@ -12,6 +12,10 @@ void gpio_io_set_relays(uint8_t mask);
  */
 void gpio_io_pulse(uint8_t channel_mask, uint16_t pulse_ms);
 uint8_t gpio_io_get_relays(void);
+/** Bits the host asked to hold. A pulse does not change this. */
+uint8_t gpio_io_latched(void);
+/** Bits currently forced on by a pulse. */
+uint8_t gpio_io_pulse_mask(void);
 /** True once after the driven mask changes (latch or a pulse edge). */
 bool gpio_io_take_relay_dirty(void);
 /** Returns true if any input changed after debounce; fills events via callbacks in poll. */

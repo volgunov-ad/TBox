@@ -66,8 +66,9 @@ uint16_t gpio_io_read_inputs(void)
 
 void gpio_io_set_relays(uint8_t mask)
 {
+    /* A latch updates only the held bits. A pulse on the other channel
+     * keeps running and returns to this latch when it ends. */
     s_latched_mask = mask & ((1 << RELAY_COUNT) - 1);
-    s_pulse_mask = 0;
     drive_relays();
     s_relay_dirty = true;
 }
@@ -98,6 +99,16 @@ bool gpio_io_take_relay_dirty(void)
 uint8_t gpio_io_get_relays(void)
 {
     return s_relay_mask;
+}
+
+uint8_t gpio_io_latched(void)
+{
+    return s_latched_mask;
+}
+
+uint8_t gpio_io_pulse_mask(void)
+{
+    return s_pulse_mask;
 }
 
 void gpio_io_poll(uint32_t now_ms, gpio_event_cb_t on_event)

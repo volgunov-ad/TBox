@@ -135,6 +135,7 @@ internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalVal
 internal fun espRelayMaskMapBitFlow(
     masks: Flow<Map<String, Int>>,
     index: Int,
+    relayId: String? = null,
 ): Flow<AutomationSignalValue> =
     combine(
         masks,
@@ -142,8 +143,14 @@ internal fun espRelayMaskMapBitFlow(
         EspCompanionRepository.connected,
     ) { maskMap, relays, connected ->
         if (!connected) return@combine AutomationSignalValue.Unavailable
-        val id = relays.getOrNull(index)?.id
-            ?: return@combine AutomationSignalValue.Unavailable
+        val wanted = relayId?.trim()?.lowercase().orEmpty()
+        val id = if (wanted.length == 8) {
+            relays.firstOrNull { it.id.equals(wanted, ignoreCase = true) }?.id
+                ?: return@combine AutomationSignalValue.Unavailable
+        } else {
+            relays.getOrNull(index)?.id
+                ?: return@combine AutomationSignalValue.Unavailable
+        }
         val value = maskMap[id] ?: return@combine AutomationSignalValue.Unavailable
         AutomationSignalValue.State(if ((value and 1) != 0) "on" else "off")
     }

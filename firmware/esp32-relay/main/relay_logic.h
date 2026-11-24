@@ -24,6 +24,10 @@ uint8_t relay_logic_mask(void);
 bool relay_logic_pulse_active(void);
 /** One-shot: true on the first call after boot (state restored from NVS). */
 bool relay_logic_take_restored(void);
+/** Remember that max-on or link-loss opened the coil. Not used for a pulse end. */
+void relay_logic_mark_self_opened(void);
+/** One-shot flag for the next 0x31 (bit 3). */
+bool relay_logic_take_self_opened(void);
 /** Board button emulation pulse, RELAY_PULSE_MS long. */
 uint8_t relay_logic_press(void);
 

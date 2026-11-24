@@ -1232,6 +1232,7 @@
     <string name="esp_phone_kind_relay">Реле</string>
     <string name="esp_ble_relay_forget_title">Забыть реле?</string>
     <string name="esp_ble_relay_forget_message">Сначала реле будет разомкнуто. Чтобы сопрячь его снова, удерживайте кнопку на плате 5 секунд.</string>
+    <string name="esp_ble_relay_forget_offline">Реле сейчас не на связи, поэтому его состояние не изменится. Чтобы сопрячь снова, удерживайте кнопку на плате 5 секунд.</string>
     <string name="esp_ble_relay_missing">Реле не найдено</string>
     <string name="esp_ble_relay_unknown">Нет данных</string>
     <string name="esp_protocol_unsupported">Прошивка компаньона говорит на протоколе v%1$d, приложение ждёт v1</string>

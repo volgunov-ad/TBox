@@ -1078,7 +1078,19 @@ fun EspCompanionTabContent(
         AlertDialog(
             onDismissRequest = { forgetRelay = null },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_ble_relay_forget_title)) },
-            text = { AppAlertDialogText(stringResource(R.string.esp_ble_relay_forget_message)) },
+            text = {
+                val seen = bleRelayOnline[relay.id] ?: 0L
+                val online = seen > 0L && nowMs - seen <= BLE_RELAY_ONLINE_MS
+                AppAlertDialogText(
+                    stringResource(
+                        if (online) {
+                            R.string.esp_ble_relay_forget_message
+                        } else {
+                            R.string.esp_ble_relay_forget_offline
+                        },
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = rememberWrappedOnClick {

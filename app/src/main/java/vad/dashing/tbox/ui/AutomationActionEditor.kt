@@ -88,6 +88,8 @@ import vad.dashing.tbox.automation.floatingPanelVisibilityOpLabel
 import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
 import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.automation.EspBleRelayActionEncoding
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
@@ -772,8 +774,23 @@ private fun BleRelayTargetFields(
         onValueChange = { onChange(action.copy(intValue = it)) },
         modifier = Modifier.fillMaxWidth(),
     )
+    val bleRelays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
+    LaunchedEffect(action.intValue, action.type, bleRelays) {
+        if (EspBleRelayActionEncoding.idText(action).isNotEmpty()) return@LaunchedEffect
+        val id = bleRelays.getOrNull(action.intValue)?.id.orEmpty()
+        if (id.isEmpty()) return@LaunchedEffect
+        onChange(
+            action.copy(
+                stringValue = EspBleRelayActionEncoding.pack(
+                    action.type,
+                    id,
+                    EspBleRelayActionEncoding.pulseText(action),
+                ),
+            ),
+        )
+    }
     AutomationTextField(
-        value = EspBleRelayActionEncoding.idOf(action),
+        value = EspBleRelayActionEncoding.idText(action),
         onValueChange = { id ->
             onChange(
                 action.copy(
@@ -796,7 +813,7 @@ private fun BleRelayTargetFields(
                     action.copy(
                         stringValue = EspBleRelayActionEncoding.pack(
                             action.type,
-                            EspBleRelayActionEncoding.idOf(action),
+                            EspBleRelayActionEncoding.idText(action),
                             ms,
                         ),
                     ),

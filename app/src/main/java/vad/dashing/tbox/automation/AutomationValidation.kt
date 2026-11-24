@@ -281,6 +281,7 @@ object AutomationValidator {
                     )
                 }
                 validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+                validateBleRelaySignalId(trigger.signal, trigger.relayId, "$path.relayId", issues)
             }
 
             is AutomationTrigger.Geofence -> {
@@ -443,6 +444,7 @@ object AutomationValidator {
                         issues,
                     )
                 }
+                validateBleRelaySignalId(condition.signal, condition.relayId, "$path.relayId", issues)
             }
 
             is AutomationCondition.TriggeredBy -> {
@@ -701,6 +703,26 @@ object AutomationValidator {
             options.none { it.equals(value.trim(), ignoreCase = true) }
         ) {
             issues += AutomationValidationIssue(path, ruEn("Состояние отсутствует в каталоге", "State is not in the catalog"))
+        }
+    }
+
+    private fun validateBleRelaySignalId(
+        signal: AutomationSignalId,
+        relayId: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (signal != AutomationSignalId.ESP_BLE_RELAY_0 &&
+            signal != AutomationSignalId.ESP_BLE_RELAY_1
+        ) {
+            return
+        }
+        val id = relayId.trim()
+        if (id.isNotEmpty() && !id.matches(Regex("^[0-9a-fA-F]{8}$"))) {
+            issues += AutomationValidationIssue(
+                path,
+                ruEn("Id BLE-реле — 8 hex-символов", "BLE relay id is 8 hex characters"),
+            )
         }
     }
 

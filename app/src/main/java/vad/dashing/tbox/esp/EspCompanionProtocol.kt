@@ -311,12 +311,13 @@ object EspCompanionProtocol {
         line(TYPE_PHONE_FORGET, mapOf("id" to id.trim().lowercase(Locale.US)))
 
     /** Empty [id] targets every paired BLE relay board; pulseMs > 0 is a timed pulse. */
-    fun encodeRelayDevSet(id: String, mask: Int, pulseMs: Int = 0): String {
+    fun encodeRelayDevSet(id: String, mask: Int, pulseMs: Int = 0, req: Int = 0): String {
         val extras = linkedMapOf<String, Any>(
             "mask" to (mask and 0xFF),
             "pulseMs" to pulseMs.coerceIn(0, 0xFFFF),
         )
         if (id.isNotBlank()) extras["id"] = id.trim().lowercase(Locale.US)
+        if (req > 0) extras["req"] = req
         return line(TYPE_RELAY_DEV_SET, extras)
     }
 
@@ -652,7 +653,11 @@ object EspCompanionProtocol {
                     level = o.optInt("level", 0) != 0,
                     ms = o.optLong("ms", 0L),
                 )
-                TYPE_RELAY -> EspMessage.Relay(mask = o.optInt("mask", 0))
+                TYPE_RELAY -> EspMessage.Relay(
+                    mask = o.optInt("mask", 0),
+                    latched = if (o.has("latched")) o.optInt("latched", 0) else null,
+                    pulse = o.optInt("pulse", 0),
+                )
                 TYPE_UM980_RSP -> {
                     val arr = o.optJSONArray("lines") ?: JSONArray()
                     val lines = buildList {
@@ -776,6 +781,7 @@ object EspCompanionProtocol {
                     phase = o.optString("phase", ""),
                     ok = o.optBoolean("ok", false),
                     err = o.optString("err", "").ifBlank { null },
+                    req = if (o.has("req")) o.optInt("req") else null,
                 )
                 TYPE_AP_STATUS -> EspMessage.ApStatus(
                     on = o.optBoolean("on", false),
@@ -983,7 +989,12 @@ sealed class EspMessage {
 
     data class GpioEvent(val channel: Int, val level: Boolean, val ms: Long) : EspMessage()
 
-    data class Relay(val mask: Int) : EspMessage()
+    data class Relay(
+        val mask: Int,
+        /** Held state. Null on firmware that only reports the driven mask. */
+        val latched: Int? = null,
+        val pulse: Int = 0,
+    ) : EspMessage()
 
     data class Um980Rsp(
         val cmd: String,
@@ -1111,6 +1122,8 @@ sealed class EspMessage {
         val phase: String,
         val ok: Boolean,
         val err: String? = null,
+        /** Matches relayDevSet "req". Null when the companion did not echo one. */
+        val req: Int? = null,
     ) : EspMessage()
 
     data class ApStatus(

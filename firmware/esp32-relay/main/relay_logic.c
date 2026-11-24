@@ -16,6 +16,7 @@ static bool s_pulse;
 static uint32_t s_pulse_start_ms;
 static uint32_t s_pulse_len_ms;
 static bool s_restored;
+static bool s_self_opened;
 static uint32_t s_latched_on_ms;
 static SemaphoreHandle_t s_mu;
 
@@ -116,6 +117,7 @@ void relay_logic_poll(void)
     if (CONFIG_RELAY_MAX_ON_S > 0 && (s_mask & 0x01) && s_latched_on_ms != 0) {
         uint32_t limit = (uint32_t)CONFIG_RELAY_MAX_ON_S * 1000u;
         if ((uint32_t)(now_ms() - s_latched_on_ms) >= limit) {
+            s_self_opened = true;
             relay_logic_apply(0, 0);
         }
     }
@@ -129,5 +131,17 @@ bool relay_logic_take_restored(void)
 {
     bool r = s_restored;
     s_restored = false;
+    return r;
+}
+
+void relay_logic_mark_self_opened(void)
+{
+    s_self_opened = true;
+}
+
+bool relay_logic_take_self_opened(void)
+{
+    bool r = s_self_opened;
+    s_self_opened = false;
     return r;
 }
