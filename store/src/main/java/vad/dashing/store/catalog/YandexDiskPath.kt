@@ -44,6 +44,9 @@ object YandexDiskPath {
     fun appIconPath(channel: UpdateChannel, appId: String, fileName: String = "icon.png"): String =
         "${channelRoot(channel)}/apps/$appId/$fileName"
 
+    fun appFilePath(channel: UpdateChannel, appId: String, fileName: String): String =
+        "${channelRoot(channel)}/apps/$appId/files/$fileName"
+
     /**
      * Per-app localized changelog on the share: `changelog.ru.txt` / `changelog.en.txt`.
      * [lang] is `ru` or `en` (other values → `ru`).

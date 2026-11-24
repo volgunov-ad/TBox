@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "publishedAt": "2026-11-21T12:00:00Z",
+  "sections": [
+    {"id": "app", "title": "Приложения", "titleEn": "Apps"},
+    {"id": "tool", "title": "Инструменты", "titleEn": "Tools"}
+  ],
   "apps": [
     {
       "id": "tbox-store",
@@ -8,10 +12,8 @@
       "title": "Dashing Store",
       "summary": "Магазин приложений ГУ — обновляется сам из каталога (ru/en)",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "manifest": "yandex-disk:/apps/tbox-store/version.json"
     },
     {
@@ -20,10 +22,8 @@
       "title": "TBox Monitor",
       "summary": "Телеметрия, поездки, панели, CAN",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "manifest": "yandex-disk:/apps/tbox-monitor/version.json"
     },
     {
@@ -32,10 +32,8 @@
       "title": "TBox MQTT",
       "summary": "Мост External API → MQTT / Home Assistant",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "manifest": "yandex-disk:/apps/mqtt/version.json"
     },
     {
@@ -44,10 +42,8 @@
       "title": "Камеры ГУ",
       "summary": "Окна камер A9",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "manifest": "yandex-disk:/apps/camd/version.json"
     },
     {
@@ -56,25 +52,29 @@
       "title": "DCL Launcher",
       "summary": "Лаунчер DCL — установка и обновление без DCLInstall",
       "publisher": "DCL",
-      "origin": "third-party",
       "hu": ["a9"],
-      "category": "app",
-      "verified": true,
-      "manifest": "yandex-disk:/apps/dcl-launcher/version.json",
-      "reviewNotes": "Публикует разработчик лаунчера"
+      "sections": ["app"],
+      "manifest": "yandex-disk:/apps/dcl-launcher/version.json"
     },
     {
       "id": "dclinstall",
       "packageName": "vad.dashing.dclinstall",
       "title": "DCL Install",
-      "summary": "Окружение DCL на A9. При скачивании APK лаунчера кладётся в Загрузки для выбора в установщике",
+      "summary": "Окружение DCL на A9. При скачивании файлы карточки сохраняются в Загрузки",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9"],
-      "category": "tool",
-      "verified": true,
+      "sections": ["tool"],
       "manifest": "yandex-disk:/apps/dclinstall/version.json",
-      "copyApkToDownloadsAppId": "dcl-launcher"
+      "downloads": {
+        "folder": "DCL Launcher",
+        "files": [
+          {
+            "name": "dcl-launcher-0.8.32-ru.apk",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sizeBytes": 31457280
+          }
+        ]
+      }
     },
     {
       "id": "phone",
@@ -82,10 +82,8 @@
       "title": "TBox Phone",
       "summary": "Связь телефона с ГУ — QR для установки на телефон, APK можно сохранить в Загрузки на ГУ",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "manifest": "yandex-disk:/apps/phone/version.json",
       "installMode": "phone"
     }

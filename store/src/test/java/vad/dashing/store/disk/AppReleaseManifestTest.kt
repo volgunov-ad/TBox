@@ -31,8 +31,7 @@ class AppReleaseManifestTest {
                   "flavor": "default",
                   "apkFileName": "mqtt.apk",
                   "sha256": "bbb",
-                  "apkSizeBytes": 1234,
-                  "changelog": "fix"
+                  "apkSizeBytes": 1234
                 }
               ]
             }
@@ -42,7 +41,6 @@ class AppReleaseManifestTest {
         assertEquals(11L, release?.versionCode)
         assertEquals("mqtt.apk", release?.apkFileName)
         assertEquals(1234L, release?.apkSizeBytes)
-        assertEquals("fix", release?.changelog)
     }
 
     @Test

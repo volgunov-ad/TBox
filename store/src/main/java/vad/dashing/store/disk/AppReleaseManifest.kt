@@ -11,7 +11,6 @@ data class AppReleaseInfo(
     val sha256: String,
     val apkSizeBytes: Long? = null,
     val minSupportedVersionCode: Long = 0L,
-    val changelog: String = "",
     val publishedAt: String = "",
 )
 
@@ -73,7 +72,6 @@ data class AppReleaseManifest(
                             sha256 = sha256,
                             apkSizeBytes = apkSizeBytes,
                             minSupportedVersionCode = item.optLong("minSupportedVersionCode", 0L),
-                            changelog = item.optString("changelog"),
                             publishedAt = item.optString("publishedAt"),
                         ),
                     )

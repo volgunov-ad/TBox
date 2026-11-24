@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.store.catalog.StoreCatalog
 import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.catalog.StorePublicShareUrl
+import vad.dashing.store.catalog.StoreSection
 import vad.dashing.store.catalog.YandexDiskPath
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppChangelogState
@@ -35,7 +36,10 @@ import vad.dashing.store.install.ApkInstaller
 import vad.dashing.store.install.ApkSigner
 import vad.dashing.store.install.ApkUninstaller
 import vad.dashing.store.install.ApkVerifier
-import vad.dashing.store.install.DownloadsApkSaver
+import vad.dashing.store.install.CardFileProgress
+import vad.dashing.store.install.CardFilesDownloader
+import vad.dashing.store.install.CardFilesResult
+import vad.dashing.store.install.DownloadsSaver
 import vad.dashing.store.install.InstallPermissionHelper
 
 data class InstalledAppInfo(
@@ -81,7 +85,11 @@ data class StoreAppRow(
 sealed interface StoreListState {
     data object Idle : StoreListState
     data object Loading : StoreListState
-    data class Ready(val rows: List<StoreAppRow>, val publishedAt: String = "") : StoreListState
+    data class Ready(
+        val rows: List<StoreAppRow>,
+        val publishedAt: String = "",
+        val sections: List<StoreSection> = emptyList(),
+    ) : StoreListState
     data class Error(val message: String) : StoreListState
 }
 
@@ -98,6 +106,7 @@ sealed interface StoreActionState {
         val downloadedBytes: Long = 0L,
         val totalBytes: Long? = null,
         val target: DownloadTarget = DownloadTarget.INSTALL,
+        val file: CardFileProgress? = null,
     ) : StoreActionState {
         val percent: Int?
             get() = if (totalBytes != null && totalBytes > 0L) {
@@ -118,10 +127,8 @@ sealed interface StoreActionState {
         val entry: StoreCatalogEntry,
         /** Signer of [apkFile] read while verifying; null when it was not needed or unreadable. */
         val apkSigner: ApkSigner? = null,
-        /** Public Downloads path of a companion APK (e.g. DCL launcher for DCLInstall). */
-        val downloadsSidecarPath: String? = null,
-        /** Soft failure while saving the companion APK; main APK is still ready. */
-        val downloadsSidecarError: String? = null,
+        /** Card files saved into Downloads (optional). */
+        val files: CardFilesResult? = null,
     ) : StoreActionState
 
     /** APK saved to public Downloads (phone apps, or any app to install elsewhere). */
@@ -130,6 +137,7 @@ sealed interface StoreActionState {
         val downloadsPath: String,
         val release: AppReleaseInfo,
         val entry: StoreCatalogEntry,
+        val files: CardFilesResult? = null,
     ) : StoreActionState
 
     data class Error(val appId: String?, val message: String) : StoreActionState
@@ -155,6 +163,8 @@ object StoreErrors {
     const val CERT_CONFLICTS_INSTALLED = "cert_conflicts_installed"
     const val APK_MISSING = "apk_missing"
     const val DOWNLOADS_WRITE_FAILED = "downloads_write_failed"
+    const val FILE_CHECKSUM_MISMATCH = "file_checksum_mismatch"
+    const val FILE_WRITE_FAILED = "file_write_failed"
 }
 
 class StoreRepository(
@@ -276,7 +286,11 @@ class StoreRepository(
                 }.awaitAll()
             }
             lastRows = rows
-            _listState.value = StoreListState.Ready(rows, catalog.publishedAt)
+            _listState.value = StoreListState.Ready(
+                rows = rows,
+                publishedAt = catalog.publishedAt,
+                sections = catalog.sections,
+            )
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -327,8 +341,8 @@ class StoreRepository(
             _actionState.value = StoreActionState.Error(appId, StoreErrors.NETWORK_UNAVAILABLE)
             return
         }
-        if (effectiveTarget == DownloadTarget.DOWNLOADS || row.entry.copyApkToDownloadsAppId.isNotBlank()) {
-            if (!DownloadsApkSaver.hasWritePermission(context)) {
+        if (effectiveTarget == DownloadTarget.DOWNLOADS || row.entry.hasDownloadFiles) {
+            if (!DownloadsSaver.hasWritePermission(context)) {
                 _actionState.value = StoreActionState.Error(appId, StoreErrors.DOWNLOADS_PERMISSION)
                 return
             }
@@ -378,15 +392,27 @@ class StoreRepository(
                         destination.delete()
                     }
                 }
+                val files = if (row.entry.hasDownloadFiles) {
+                    withContext(Dispatchers.IO) {
+                        downloadCardFiles(channel, row.entry, appId, effectiveTarget)
+                    }
+                } else {
+                    null
+                }
                 _actionState.value = StoreActionState.SavedToDownloads(
                     appId = appId,
                     downloadsPath = saved.absolutePath,
                     release = withSize,
                     entry = row.entry,
+                    files = files,
                 )
             } else {
-                val sidecar = withContext(Dispatchers.IO) {
-                    downloadSidecarToDownloads(channel, row.entry)
+                val files = if (row.entry.hasDownloadFiles) {
+                    withContext(Dispatchers.IO) {
+                        downloadCardFiles(channel, row.entry, appId, effectiveTarget)
+                    }
+                } else {
+                    null
                 }
                 _actionState.value = StoreActionState.ReadyToInstall(
                     appId = appId,
@@ -394,8 +420,7 @@ class StoreRepository(
                     release = withSize,
                     entry = row.entry,
                     apkSigner = apkSigner,
-                    downloadsSidecarPath = sidecar.path,
-                    downloadsSidecarError = sidecar.error,
+                    files = files,
                 )
             }
         } catch (error: CancellationException) {
@@ -462,8 +487,7 @@ class StoreRepository(
 
     /**
      * Loads `changelog.<lang>.txt` for [appId] when the detail card opens.
-     * Prefers the Store UI language, then the other language; does not use
-     * `version.json` release notes (those remain a short fallback in the UI).
+     * Prefers the Store UI language, then the other language.
      */
     suspend fun loadAppChangelog(appId: String) {
         val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
@@ -586,22 +610,6 @@ class StoreRepository(
         }
     }
 
-    private fun loadRelease(
-        channel: UpdateChannel,
-        entry: StoreCatalogEntry,
-        preferredFlavor: String? = null,
-    ): AppReleaseInfo {
-        val releases = loadReleases(channel, entry)
-        return AppReleaseManifest(1, releases).preferredRelease(
-            preferredFlavor ?: _apkLanguage.value.flavor,
-        ) ?: throw IOException("No releases for ${entry.id}")
-    }
-
-    private data class SidecarResult(
-        val path: String? = null,
-        val error: String? = null,
-    )
-
     private fun downloadsDisplayName(entry: StoreCatalogEntry, release: AppReleaseInfo): String =
         buildString {
             append(entry.id)
@@ -616,46 +624,43 @@ class StoreRepository(
         entry: StoreCatalogEntry,
         release: AppReleaseInfo,
         cacheFile: File,
-    ): File = DownloadsApkSaver.save(
+    ): File = DownloadsSaver.save(
         context,
         cacheFile,
         downloadsDisplayName(entry, release),
     )
 
-    /**
-     * For tools like DCLInstall: also fetch companion app APK into public Downloads
-     * so the user can pick it inside that tool. Does not install the companion.
-     */
-    private suspend fun downloadSidecarToDownloads(
+    private suspend fun downloadCardFiles(
         channel: UpdateChannel,
         entry: StoreCatalogEntry,
-    ): SidecarResult {
-        val sidecarId = entry.copyApkToDownloadsAppId.trim()
-        if (sidecarId.isBlank()) return SidecarResult()
-        var cacheFile: File? = null
-        return try {
-            val sidecarRow = lastRows.firstOrNull { it.entry.id == sidecarId }
-            val sidecarEntry = sidecarRow?.entry
-                ?: throw IOException("Catalog entry not found: $sidecarId")
-            val release = sidecarRow.remote
-                ?: loadRelease(channel, sidecarEntry, _apkLanguage.value.flavor)
-            val file = apkDestinationFile(sidecarEntry.id, release)
-            cacheFile = file
-            cloud.downloadToFile(
-                diskPath = YandexDiskPath.appApkPath(channel, sidecarEntry.id, release.apkFileName),
-                destination = file,
-            )
-            verifyDownloadedApk(file, sidecarEntry, release)
-            val saved = saveApkToDownloads(sidecarEntry, release, file)
-            SidecarResult(path = saved.absolutePath)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            SidecarResult(error = errorText(error))
-        } finally {
-            cacheFile?.let { file ->
-                file.delete()
-                File(file.parentFile, "${file.name}.part").delete()
+        appId: String,
+        target: DownloadTarget,
+    ): CardFilesResult {
+        val downloader = CardFilesDownloader(
+            cacheDir = File(context.cacheDir, "store/files"),
+            download = { diskPath, dest, onProgress ->
+                cloud.downloadToFile(diskPath, dest, onProgress)
+            },
+            publish = { source, folder, fileName ->
+                DownloadsSaver.saveFile(context, source, folder, fileName)
+            },
+            existing = { folder, fileName -> DownloadsSaver.existingFile(folder, fileName) },
+        )
+        var throttle = ProgressThrottle()
+        var lastIndex = -1
+        return downloader.saveAll(channel, entry) { fileProgress, downloaded, total ->
+            if (fileProgress.index != lastIndex) {
+                throttle = ProgressThrottle()
+                lastIndex = fileProgress.index
+            }
+            if (downloaded == 0L || throttle.shouldEmit(downloaded, total)) {
+                _actionState.value = StoreActionState.Downloading(
+                    appId = appId,
+                    downloadedBytes = downloaded,
+                    totalBytes = total,
+                    target = target,
+                    file = fileProgress,
+                )
             }
         }
     }

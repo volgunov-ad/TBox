@@ -16,8 +16,8 @@ android {
         minSdk = 28
         targetSdk = 36
         // Keep in sync with store/Changelog.dm (bump both on every Disk publish).
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Dedicated AppStore shares (release/ + dev/ apps trees). Not the Monitor OTA keys.
         buildConfigField(

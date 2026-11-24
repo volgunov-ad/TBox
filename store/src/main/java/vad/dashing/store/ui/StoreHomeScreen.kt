@@ -31,12 +31,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -47,6 +51,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -67,6 +72,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,6 +89,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import vad.dashing.store.BuildConfig
 import vad.dashing.store.DownloadTarget
 import vad.dashing.store.HuKind
@@ -91,15 +98,15 @@ import vad.dashing.store.StoreActionState
 import vad.dashing.store.StoreAppRow
 import vad.dashing.store.StoreErrors
 import vad.dashing.store.StoreListState
-import vad.dashing.store.catalog.StoreAppCategory
-import vad.dashing.store.catalog.StoreAppOrigin
+import vad.dashing.store.catalog.StoreSection
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.CloudSource
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.dexopt.CompileErrors
 import vad.dashing.store.dexopt.CompileState
-import vad.dashing.store.install.DownloadsApkSaver
+import vad.dashing.store.install.CardFilesResult
+import vad.dashing.store.install.DownloadsSaver
 import vad.dashing.store.install.InstallPermissionHelper
 import vad.dashing.store.install.formatApkSizeMegabytes
 import vad.dashing.store.ui.theme.StoreDimens
@@ -118,7 +125,10 @@ fun StoreHomeScreen(
     val cloudSource by viewModel.cloudSource.collectAsStateWithLifecycle()
     val apkLanguage by viewModel.apkLanguage.collectAsStateWithLifecycle()
     val selectedAppId by viewModel.selectedAppId.collectAsStateWithLifecycle()
+    val selectedSectionId by viewModel.selectedSectionId.collectAsStateWithLifecycle()
+    val page by viewModel.page.collectAsStateWithLifecycle()
     val icons by viewModel.icons.collectAsStateWithLifecycle()
+    val uiLang = if (BuildConfig.FLAVOR.equals("en", ignoreCase = true)) "en" else "ru"
     val appChangelogs by viewModel.appChangelogs.collectAsStateWithLifecycle()
     val compileStates by viewModel.compileStates.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -143,8 +153,8 @@ fun StoreHomeScreen(
 
     fun startDownload(row: StoreAppRow, target: DownloadTarget) {
         val toDownloads = target == DownloadTarget.DOWNLOADS || row.entry.isPhoneDistribution
-        val needsDownloadsWrite = toDownloads || row.entry.copyApkToDownloadsAppId.isNotBlank()
-        if (needsDownloadsWrite && !DownloadsApkSaver.hasWritePermission(context)) {
+        val needsDownloadsWrite = toDownloads || row.entry.hasDownloadFiles
+        if (needsDownloadsWrite && !DownloadsSaver.hasWritePermission(context)) {
             pendingDownload = PendingDownload(row.entry.id, target)
             writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             return
@@ -231,6 +241,10 @@ fun StoreHomeScreen(
                     isHeadUnit = isHeadUnit,
                     isSelf = selectedRow.entry.packageName == context.packageName,
                     phoneQrUrl = viewModel.phoneApkBrowseUrl(selectedRow),
+                    sectionTitles = (listState as? StoreListState.Ready)?.sections
+                        ?.filter { it.id in selectedRow.entry.sections }
+                        ?.map { it.displayTitle(uiLang) }
+                        .orEmpty(),
                     changelogState = selectedChangelog,
                     compileState = compilePackage?.let { compileStates[it] ?: CompileState.Unknown },
                     compileBusy = compileStates.values.any { it is CompileState.Compiling },
@@ -244,12 +258,29 @@ fun StoreHomeScreen(
                     onGrantInstall = { openInstallSettings() },
                 )
             } else {
+                val catalogView = remember(listState, selectedSectionId, page, uiLang) {
+                    val ready = listState as? StoreListState.Ready
+                    if (ready == null) {
+                        CatalogView(emptyList(), null, emptyList(), 0, 1)
+                    } else {
+                        buildCatalogView(
+                            rows = ready.rows,
+                            sections = ready.sections,
+                            selectedSectionId = selectedSectionId,
+                            page = page,
+                            lang = uiLang,
+                        )
+                    }
+                }
                 CatalogScreen(
                     listState = listState,
+                    catalogView = catalogView,
                     icons = icons,
                     actionState = actionState,
                     storePackageName = context.packageName,
                     isHeadUnit = isHeadUnit,
+                    onSelectSection = { viewModel.selectSection(it) },
+                    onPage = { viewModel.setPage(it) },
                     header = {
                         StoreFilterBar(
                             channel = channel,
@@ -677,6 +708,27 @@ private fun SelfUpdateBanner(
     }
 }
 
+@Composable
+private fun FilesResultBanners(files: CardFilesResult?) {
+    if (files == null) return
+    if (files.readyCount > 0) {
+        MessageBanner(
+            kind = MessageKind.SUCCESS,
+            text = stringResource(R.string.store_files_saved, files.folderPath, files.readyCount),
+        )
+    }
+    files.failed.forEach { failure ->
+        MessageBanner(
+            kind = MessageKind.ERROR,
+            text = stringResource(
+                R.string.store_files_failed,
+                failure.name,
+                knownErrorText(failure.error) ?: failure.error,
+            ),
+        )
+    }
+}
+
 /** Result of a quick action started from the list (no detail screen open to show it). */
 @Composable
 private fun ListActionResult(
@@ -694,11 +746,15 @@ private fun ListActionResult(
                 onDismiss = onDismiss,
             )
         }
-        is StoreActionState.SavedToDownloads -> MessageBanner(
-            kind = MessageKind.SUCCESS,
-            text = stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
-            onDismiss = onDismiss,
-        )
+        is StoreActionState.SavedToDownloads -> {
+            MessageBanner(
+                kind = MessageKind.SUCCESS,
+                text = stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
+                onDismiss = onDismiss,
+            )
+            FilesResultBanners(actionState.files)
+        }
+        is StoreActionState.ReadyToInstall -> FilesResultBanners(actionState.files)
         else -> Unit
     }
 }
@@ -714,6 +770,8 @@ private fun knownErrorText(message: String): String? = when (message) {
     StoreErrors.PHONE_APK_NOT_FOR_HU -> stringResource(R.string.store_error_phone_not_for_hu)
     StoreErrors.DOWNLOADS_PERMISSION -> stringResource(R.string.store_error_downloads_permission)
     StoreErrors.DOWNLOADS_WRITE_FAILED -> stringResource(R.string.store_error_downloads_write_failed)
+    StoreErrors.FILE_CHECKSUM_MISMATCH -> stringResource(R.string.store_error_file_checksum_mismatch)
+    StoreErrors.FILE_WRITE_FAILED -> stringResource(R.string.store_error_file_write_failed)
     StoreErrors.NO_ACTIVITY -> stringResource(R.string.store_error_no_activity)
     StoreErrors.APK_MISSING -> stringResource(R.string.store_error_apk_missing)
     StoreErrors.CHECKSUM_MISMATCH -> stringResource(R.string.store_error_checksum_mismatch)
@@ -732,10 +790,13 @@ private fun knownErrorText(message: String): String? = when (message) {
 @Composable
 private fun CatalogScreen(
     listState: StoreListState,
+    catalogView: CatalogView,
     icons: Map<String, Bitmap>,
     actionState: StoreActionState,
     storePackageName: String,
     isHeadUnit: Boolean,
+    onSelectSection: (String?) -> Unit,
+    onPage: (Int) -> Unit,
     header: @Composable ColumnScope.() -> Unit,
     onRetry: () -> Unit,
     onSelect: (String) -> Unit,
@@ -743,8 +804,17 @@ private fun CatalogScreen(
     onInstall: () -> Unit,
     onOpen: (StoreAppRow) -> Unit,
 ) {
+    val listStateLazy = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    fun scrollToSectionsOrCards() {
+        scope.launch {
+            // Scroll to sections row (or first cards) under the header.
+            listStateLazy.scrollToItem(1)
+        }
+    }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
+            state = listStateLazy,
             modifier = Modifier
                 .fillMaxSize()
                 .widthIn(max = StoreDimens.ContentMaxWidth),
@@ -796,30 +866,117 @@ private fun CatalogScreen(
                         )
                     }
                 }
-                is StoreListState.Ready -> if (listState.rows.isEmpty()) {
-                    item(key = "empty") {
-                        CenteredState {
-                            Text(
-                                stringResource(R.string.store_empty),
-                                style = MaterialTheme.typography.tboxBody,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
+                is StoreListState.Ready -> {
+                    if (catalogView.chips.isNotEmpty()) {
+                        item(key = "sections") {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(vertical = 2.dp),
+                            ) {
+                                items(catalogView.chips, key = { it.id ?: "all" }) { chip ->
+                                    val selected = catalogView.selectedSectionId == chip.id
+                                    val title = if (chip.id == null) {
+                                        stringResource(R.string.store_section_all)
+                                    } else {
+                                        chip.title
+                                    }
+                                    FilterChip(
+                                        selected = selected,
+                                        onClick = { onSelectSection(chip.id) },
+                                        label = {
+                                            Text(
+                                                stringResource(
+                                                    R.string.store_section_chip,
+                                                    title,
+                                                    chip.count,
+                                                ),
+                                                style = MaterialTheme.typography.labelLarge,
+                                            )
+                                        },
+                                        modifier = Modifier.heightIn(min = StoreDimens.ChipHeight),
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    items(listState.rows, key = { it.entry.id }) { row ->
-                        AppStoreCard(
-                            row = row,
-                            icon = icons[row.entry.id],
-                            actionState = actionState,
-                            isSelf = row.entry.packageName == storePackageName,
-                            isHeadUnit = isHeadUnit,
-                            onClick = { onSelect(row.entry.id) },
-                            onDownload = { target -> onDownload(row, target) },
-                            onInstall = onInstall,
-                            onOpen = { onOpen(row) },
-                        )
+                    if (listState.rows.isEmpty()) {
+                        item(key = "empty") {
+                            CenteredState {
+                                Text(
+                                    stringResource(R.string.store_empty),
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    } else {
+                        items(catalogView.pageRows, key = { it.entry.id }) { row ->
+                            AppStoreCard(
+                                row = row,
+                                icon = icons[row.entry.id],
+                                actionState = actionState,
+                                isSelf = row.entry.packageName == storePackageName,
+                                isHeadUnit = isHeadUnit,
+                                sectionTitles = catalogView.chips
+                                    .filter { it.id != null && it.id in row.entry.sections }
+                                    .map { it.title },
+                                onClick = { onSelect(row.entry.id) },
+                                onDownload = { target -> onDownload(row, target) },
+                                onInstall = onInstall,
+                                onOpen = { onOpen(row) },
+                            )
+                        }
+                        if (catalogView.pageCount > 1) {
+                            item(key = "pager") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            onPage(catalogView.page - 1)
+                                            scrollToSectionsOrCards()
+                                        },
+                                        enabled = catalogView.page > 0,
+                                        modifier = Modifier.heightIn(min = StoreDimens.CompactButtonHeight),
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                            contentDescription = null,
+                                        )
+                                        Text(stringResource(R.string.store_page_prev))
+                                    }
+                                    Text(
+                                        text = stringResource(
+                                            R.string.store_page_indicator,
+                                            catalogView.page + 1,
+                                            catalogView.pageCount,
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            onPage(catalogView.page + 1)
+                                            scrollToSectionsOrCards()
+                                        },
+                                        enabled = catalogView.page < catalogView.pageCount - 1,
+                                        modifier = Modifier.heightIn(min = StoreDimens.CompactButtonHeight),
+                                    ) {
+                                        Text(stringResource(R.string.store_page_next))
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                            contentDescription = null,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -863,6 +1020,7 @@ private fun AppStoreCard(
     actionState: StoreActionState,
     isSelf: Boolean,
     isHeadUnit: Boolean,
+    sectionTitles: List<String>,
     onClick: () -> Unit,
     onDownload: (DownloadTarget) -> Unit,
     onInstall: () -> Unit,
@@ -902,7 +1060,7 @@ private fun AppStoreCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val meta = metaLine(row)
+                val meta = metaLine(row, sectionTitles)
                 if (meta.isNotBlank()) {
                     Text(
                         text = meta,
@@ -1045,19 +1203,11 @@ private fun Pill(
 }
 
 @Composable
-private fun categoryLabel(category: StoreAppCategory): String = when (category) {
-    StoreAppCategory.TOOL -> stringResource(R.string.store_category_tool)
-    StoreAppCategory.ONESHOT -> stringResource(R.string.store_category_oneshot)
-    StoreAppCategory.APP -> stringResource(R.string.store_category_app)
-}
-
-@Composable
-private fun metaLine(row: StoreAppRow): String {
+private fun metaLine(row: StoreAppRow, sectionTitles: List<String>): String {
     val parts = mutableListOf<String>()
     if (row.entry.publisher.isNotBlank()) parts += row.entry.publisher
-    parts += categoryLabel(row.entry.category)
-    if (row.entry.origin == StoreAppOrigin.THIRD_PARTY) {
-        parts += stringResource(R.string.store_badge_third_party)
+    if (sectionTitles.isNotEmpty()) {
+        parts += sectionTitles.joinToString(", ")
     }
     return parts.joinToString(" · ")
 }
@@ -1098,6 +1248,7 @@ private fun AppDetail(
     isHeadUnit: Boolean,
     isSelf: Boolean,
     phoneQrUrl: String?,
+    sectionTitles: List<String>,
     changelogState: AppChangelogState,
     compileState: CompileState?,
     compileBusy: Boolean,
@@ -1148,10 +1299,7 @@ private fun AppDetail(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             StatusPill(row = row, isSelf = isSelf, isHeadUnit = isHeadUnit)
-                            Pill(categoryLabel(row.entry.category))
-                            if (row.entry.origin == StoreAppOrigin.THIRD_PARTY) {
-                                Pill(stringResource(R.string.store_badge_third_party))
-                            }
+                            sectionTitles.forEach { title -> Pill(title) }
                             row.remote?.versionName?.takeIf { it.isNotBlank() }?.let { Pill("v$it") }
                             row.remote?.apkSizeBytes?.let { bytes ->
                                 Pill(stringResource(R.string.store_apk_size_mb, formatApkSizeMegabytes(bytes)))
@@ -1178,6 +1326,24 @@ private fun AppDetail(
                 )
             }
 
+            if (row.entry.hasDownloadFiles) {
+                val downloads = row.entry.downloads!!
+                DetailCard(title = stringResource(R.string.store_files_title)) {
+                    Text(
+                        stringResource(R.string.store_files_hint, downloads.folder),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    downloads.files.forEach { file ->
+                        val size = file.sizeBytes?.let { formatApkSizeMegabytes(it) }
+                        Text(
+                            text = if (size != null) "${file.name} · $size MB" else file.name,
+                            style = MaterialTheme.typography.tboxBody,
+                        )
+                    }
+                }
+            }
+
             if (compileState != null) {
                 DetailCard(title = stringResource(R.string.store_compile_title)) {
                     CompileSection(state = compileState, busy = compileBusy, onCompile = onCompile)
@@ -1196,10 +1362,7 @@ private fun AppDetail(
                 }
             }
 
-            ChangelogSection(
-                state = changelogState,
-                releaseFallback = row.remote?.changelog.orEmpty(),
-            )
+            ChangelogSection(state = changelogState)
 
             row.manifestError?.let { err ->
                 MessageBanner(kind = MessageKind.ERROR, text = stringResource(R.string.store_error, err))
@@ -1299,9 +1462,7 @@ private fun ColumnScope.CompileSection(
 @Composable
 private fun ChangelogSection(
     state: AppChangelogState,
-    releaseFallback: String,
 ) {
-    val fallback = releaseFallback.trim()
     when (state) {
         is AppChangelogState.Idle, is AppChangelogState.Loading -> {
             DetailCard(title = stringResource(R.string.store_changelog)) {
@@ -1321,21 +1482,13 @@ private fun ChangelogSection(
         is AppChangelogState.Ready -> DetailCard(title = stringResource(R.string.store_changelog)) {
             Text(state.text, style = MaterialTheme.typography.tboxBody)
         }
-        is AppChangelogState.Absent -> if (fallback.isNotEmpty()) {
-            DetailCard(title = stringResource(R.string.store_changelog)) {
-                Text(fallback, style = MaterialTheme.typography.tboxBody)
-            }
-        }
+        is AppChangelogState.Absent -> Unit
         is AppChangelogState.Error -> DetailCard(title = stringResource(R.string.store_changelog)) {
-            if (fallback.isNotEmpty()) {
-                Text(fallback, style = MaterialTheme.typography.tboxBody)
-            } else {
-                Text(
-                    actionErrorText(state.message),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+            Text(
+                actionErrorText(state.message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
@@ -1424,8 +1577,22 @@ private fun DetailActions(
     when {
         actionState is StoreActionState.Downloading && actionState.appId == id -> {
             val percent = actionState.percent
+            val file = actionState.file
             Text(
                 text = when {
+                    file != null && percent != null -> stringResource(
+                        R.string.store_downloading_file,
+                        file.index,
+                        file.count,
+                        file.name,
+                        percent,
+                    )
+                    file != null -> stringResource(
+                        R.string.store_downloading_file_unknown,
+                        file.index,
+                        file.count,
+                        file.name,
+                    )
                     percent != null -> stringResource(R.string.store_downloading, percent)
                     else -> stringResource(R.string.store_downloading_unknown)
                 },
@@ -1472,24 +1639,14 @@ private fun DetailActions(
         }
         ready != null -> {
             MessageBanner(kind = MessageKind.SUCCESS, text = stringResource(R.string.store_ready_to_install))
-            ready.downloadsSidecarPath?.let { path ->
-                MessageBanner(
-                    kind = MessageKind.SUCCESS,
-                    text = stringResource(R.string.store_sidecar_saved, path),
-                )
-            }
-            ready.downloadsSidecarError?.let { err ->
-                MessageBanner(
-                    kind = MessageKind.ERROR,
-                    text = stringResource(R.string.store_sidecar_error, knownErrorText(err) ?: err),
-                )
-            }
+            FilesResultBanners(ready.files)
         }
         actionState is StoreActionState.SavedToDownloads && actionState.appId == id -> {
             MessageBanner(
                 kind = MessageKind.SUCCESS,
                 text = stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
             )
+            FilesResultBanners(actionState.files)
         }
         actionState is StoreActionState.Error &&
             (actionState.appId == id || actionState.appId == null) -> {

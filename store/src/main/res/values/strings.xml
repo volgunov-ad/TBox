@@ -16,7 +16,6 @@
     <string name="store_status_installed">Установлено %1$s (%2$d)</string>
     <string name="store_status_update">Обновление %1$s (%2$d)</string>
     <string name="store_status_unsupported">Не для этой ГУ</string>
-    <string name="store_badge_third_party">Стороннее</string>
     <string name="store_get">Получить</string>
     <string name="store_update">Обновить</string>
     <string name="store_install">Установить</string>
@@ -33,9 +32,17 @@
     <string name="store_apps_count">%1$d приложений</string>
     <string name="store_version_line">Версия %1$s (%2$d)</string>
     <string name="store_section_about">О приложении</string>
-    <string name="store_category_app">Приложение</string>
-    <string name="store_category_tool">Инструмент</string>
-    <string name="store_category_oneshot">Утилита</string>
+    <string name="store_section_all">Все</string>
+    <string name="store_section_chip">%1$s · %2$d</string>
+    <string name="store_page_prev">Предыдущая</string>
+    <string name="store_page_next">Следующая</string>
+    <string name="store_page_indicator">Страница %1$d из %2$d</string>
+    <string name="store_files_title">Файлы в Загрузки</string>
+    <string name="store_files_hint">Сохраняются в «Загрузки/%1$s» при скачивании приложения</string>
+    <string name="store_downloading_file">Файл %1$d из %2$d: %3$s — %4$d%%</string>
+    <string name="store_downloading_file_unknown">Файл %1$d из %2$d: %3$s…</string>
+    <string name="store_files_saved">Файлы сохранены в %1$s (%2$d)</string>
+    <string name="store_files_failed">Не удалось сохранить %1$s: %2$s</string>
     <string name="store_cancel">Отменить</string>
     <string name="store_downloading">Загрузка %1$d%%</string>
     <string name="store_downloading_unknown">Загрузка…</string>
@@ -50,8 +57,6 @@
     <string name="store_changelog">Изменения</string>
     <string name="store_changelog_loading">Загрузка списка изменений…</string>
     <string name="store_back">Назад к списку</string>
-    <string name="store_sidecar_saved">APK для выбора сохранён в Загрузки:\n%1$s</string>
-    <string name="store_sidecar_error">Не удалось сохранить companion APK в Загрузки: %1$s</string>
     <string name="store_phone_only">Только для телефона</string>
     <string name="store_phone_qr_hint">Сканируйте QR на телефоне, чтобы открыть страницу скачивания APK</string>
     <string name="store_phone_qr_button">QR-код</string>
@@ -76,6 +81,8 @@
     <string name="store_error_cert_conflicts_installed">Это приложение уже установлено с другой подписью. Удалите старую версию и установите снова</string>
     <string name="store_error_apk_missing">Файл APK не найден — скачайте снова</string>
     <string name="store_error_downloads_write_failed">Не удалось записать APK в Загрузки</string>
+    <string name="store_error_file_checksum_mismatch">Контрольная сумма файла не совпала — скачайте снова</string>
+    <string name="store_error_file_write_failed">Не удалось записать файл в Загрузки</string>
     <string name="store_verifying_saving">Проверка и сохранение…</string>
     <string name="store_ready_to_install">APK скачан и проверен</string>
     <string name="store_retry">Повторить</string>
