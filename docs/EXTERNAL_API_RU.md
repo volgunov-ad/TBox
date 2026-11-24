@@ -114,11 +114,13 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
 | **Опасные команды** | тумблер разрешения ADB / `dangerous` (по умолчанию выкл.) |
 | **Справка** | коротко: для чего API; подробности — [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) |
 
-Диалог подтверждения для локальных приложений на ГУ (`ExternalApiLocalConsentActivity`) открывается
-поверх любого экрана автоматически при запросе через `ContentProvider` (нельзя закрыть Back /
-тапом снаружи — только «Разрешить» / «Отклонить»). Тот же pending дублируется в разделе «API»
-рядом с HTTP pairing. **Ручной вход в режим HTTP pairing и управление доверенными клиентами**
-тоже находятся в разделе «API».
+Диалог подтверждения на ГУ — оверлей `TYPE_APPLICATION_OVERLAY` (`ExternalApiConnectPromptOverlay`):
+для локальных приложений при запросе через `ContentProvider` и для HTTP `pair/request` при активном
+режиме pairing. Показывается **только при включённом сервере API**. Нельзя закрыть Back /
+тапом снаружи — только «Разрешить» / «Отклонить». Тот же pending дублируется в разделе «API».
+Если нет права «поверх других окон», для локальных клиентов остаётся запасной
+`ExternalApiLocalConsentActivity`. **Ручной вход в режим HTTP pairing и управление доверенными
+клиентами** тоже находятся в разделе «API».
 
 ---
 
@@ -138,8 +140,8 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
 ### 5.1. Автоподключение приложений на ГУ (`content://vad.dashing.tbox.localaccess`)
 
 Реализовано в `ExternalApiLocalAccessProvider`, `ExternalApiLocalAccess`,
-`ExternalApiLocalConsentActivity` (`:app`) и общем клиентском модуле `shared/localaccess/`
-(`LocalAccessContract`, `LocalAccessClient`).
+`ExternalApiConnectPromptOverlay` / `ExternalApiLocalConsentActivity` (`:app`) и общем
+клиентском модуле `shared/localaccess/` (`LocalAccessContract`, `LocalAccessClient`).
 
 1. **Верификация вызывающего пакета через Binder:**
    - Приложение-спутник вызывает `ContentResolver.call(Uri.parse("content://vad.dashing.tbox.localaccess"), method, null, extras)`.
@@ -151,7 +153,7 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
    - Для пакета вычисляется SHA-256 сертификата подписи APK (`PackageManager.GET_SIGNING_CERTIFICATES` → `certSha256`, lowercase hex без двоеточий). Сертификат в `ExternalApiLocalClients` не прошивается: при первом «Разрешить» Monitor запоминает digest вызвавшего APK. Эталонный digest релизной подписи DCL (`launcher-ru-release.apk`, apksigner): `c78bcd6ff57fa4ea119cae592e145c0ec6b8bc2222b36ec7320972a40544a512` (ранее фигурировал `55c85c…` от другого артефакта/ключа — в allowlist не используется).
 2. **Однократное подтверждение пользователем (`getAccess`, `interactive = true`):**
    - При первом открытии TBox MQTT, VAD Voice или Dashing Club Launcher без сохранённого токена (либо по кнопке «Отправить запрос») клиент вызывает `LocalAccessClient.awaitAccess(context)`: сначала `getAccess(interactive = true)`, затем опрос `getAccess(interactive = false)` раз в `1 с` (до `120 с`), пока статус равен `"pending"`.
-   - Если клиент `local:<packageName>` с этим `certSha256` ещё не в списке доверенных, Monitor запускает прозрачную `ExternalApiLocalConsentActivity` поверх текущего экрана с диалогом подтверждения («Разрешить приложению „TBox MQTT“ (`vad.dashing.mqtt`) доступ к API?») — включать режим pairing в «Настройки → API» не нужно.
+   - Если клиент `local:<packageName>` с этим `certSha256` ещё не в списке доверенных и сервер API **включён**, Monitor показывает оверлей `SYSTEM_ALERT_WINDOW` с подтверждением («Разрешить приложению „TBox MQTT“ (`vad.dashing.mqtt`) доступ к API?») — включать режим pairing в «Настройки → API» не нужно. Без права оверлея — запасная `ExternalApiLocalConsentActivity`. Пока сервер API выключен, оверлей не показывается; pending всё равно виден в **Настройки → API**.
    - При нажатии **«Разрешить»** (`approveLocalConsent`) Monitor регистрирует доверенного клиента `local:<packageName>` с привязкой к `packageName` и `certSha256`. При **«Отклонить»** пакет помечается отклонённым (`status = "denied"`) до следующей интерактивной попытки. Диалог **нельзя** закрыть Back / тапом снаружи — только явными кнопками; пока ответа нет, тот же pending виден в **Настройки → API** (рядом с HTTP pairing) и там тоже можно Разрешить / Отклонить. Случайный dismiss pending **не** сбрасывает (`status` остаётся `"pending"`).
 3. **Выдача и автоматическая ротация токена (`getAccess`):**
    - Когда пакет уже подтверждён (`ExternalApiAuth.isLocalClientTrusted`), любой вызов `getAccess` (в том числе фоновый с `interactive = false`) сразу генерирует **новый** `accessToken`, обновляет `tokenHash` у `local:<packageName>` (прежний токен перестаёт действовать) и возвращает `Bundle`:
@@ -177,7 +179,8 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
 1. **Настройки → API → «Подключить приложение»** → режим pairing **вкл.** (таймер **`120 с`**, `PAIRING_TIMEOUT_MS`, либо ручное выключение на том же экране).
 2. Клиент: `POST /v1/pair/request` с именем клиента `clientName`, стабильным `clientId` и опциональным `clientKind` (до `10` ожидающих заявок одновременно, `MAX_PENDING_PAIR_REQUESTS`).
 3. Клиент опрашивает `GET /v1/pair/status?requestId=<uuid>`. Пока заявка не рассмотрена, возвращается `{"status": "pending"}`.
-4. На ГУ в разделе «API» нажимается «Разрешить» (с подтверждением в диалоге) или «Отклонить».
+4. На ГУ поверх экрана появляется оверлей **«Разрешить подключение?»** (тот же UX, что у DCL/MQTT);
+   дублируется строкой в разделе «API». «Разрешить» / «Отклонить» — в оверлее или в настройках.
 5. При **Разрешить** Monitor генерирует `accessToken`, сохраняет клиента в доверенных и **автоматически выключает** режим pairing (`stopPairing()`). Пока режим выключен, новые `pair/request` получают `403 pairing_inactive`.
 6. Следующий опрос `GET /v1/pair/status?requestId=<uuid>` возвращает `status: "approved"` и `accessToken` **ровно один раз** (`takeRequestForPoll` удаляет решённую заявку при выдаче; повторный запрос с тем же `requestId` вернёт `404 not_found`). Невостребованный результат `approved` / `denied` хранится `10 минут` (`PAIR_RESULT_TTL_MS`).
 7. Дальнейшие вызовы API: заголовок `Authorization: Bearer <accessToken>`.
