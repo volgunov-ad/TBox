@@ -14,7 +14,7 @@ data class FuelTypeOption(
     val id: Int,
     val label: String,
 ) {
-    override fun toString(): String = label
+    override fun toString(): String = FuelTypes.displayName(label)
 }
 
 data class FuelCoordinates(
