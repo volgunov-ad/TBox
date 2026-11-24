@@ -6,25 +6,50 @@ internal enum class KeystoreFailure {
     OTHER,
 }
 
-/** Early boot is retried. A bad keyset is wiped once. Anything else is just a failed open. */
+/**
+ * A locked or not-yet-started keystore is retried. Corruption is only a positive marker
+ * (bad ciphertext, a broken protobuf, a dead key blob). A bare `KeyStoreException` is not
+ * enough: Android reports "System error" and "User authentication required" that way,
+ * and Tink throws "exists but is unusable" instead of regenerating the key.
+ */
 internal fun classifyKeystoreFailure(error: Throwable): KeystoreFailure {
     val text = generateSequence(error) { it.cause }
         .joinToString(" ") { "${it.javaClass.name} ${it.message.orEmpty()}" }
         .lowercase()
+    val corrupt = text.contains("aeadbadtag") ||
+        text.contains("invalidprotocolbuffer") ||
+        text.contains("key blob corrupted") ||
+        text.contains("permanently invalidated")
+    if (corrupt) return KeystoreFailure.CORRUPT
     val notReady = text.contains("timed out") ||
         text.contains("not initialized") ||
         text.contains("keystore isn") ||
         text.contains("unavailable") ||
+        text.contains("system error") ||
+        text.contains("user authentication required") ||
+        text.contains("unusable") ||
+        text.contains("keystore operation failed") ||
         (text.contains("androidkeystore") && text.contains("null"))
-    if (notReady) return KeystoreFailure.NOT_READY
-    val corrupt = text.contains("keyset") ||
-        text.contains("aeadbadtag") ||
-        text.contains("invalidprotocolbuffer") ||
-        text.contains("mac verification") ||
-        text.contains("signature/mac") ||
-        text.contains("verifymac") ||
-        text.contains("keystoreexception")
-    return if (corrupt) KeystoreFailure.CORRUPT else KeystoreFailure.OTHER
+    return if (notReady) KeystoreFailure.NOT_READY else KeystoreFailure.OTHER
+}
+
+/** How long the same process must keep seeing a corrupt keyset before it is wiped. */
+internal const val CORRUPT_REPEAT_MS = 60_000L
+
+/**
+ * The first corrupt open is recorded and kept. A later one wipes only from another process,
+ * or when [minGapMs] has passed since the first sighting in this process.
+ */
+internal fun corruptRepeats(
+    previousAtElapsedMs: Long,
+    previousPid: Int,
+    nowElapsedMs: Long,
+    pid: Int,
+    minGapMs: Long = CORRUPT_REPEAT_MS,
+): Boolean {
+    if (previousAtElapsedMs <= 0L) return false
+    if (previousPid != pid) return true
+    return nowElapsedMs - previousAtElapsedMs >= minGapMs
 }
 
 internal data class KeystoreRetry<T>(

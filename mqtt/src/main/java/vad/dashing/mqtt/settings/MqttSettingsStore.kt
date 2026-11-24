@@ -2,6 +2,7 @@ package vad.dashing.mqtt.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -187,6 +188,9 @@ class MqttSettingsStore private constructor(
         // Never reuse FILE: plain entries mixed into the encrypted file break it on the next open.
         internal const val PLAIN_FILE = "mqtt_settings_plain"
         private const val UNAVAILABLE_FILE = "mqtt_settings_unavailable"
+        private const val HEALTH_FILE = "mqtt_keystore_health"
+        private const val KEY_CORRUPT_AT = "corrupt_at_elapsed"
+        private const val KEY_CORRUPT_PID = "corrupt_pid"
         private const val RETRY_TIMES = 3
         private const val RETRY_BACKOFF_MS = 500L
         private const val ERROR_COOLDOWN_MS = 5_000L
@@ -285,14 +289,20 @@ class MqttSettingsStore private constructor(
                 openEncryptedOnce(context)
             }
             if (retry.value != null) {
+                clearCorruptStamp(context)
                 val notice = if (migratePlaintextInto(context, retry.value)) STORAGE_MIGRATED else null
                 return Opened(retry.value, null, notice)
             }
             val failure = retry.error
-            if (failure != null && classifyKeystoreFailure(failure) == KeystoreFailure.CORRUPT) {
+            if (
+                failure != null &&
+                classifyKeystoreFailure(failure) == KeystoreFailure.CORRUPT &&
+                corruptStampRepeats(context)
+            ) {
                 wipeEncrypted(context)
                 val again = runCatching { openEncryptedOnce(context) }
                 if (again.isSuccess) {
+                    clearCorruptStamp(context)
                     return Opened(again.getOrThrow(), null, STORAGE_RECOVERED)
                 }
             }
@@ -314,6 +324,26 @@ class MqttSettingsStore private constructor(
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
             )
+        }
+
+        /** Records the first corrupt open. Returns true when a later open may wipe. */
+        private fun corruptStampRepeats(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(HEALTH_FILE, Context.MODE_PRIVATE)
+            val now = SystemClock.elapsedRealtime()
+            val pid = Process.myPid()
+            val previousAt = prefs.getLong(KEY_CORRUPT_AT, 0L)
+            val previousPid = prefs.getInt(KEY_CORRUPT_PID, 0)
+            val wipe = corruptRepeats(previousAt, previousPid, now, pid)
+            if (previousAt <= 0L || previousPid != pid) {
+                prefs.edit().putLong(KEY_CORRUPT_AT, now).putInt(KEY_CORRUPT_PID, pid).commit()
+            }
+            return wipe
+        }
+
+        private fun clearCorruptStamp(context: Context) {
+            val prefs = context.getSharedPreferences(HEALTH_FILE, Context.MODE_PRIVATE)
+            if (!prefs.contains(KEY_CORRUPT_AT)) return
+            prefs.edit().remove(KEY_CORRUPT_AT).remove(KEY_CORRUPT_PID).commit()
         }
 
         private fun wipeEncrypted(context: Context) {

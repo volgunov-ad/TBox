@@ -228,8 +228,10 @@ retained, и чтобы обновлялась «Последняя связь»
 
 ## 3. Топики
 
-Префикс по умолчанию `tbox/<deviceId>`. `deviceId` редактируется, по умолчанию `dashing`,
-после нормализации — только `[a-z0-9_]`. Так две машины на одном брокере не смешиваются.
+Префикс по умолчанию `tbox/<deviceId>`. `deviceId` редактируется. У новой установки это
+`dashing_` и четыре знака `ANDROID_ID`. Уже сохранённый идентификатор, в том числе прежний
+`dashing`, не меняется. После нормализации — только `[a-z0-9_]`. Так две машины на одном
+брокере не смешиваются.
 Это технический идентификатор топиков. Имя, которое человек видит в Home Assistant,
 задаётся отдельно и на топики не влияет.
 
@@ -360,19 +362,21 @@ auto, рециркуляция). Карточку `climate` Home Assistant из 
 Карточка плеера ниже — шаблон платформы `media_player` у интеграции `template`.
 В ядре Home Assistant такой платформы нет: нужен пользовательский компонент
 (HACS, Media Player Template). Без него фрагмент в `configuration.yaml` не загрузится.
-Префикс и идентификатор машины — как в «Дополнительно»:
+Префикс и идентификатор машины — как в «Дополнительно». С Home Assistant 2025.10 сущность
+датчика называется `sensor.tbox_<deviceId>_media`. В примере ниже `deviceId` равен `dashing`;
+у новой установки в имени будет `dashing_` и четыре знака `ANDROID_ID`.
 
 ```yaml
 template:
   - media_player:
       - name: Музыка
         unique_id: tbox_dashing_media_player
-        state: "{{ state_attr('sensor.media', 'state') }}"
-        media_title: "{{ state_attr('sensor.media', 'title') }}"
-        media_artist: "{{ state_attr('sensor.media', 'artist') }}"
-        media_position: "{{ state_attr('sensor.media', 'position') | float(0) }}"
-        media_duration: "{{ state_attr('sensor.media', 'duration') | float(0) }}"
-        volume_level: "{{ (state_attr('sensor.media', 'volume') | float(0)) / 31 }}"
+        state: "{{ state_attr('sensor.tbox_dashing_media', 'state') }}"
+        media_title: "{{ state_attr('sensor.tbox_dashing_media', 'title') }}"
+        media_artist: "{{ state_attr('sensor.tbox_dashing_media', 'artist') }}"
+        media_position: "{{ state_attr('sensor.tbox_dashing_media', 'position') | float(0) }}"
+        media_duration: "{{ state_attr('sensor.tbox_dashing_media', 'duration') | float(0) }}"
+        volume_level: "{{ (state_attr('sensor.tbox_dashing_media', 'volume') | float(0)) / 31 }}"
         play:
           action: mqtt.publish
           data:
@@ -785,7 +789,7 @@ WQTT **не** разбирает `homeassistant/…/config`. Устройств�
    - если отмечены и `hvac_power`, и `hvac_temperature_left` — **композит** термостат «Климат» **плюс** отдельные 1:1 карточки питания и уставки;
    - **громкость / яркость / EQ / fan_speed** и похожие слайдеры (часто с пустым `unit` в каталоге) не пропускаются: read-only → `sensor_float`; writable `number` → тип свет/диммер/яркость + `range` (не термостат). Температура по-прежнему термостат. Дефолты min/max при отсутствии в сущности: volume `0…31`, brightness `1…10`, иначе `0…100`;
    - неподдерживаемые типы (`device_tracker`, «Музыка») пропускаются с причиной в UI; список результата в UI обрезается (~40 устройств / ~20 пропусков) с хвостом «и ещё N»;
-   - идемпотентно по имени+топикам, затем `refresh`; для командных сущностей включается «Принимать команды»;
+   - идемпотентно по имени+топикам, затем `refresh`; «Принимать команды» само не включается. Если тумблер выключен, а среди созданных есть управляемые, экран пишет, что Алиса не сможет управлять, пока его не включить;
    - успешные `device_id` запоминаются локально (ускоряют последующее удаление).
 6. «Удалить устройства TBox» — только устройства, похожие на провижен этого APK:
    - критерий: любой `topic_cmd` / `topic_state` под текущим MQTT-базисом
@@ -797,7 +801,7 @@ WQTT **не** разбирает `homeassistant/…/config`. Устройств�
    - прогресс «удалено N / ошибок M», затем `GET /api/devices/refresh` как после создания;
    - кнопка недоступна без токена и пока идёт create/delete.
 
-Топики те же, что у HA-пути: `tbox/<deviceId>/<objectId>/state` и `…/set`. Switch: `ON`/`OFF`. SELECT-кнопки: option state. BUTTON: `PRESS`. Number-слайдеры: число в `…/set`.
+Топики те же, что у HA-пути: `tbox/<deviceId>/<objectId>/state` и `…/set`. Switch: `ON`/`OFF`. SELECT-кнопки: option state. BUTTON: `PRESS`. Команда «выключи» у новой кнопки — `NOOP`, мост её не выполняет. Уже созданное устройство сохраняет старую команду «выключи», пока не нажать «Создать в WQTT» ещё раз. Number-слайдеры: число в `…/set`.
 
 Прямой навык Яндекса в APK по-прежнему вне скоупа.
 

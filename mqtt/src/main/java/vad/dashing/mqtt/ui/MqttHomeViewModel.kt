@@ -67,7 +67,15 @@ data class MqttHomeState(
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
-    private val store = MqttSettingsStore.get(app)
+    /** A failed open is not kept: the next save asks the store again after the keystore recovers. */
+    private fun openStore(): MqttSettingsStore = MqttSettingsStore.get(getApplication())
+
+    private fun rememberStorage(opened: MqttSettingsStore) {
+        val message = opened.storageError ?: opened.storageNotice.orEmpty()
+        _state.update { current ->
+            if (current.storageMessage == message) current else current.copy(storageMessage = message)
+        }
+    }
     private val api = MonitorApi()
     private val wqttApi = WqttApi()
     private val wqttProvisioner = WqttProvisioner(wqttApi)
@@ -89,7 +97,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        val settings = store.load()
+        val opened = openStore()
+        val settings = opened.load()
         val startTab = if (settings.ready) 1 else 0
         _state.value = _state.value.copy(
             settings = settings,
@@ -97,7 +106,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             tab = startTab,
             wqttTokenDraft = settings.wqttApiToken,
             wqttRoomDraft = settings.wqttRoom,
-            storageMessage = store.storageError ?: store.storageNotice.orEmpty(),
+            storageMessage = opened.storageError ?: opened.storageNotice.orEmpty(),
         )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
@@ -116,21 +125,24 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectTab(index: Int) {
+        rememberStorage(openStore())
         _state.update { it.copy(tab = index) }
         if (index == 2) refreshEntities()
     }
 
     fun update(transform: (MqttSettings) -> MqttSettings) {
+        val opened = openStore()
+        rememberStorage(opened)
         val current = _state.value
-        val base = withStoredAccess(current.settings)
+        val base = storedAccess(opened, current.settings)
         val next = transform(base).normalized()
         if (next.accessToken != base.accessToken || next.apiPort != base.apiPort) {
-            store.saveMonitorAccess(
+            opened.saveMonitorAccess(
                 accessToken = next.accessToken.takeIf { it != base.accessToken },
                 apiPort = next.apiPort.takeIf { it != base.apiPort },
             )
         }
-        store.save(next)
+        opened.save(next)
         _state.update { latest ->
             latest.copy(
                 settings = next,
@@ -200,9 +212,11 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveConnection() {
+        val opened = openStore()
+        rememberStorage(opened)
         val current = _state.value
-        val merged = withStoredAccess(current.settings).applyingConnection(current.connectionDraft).normalized()
-        store.save(merged)
+        val merged = storedAccess(opened, current.settings).applyingConnection(current.connectionDraft).normalized()
+        opened.save(merged)
         _state.value = current.copy(
             settings = merged,
             connectionDraft = merged,
@@ -251,7 +265,9 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (result.granted) {
                 withContext(Dispatchers.Main) {
-                    store.saveMonitorAccess(accessToken = result.accessToken, apiPort = result.port)
+                    val opened = openStore()
+                    rememberStorage(opened)
+                    opened.saveMonitorAccess(accessToken = result.accessToken, apiPort = result.port)
                     reloadMonitorAccess()
                     val message = if (result.serverEnabled == false) {
                         "Доступ разрешён. Включите API в TBox Monitor: Настройки → API"
@@ -278,7 +294,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val request = api.pairRequest(
                 port = settings.apiPort,
-                clientId = store.pairClientId(),
+                clientId = openStore().pairClientId(),
                 clientName = "TBox MQTT",
             )
             updateUi { it.copy(pairMessage = "Ожидание подтверждения в Monitor") }
@@ -333,8 +349,12 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The bridge service may have renewed the token or port since this screen loaded. */
-    private fun withStoredAccess(settings: MqttSettings): MqttSettings {
-        val stored = store.load()
+    private fun withStoredAccess(settings: MqttSettings): MqttSettings =
+        storedAccess(openStore(), settings)
+
+    private fun storedAccess(opened: MqttSettingsStore, settings: MqttSettings): MqttSettings {
+        if (opened.storageError != null) return settings
+        val stored = opened.load()
         return settings.copy(accessToken = stored.accessToken, apiPort = stored.apiPort)
     }
 

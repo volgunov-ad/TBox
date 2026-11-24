@@ -75,6 +75,8 @@ class MqttBridgeService : Service() {
     private var catalogAtMs: Long = 0L
     private var catalogVersion: Int = -1
     private var publishSignature: String = ""
+    private var signatureKey: String = ""
+    private var signaturePending = true
     private val knownEntities = HashMap<String, CatalogEntity>()
     private val missingReloads = HashMap<String, Int>()
     private val missingSinceMs = HashMap<String, Long>()
@@ -96,6 +98,7 @@ class MqttBridgeService : Service() {
     private var brokerSinceMs = 0L
     private var monitorSinceMs = 0L
     private val journal = LinkJournal()
+    @Volatile
     private var running = false
     private val statusHttp = MqttStatusHttpServer {
         MqttLocalStatus.encode(BridgeStatusStore.state.value, serviceRunning = true)
@@ -401,6 +404,12 @@ class MqttBridgeService : Service() {
         val publishedIds = entities.map { it.objectId }.toSet()
         lastState.keys.retainAll(publishedIds)
         fastPublish.retain(publishedIds)
+        val key = discoverySignatureKey(settings)
+        if (catalogReloaded || key != signatureKey) {
+            signatureKey = key
+            signaturePending = true
+        }
+        if (!signaturePending) return
         val signature = DiscoverySignature.compute(
             entities = entities,
             topicPrefix = settings.topicPrefix,
@@ -411,10 +420,22 @@ class MqttBridgeService : Service() {
             discoveryEnabled = settings.discoveryEnabled,
             acceptCommands = settings.acceptCommands,
         )
-        if (signature != publishSignature && republishStatic(settings)) {
+        if (signature == publishSignature || republishStatic(settings)) {
             publishSignature = signature
+            signaturePending = false
         }
     }
+
+    /** Catalog content is hashed on reload. A settings edit hashes on the next cycle. */
+    private fun discoverySignatureKey(settings: MqttSettings): String = listOf(
+        settings.topicPrefix,
+        settings.discoveryPrefix,
+        settings.deviceId,
+        settings.deviceName,
+        settings.discoveryEnabled.toString(),
+        settings.acceptCommands.toString(),
+        settings.selectedObjectIds.sorted().joinToString(","),
+    ).joinToString("\u0000")
 
     private fun rememberMissing(selected: Set<String>, now: Long) {
         allEntities.forEach { knownEntities[it.objectId] = it }
@@ -641,7 +662,7 @@ class MqttBridgeService : Service() {
         }
         if (!settings.acceptCommands || !monitorUp) return
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
-        val entity = entities.firstOrNull { Topics.set(base, it.objectId) == topic } ?: return
+        val entity = entities.firstOrNull { it.writable && Topics.set(base, it.objectId) == topic } ?: return
         val decision = guard.decide(
             objectId = entity.objectId,
             payload = payload.trim(),
