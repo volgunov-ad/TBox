@@ -51,6 +51,8 @@ class CommandPayloadTest {
         val press = commandToInvoke(button, "PRESS")
         assertEquals("media_next", actions(press!!.request).getJSONObject(0).getString("actionType"))
         assertNull(commandToInvoke(button, "ON"))
+        assertNull(commandToInvoke(button, "NOOP"))
+        assertNull(commandToInvoke(driveMode(), "NOOP"))
     }
 
     @Test

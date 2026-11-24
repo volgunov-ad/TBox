@@ -63,6 +63,7 @@ class MediaPlayerTest {
         assertNull(mediaViewOf("not-json"))
         assertEquals(MediaCommand.Play, parseMediaCommand(" play "))
         assertEquals(MediaCommand.Volume(15), parseMediaCommand("VOLUME 15"))
+        assertNull(parseMediaCommand("VOLUME 99999999999"))
         assertNull(parseMediaCommand("STOP"))
         val pause = mediaInvoke(bundle(), MediaCommand.Pause, playing = false)
         assertNull(pause)

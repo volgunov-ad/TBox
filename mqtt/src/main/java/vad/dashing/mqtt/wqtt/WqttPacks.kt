@@ -1,5 +1,6 @@
 package vad.dashing.mqtt.wqtt
 
+import vad.dashing.mqtt.bridge.IGNORED_COMMAND
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.HaComponent
 import vad.dashing.mqtt.ha.MEDIA_OBJECT_ID
@@ -296,7 +297,7 @@ object WqttDeviceMapper {
                             topicState = "",
                             // Set payload stays the raw option key Alice/WQTT must publish.
                             cmdOn = pair.state,
-                            cmdOff = pair.state,
+                            cmdOff = IGNORED_COMMAND,
                         ),
                     ),
                     objectIds = setOf(entity.objectId),
@@ -455,7 +456,7 @@ object WqttDeviceMapper {
                 topicCmd = Topics.set(base, entity.objectId),
                 topicState = "",
                 cmdOn = "PRESS",
-                cmdOff = "PRESS",
+                cmdOff = IGNORED_COMMAND,
             ),
         ),
         objectIds = setOf(entity.objectId),

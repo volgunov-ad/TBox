@@ -9,6 +9,10 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.nio.charset.Charset
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -22,6 +26,7 @@ class MqttStatusHttpServer(
     private val running = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
+    private var workers = newWorkers()
 
     @Volatile
     var lastError: String? = null
@@ -30,12 +35,16 @@ class MqttStatusHttpServer(
     val isRunning: Boolean
         get() = running.get() && serverSocket?.isClosed == false
 
+    val localPort: Int
+        get() = serverSocket?.localPort ?: -1
+
     fun start(port: Int = MqttLocalStatus.PORT) {
         stop()
+        workers = newWorkers()
         lastError = null
         val socket = ServerSocket()
         socket.reuseAddress = true
-        socket.bind(InetSocketAddress(MqttLocalStatus.BIND_HOST, port))
+        socket.bind(InetSocketAddress(MqttLocalStatus.BIND_HOST, port), 8)
         serverSocket = socket
         running.set(true)
         acceptThread = Thread({ acceptLoop(socket) }, "mqtt-status-http").apply {
@@ -52,15 +61,23 @@ class MqttStatusHttpServer(
         }
         serverSocket = null
         acceptThread = null
+        workers.shutdownNow()
     }
 
     private fun acceptLoop(socket: ServerSocket) {
         while (running.get() && !socket.isClosed) {
             try {
                 val client = socket.accept()
-                Thread({ handleClient(client) }, "mqtt-status-worker").apply {
-                    isDaemon = true
-                    start()
+                try {
+                    workers.execute { handleClient(client) }
+                } catch (_: RejectedExecutionException) {
+                    try {
+                        client.use { busy ->
+                            val output = BufferedOutputStream(busy.getOutputStream())
+                            write(output, 503, """{"error":"busy"}""")
+                        }
+                    } catch (_: IOException) {
+                    }
                 }
             } catch (error: SocketException) {
                 if (running.get()) {
@@ -138,6 +155,7 @@ class MqttStatusHttpServer(
             400 -> "Bad Request"
             404 -> "Not Found"
             405 -> "Method Not Allowed"
+            503 -> "Service Unavailable"
             else -> "Error"
         }
         val headers = "HTTP/1.1 $status $reason\r\n" +
@@ -148,4 +166,14 @@ class MqttStatusHttpServer(
         output.write(bodyBytes)
         output.flush()
     }
+
+    private fun newWorkers(): ThreadPoolExecutor = ThreadPoolExecutor(
+        2,
+        2,
+        0L,
+        TimeUnit.MILLISECONDS,
+        ArrayBlockingQueue(4),
+        { runnable -> Thread(runnable, "mqtt-status-worker").apply { isDaemon = true } },
+        ThreadPoolExecutor.AbortPolicy(),
+    )
 }

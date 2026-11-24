@@ -3,6 +3,7 @@ package vad.dashing.mqtt.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -62,6 +63,7 @@ data class MqttHomeState(
     val wqttSkipped: List<WqttSkippedEntity> = emptyList(),
     /** Non-null when the irreversible-delete confirm dialog should be shown. */
     val wqttDeletePending: List<WqttCleanupCandidate>? = null,
+    val storageMessage: String = "",
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -73,6 +75,18 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(MqttHomeState())
     val state: StateFlow<MqttHomeState> = _state
     private var pairJob: Job? = null
+    private val ioErrors = CoroutineExceptionHandler { _, error ->
+        _state.update { current ->
+            current.copy(
+                brokerBusy = false,
+                pairBusy = false,
+                wqttBusy = false,
+                brokerMessage = if (current.brokerBusy) error.message ?: "Ошибка" else current.brokerMessage,
+                pairMessage = if (current.pairBusy) error.message ?: "Ошибка" else current.pairMessage,
+                wqttMessage = if (current.wqttBusy) error.message ?: "Ошибка" else current.wqttMessage,
+            )
+        }
+    }
 
     init {
         val settings = store.load()
@@ -83,6 +97,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             tab = startTab,
             wqttTokenDraft = settings.wqttApiToken,
             wqttRoomDraft = settings.wqttRoom,
+            storageMessage = store.storageError ?: store.storageNotice.orEmpty(),
         )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
@@ -101,27 +116,36 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectTab(index: Int) {
-        _state.value = _state.value.copy(tab = index)
+        _state.update { it.copy(tab = index) }
         if (index == 2) refreshEntities()
     }
 
     fun update(transform: (MqttSettings) -> MqttSettings) {
         val current = _state.value
-        val next = transform(withStoredAccess(current.settings))
+        val base = withStoredAccess(current.settings)
+        val next = transform(base).normalized()
+        if (next.accessToken != base.accessToken || next.apiPort != base.apiPort) {
+            store.saveMonitorAccess(
+                accessToken = next.accessToken.takeIf { it != base.accessToken },
+                apiPort = next.apiPort.takeIf { it != base.apiPort },
+            )
+        }
         store.save(next)
-        _state.value = current.copy(
-            settings = next,
-            connectionDraft = current.connectionDraft.copy(
-                apiPort = next.apiPort,
-                brokerEnabled = next.brokerEnabled,
-                autostart = next.autostart,
-                accessToken = next.accessToken,
-                deviceName = next.deviceName,
-                discoveryEnabled = next.discoveryEnabled,
-                acceptCommands = next.acceptCommands,
-                selectedObjectIds = next.selectedObjectIds,
-            ),
-        )
+        _state.update { latest ->
+            latest.copy(
+                settings = next,
+                connectionDraft = latest.connectionDraft.copy(
+                    apiPort = next.apiPort,
+                    brokerEnabled = next.brokerEnabled,
+                    autostart = next.autostart,
+                    accessToken = next.accessToken,
+                    deviceName = next.deviceName,
+                    discoveryEnabled = next.discoveryEnabled,
+                    acceptCommands = next.acceptCommands,
+                    selectedObjectIds = next.selectedObjectIds,
+                ),
+            )
+        }
     }
 
     /** Applies at once, unlike the broker fields: the switch is the quick way to pause the bridge. */
@@ -167,11 +191,12 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun editConnection(transform: (MqttSettings) -> MqttSettings) {
-        val current = _state.value
-        _state.value = current.copy(
-            connectionDraft = transform(current.connectionDraft),
-            connectionMessage = "",
-        )
+        _state.update { current ->
+            current.copy(
+                connectionDraft = transform(current.connectionDraft),
+                connectionMessage = "",
+            )
+        }
     }
 
     fun saveConnection() {
@@ -187,7 +212,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleAdvanced() {
-        _state.value = _state.value.copy(advancedOpen = !_state.value.advancedOpen)
+        _state.update { it.copy(advancedOpen = !it.advancedOpen) }
     }
 
     fun toggleManualToken() {
@@ -219,7 +244,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     private fun requestAccess(httpFallback: Boolean) {
         if (_state.value.pairBusy) return
         pairJob?.cancel()
-        pairJob = viewModelScope.launch(Dispatchers.IO) {
+        pairJob = viewModelScope.launch(Dispatchers.IO + ioErrors) {
             updateUi { it.copy(pairBusy = true, pairMessage = "Запрос доступа у TBox Monitor") }
             val result = LocalAccessClient.awaitAccess(getApplication()) {
                 updateUi { it.copy(pairMessage = "Подтвердите доступ в окне TBox Monitor") }
@@ -328,14 +353,13 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun checkBroker() {
         if (_state.value.brokerBusy) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             updateUi { it.copy(brokerBusy = true, brokerMessage = "Проверка") }
-            val message = HiveMqttSession.probe(_state.value.connectionDraft)
-            updateUi {
-                it.copy(
-                    brokerBusy = false,
-                    brokerMessage = message ?: "Брокер отвечает",
-                )
+            try {
+                val message = HiveMqttSession.probe(_state.value.connectionDraft)
+                updateUi { it.copy(brokerMessage = message ?: "Брокер отвечает") }
+            } finally {
+                updateUi { it.copy(brokerBusy = false) }
             }
         }
     }
@@ -367,7 +391,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             try {
                 val catalog = api.catalog(settings.apiPort, settings.accessToken)
                 val automations = api.automations(settings.apiPort, settings.accessToken)
@@ -446,7 +470,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun testWqttConnection() {
         if (_state.value.wqttBusy) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
             if (token.isBlank()) {
                 updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
@@ -476,7 +500,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun applyWqttBrokerToDraft() {
         if (_state.value.wqttBusy) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
             if (token.isBlank()) {
                 updateUi { it.copy(wqttMessage = "Сначала вставьте токен WQTT") }
@@ -518,7 +542,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createWqttDevices(onSettingsSaved: () -> Unit) {
         if (_state.value.wqttBusy) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             val current = _state.value
             val token = WqttApi.normalizeToken(current.wqttTokenDraft)
             if (token.isBlank()) {
@@ -560,14 +584,10 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                         wqttApiToken = token,
                         wqttRoom = current.wqttRoomDraft.ifBlank { saved.wqttRoom },
                         wqttDeviceIds = saved.wqttDeviceIds + provisionedIds,
-                        acceptCommands = if (report.enabledObjectIds.any { id ->
-                            current.entities.any { entity -> entity.objectId == id && entity.writable }
-                        }) {
-                            true
-                        } else {
-                            saved.acceptCommands
-                        },
                     )
+                }
+                val commandsOff = !current.settings.acceptCommands && report.enabledObjectIds.any { id ->
+                    current.entities.any { entity -> entity.objectId == id && entity.writable }
                 }
                 onSettingsSaved()
                 val summary = summarize(report.devices, report.skipped.size)
@@ -583,6 +603,10 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                                 if (isNotEmpty()) append(". ")
                                 append(report.refreshMessage)
                             }
+                            if (commandsOff) {
+                                if (isNotEmpty()) append(". ")
+                                append("Приём команд выключен: Алиса не сможет управлять, пока не включите «Принимать команды»")
+                            }
                         },
                     )
                 }
@@ -593,7 +617,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     /** Scan cabinet for TBox-looking devices, then show irreversible confirm with count. */
     fun prepareWqttDelete() {
         if (_state.value.wqttBusy) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             val current = _state.value
             val token = WqttApi.normalizeToken(current.wqttTokenDraft)
             if (token.isBlank()) {
@@ -672,7 +696,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             updateUi { it.copy(wqttDeletePending = null) }
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + ioErrors) {
             val current = _state.value
             val token = WqttApi.normalizeToken(current.wqttTokenDraft)
             if (token.isBlank()) {

@@ -7,18 +7,49 @@ import java.net.InetSocketAddress
 
 class WgRouteException(message: String) : Exception(message)
 
+/** The caller lost the race with a newer bridge instance. The tunnel was not touched. */
+class WgSupersededException : Exception("Туннель перешёл к новому мосту")
+
 /** Local TCP socket that carries the broker name for TLS, while the bytes go to 127.0.0.1. */
 class TunnelEndpoint(
     val port: Int,
     val socket: InetSocketAddress,
 )
 
+internal data class WgHeld(
+    val identity: String,
+    val owner: Long,
+    val port: Int,
+)
+
+internal sealed class ProbeTunnelPlan {
+    data class Direct(val note: String?) : ProbeTunnelPlan()
+    data class Reuse(val port: Int) : ProbeTunnelPlan()
+    data class Refuse(val message: String) : ProbeTunnelPlan()
+    data object Start : ProbeTunnelPlan()
+}
+
+internal interface WgBackend {
+    fun start(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int
+    fun stop()
+    fun lastError(): String
+}
+
+/**
+ * One process-wide tunnel. Each caller holds an owner token from [newOwner].
+ * [release] stops the tunnel only when that caller still owns it, so a probe or a
+ * dying service instance cannot tear down the live bridge.
+ */
 object WgTunnel {
     private val lock = Any()
-    private var runningKey: String? = null
+    private var runningIdentity: String? = null
     private var runningPort: Int = 0
+    private var ownerToken: Long = 0L
+    private var nextToken: Long = 1L
     private var libraryReady = false
     private var libraryFailure: String? = null
+
+    internal var backend: WgBackend = NativeWgBackend
 
     internal fun blockedByLibrary(): String? = libraryFailure
 
@@ -26,6 +57,120 @@ object WgTunnel {
 
     internal fun rememberLibraryFailure(message: String) {
         libraryFailure = message
+    }
+
+    fun newOwner(): Long = synchronized(lock) { nextToken++ }
+
+    /** Stable identity of the draft, or null when WireGuard is off. No DNS. */
+    fun identity(settings: MqttSettings): String? {
+        val normalized = settings.normalized()
+        if (!normalized.wireguardEnabled || normalized.wireguardConf.isBlank()) return null
+        return normalized.wireguardConf + "\n" + normalized.brokerHost + ":" + normalized.brokerPort
+    }
+
+    internal fun held(): WgHeld? = synchronized(lock) {
+        val identity = runningIdentity ?: return null
+        if (runningPort == 0 || ownerToken == 0L) return null
+        WgHeld(identity, ownerToken, runningPort)
+    }
+
+    fun endpointFor(brokerHost: String): TunnelEndpoint? = synchronized(lock) {
+        if (runningPort == 0) return null
+        endpoint(brokerHost, runningPort)
+    }
+
+    /**
+     * @param takeover a live bridge may replace someone else's tunnel. A probe must not.
+     */
+    fun route(
+        settings: MqttSettings,
+        owner: Long,
+        stillActive: () -> Boolean = { true },
+        takeover: Boolean = true,
+    ): TunnelEndpoint? {
+        synchronized(lock) {
+            if (!stillActive()) throw WgSupersededException()
+            val normalized = settings.normalized()
+            val draft = identity(normalized)
+            if (draft == null) {
+                if (ownerToken == owner && runningIdentity != null) stopLocked()
+                return null
+            }
+            if (draft == runningIdentity && runningPort != 0) {
+                // A new bridge instance adopts the live tunnel without restarting it.
+                if (takeover && ownerToken != owner) {
+                    if (!stillActive()) throw WgSupersededException()
+                    ownerToken = owner
+                }
+                return endpoint(normalized.brokerHost, runningPort)
+            }
+            if (runningIdentity != null && ownerToken != owner && !takeover) {
+                throw WgRouteException(PROBE_OTHER_TUNNEL_MESSAGE)
+            }
+            if (!stillActive()) throw WgSupersededException()
+            if (normalized.brokerHost.isBlank()) throw WgRouteException("Укажите адрес брокера")
+            val conf = parseWgConf(normalized.wireguardConf).getOrElse {
+                throw WgRouteException(it.message ?: "Файл WireGuard не разобран")
+            }
+            val target = brokerTarget(conf, normalized.brokerHost, normalized.brokerPort)
+            val endpoints = conf.peers.map { peer ->
+                resolveEndpoint(peer.endpointHost, peer.endpointPort)
+            }
+            if (!stillActive()) throw WgSupersededException()
+            val ipc = conf.toIpc(endpoints)
+            stopLocked()
+            val port = backend.start(ipc, conf.addressCsv(), conf.dnsCsv(), conf.mtu, target)
+            runningIdentity = draft
+            runningPort = port
+            ownerToken = owner
+            return endpoint(normalized.brokerHost, port)
+        }
+    }
+
+    /** Stops the tunnel only when [owner] is still the one that started it. */
+    fun release(owner: Long) {
+        synchronized(lock) {
+            if (ownerToken != owner) return
+            stopLocked()
+        }
+    }
+
+    fun stop() {
+        synchronized(lock) { stopLocked() }
+    }
+
+    /**
+     * Last failed dial from the local port into the tunnel. The native side never clears it,
+     * so it is only meaningful while the broker is unreachable.
+     */
+    fun lastDialError(): String {
+        synchronized(lock) {
+            if (runningIdentity == null) return ""
+            return backend.lastError()
+        }
+    }
+
+    internal fun resetForTest() {
+        synchronized(lock) {
+            runningIdentity = null
+            runningPort = 0
+            ownerToken = 0L
+            nextToken = 1L
+            backend = NativeWgBackend
+        }
+    }
+
+    private fun stopLocked() {
+        runningIdentity = null
+        runningPort = 0
+        ownerToken = 0L
+        runCatching { backend.stop() }
+    }
+
+    private fun endpoint(host: String, port: Int): TunnelEndpoint {
+        // Hostname stays on the address so TLS checks the broker name, not 127.0.0.1.
+        val loopback = InetAddress.getByAddress(host, byteArrayOf(127, 0, 0, 1))
+        return TunnelEndpoint(port, InetSocketAddress(loopback, port))
     }
 
     /** Load libgojni on the main thread, before a broker check touches the class. */
@@ -42,60 +187,42 @@ object WgTunnel {
         }
     }
 
-    /** Null means the broker is dialed directly. */
-    fun route(settings: MqttSettings): TunnelEndpoint? {
-        synchronized(lock) {
-            if (!settings.wireguardEnabled || settings.wireguardConf.isBlank()) {
-                if (runningKey != null) stopLocked()
-                return null
+    private object NativeWgBackend : WgBackend {
+        override fun start(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {
+            blockedByLibrary()?.let { throw WgRouteException(it) }
+            if (!libraryLoaded()) {
+                throw WgRouteException("Не удалось загрузить библиотеку WireGuard")
             }
-            if (settings.brokerHost.isBlank()) throw WgRouteException("Укажите адрес брокера")
-            val conf = parseWgConf(settings.wireguardConf).getOrElse {
-                throw WgRouteException(it.message ?: "Файл WireGuard не разобран")
-            }
-            val target = brokerTarget(conf, settings.brokerHost, settings.brokerPort)
-            val endpoints = conf.peers.map { peer ->
-                resolveEndpoint(peer.endpointHost, peer.endpointPort)
-            }
-            val ipc = conf.toIpc(endpoints)
-            val key = ipc + "|" + target
-            if (runningKey == key && runningPort != 0) {
-                return endpoint(settings.brokerHost, runningPort)
-            }
-            stopLocked()
-            val port = WgNative.start(ipc, conf.addressCsv(), conf.dnsCsv(), conf.mtu, target)
-            runningKey = key
-            runningPort = port
-            return endpoint(settings.brokerHost, port)
+            return startNative(ipc, addresses, dns, mtu, broker)
+        }
+
+        override fun stop() {
+            if (!libraryLoaded()) return
+            runCatching { wgstack.Wgstack.stop() }
+        }
+
+        override fun lastError(): String {
+            if (!libraryLoaded()) return ""
+            return runCatching { wgstack.Wgstack.lastError().orEmpty().trim() }.getOrDefault("")
         }
     }
+}
 
-    fun stop() {
-        synchronized(lock) { stopLocked() }
-    }
+internal const val PROBE_OTHER_TUNNEL_MESSAGE =
+    "Мост уже держит другой туннель WireGuard. Сохраните настройки или остановите мост и проверьте снова."
 
-    /**
-     * Last failed dial from the local port into the tunnel. The native side never clears it,
-     * so it is only meaningful while the broker is unreachable.
-     */
-    fun lastDialError(): String {
-        synchronized(lock) {
-            if (runningKey == null) return ""
-            return WgNative.lastError()
+internal fun planProbeTunnel(draftIdentity: String?, held: WgHeld?): ProbeTunnelPlan {
+    if (draftIdentity == null) {
+        val note = if (held != null) {
+            "Проверка без WireGuard: в черновике туннель выключен, рабочий туннель не останавливала"
+        } else {
+            null
         }
+        return ProbeTunnelPlan.Direct(note)
     }
-
-    private fun stopLocked() {
-        runningKey = null
-        runningPort = 0
-        runCatching { WgNative.stop() }
-    }
-
-    private fun endpoint(host: String, port: Int): TunnelEndpoint {
-        // Hostname stays on the address so TLS checks the broker name, not 127.0.0.1.
-        val loopback = InetAddress.getByAddress(host, byteArrayOf(127, 0, 0, 1))
-        return TunnelEndpoint(port, InetSocketAddress(loopback, port))
-    }
+    if (held == null) return ProbeTunnelPlan.Start
+    if (held.identity == draftIdentity) return ProbeTunnelPlan.Reuse(held.port)
+    return ProbeTunnelPlan.Refuse(PROBE_OTHER_TUNNEL_MESSAGE)
 }
 
 private fun brokerTarget(conf: WgConf, host: String, port: Int): String {
@@ -125,26 +252,6 @@ private fun resolveEndpoint(host: String, port: Int): String {
     } ?: throw WgRouteException("Сервер WireGuard не найден")
     val ip = resolved.hostAddress ?: throw WgRouteException("Сервер WireGuard не найден")
     return formatEndpoint(ip, port)
-}
-
-private object WgNative {
-    fun start(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {
-        WgTunnel.blockedByLibrary()?.let { throw WgRouteException(it) }
-        if (!WgTunnel.libraryLoaded()) {
-            throw WgRouteException("Не удалось загрузить библиотеку WireGuard")
-        }
-        return startNative(ipc, addresses, dns, mtu, broker)
-    }
-
-    fun stop() {
-        if (!WgTunnel.libraryLoaded()) return
-        runCatching { wgstack.Wgstack.stop() }
-    }
-
-    fun lastError(): String {
-        if (!WgTunnel.libraryLoaded()) return ""
-        return runCatching { wgstack.Wgstack.lastError().orEmpty().trim() }.getOrDefault("")
-    }
 }
 
 private fun startNative(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {

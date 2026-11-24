@@ -133,6 +133,14 @@ private fun ConnectionTab(
 ) {
     val settings = state.settings
     val connection = state.connectionDraft
+    if (state.storageMessage.isNotBlank()) {
+        Text(
+            text = state.storageMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.tboxBody,
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+    }
     SettingSwitch(
         checked = settings.autostart,
         title = "Автозапуск при старте системы",
@@ -329,7 +337,7 @@ private fun WireguardBlock(connection: MqttSettings, viewModel: MqttHomeViewMode
         checked = connection.wireguardEnabled,
         title = if (hasFile) "Через WireGuard: $fileName" else "Через WireGuard",
         description = if (hasFile) {
-            "К брокеру ходит только эта программа. Остальные приложения головного устройства туннель не видят"
+            "К брокеру ходит только эта программа. Остальные приложения туннель не видят, кроме локального порта к брокеру"
         } else {
             "Сначала выберите файл .conf"
         },

@@ -17,6 +17,8 @@ data class MqttSettings(
     val deviceId: String = Topics.DEFAULT_DEVICE_ID,
     val deviceName: String = Topics.DEFAULT_DEVICE_NAME,
     val mqttClientId: String = "",
+    /** Stable per-install suffix used when [mqttClientId] is left empty. */
+    val clientSuffix: String = "",
     val discoveryEnabled: Boolean = true,
     val acceptCommands: Boolean = true,
     val autostart: Boolean = true,
@@ -108,7 +110,7 @@ data class MqttSettings(
         password,
         tlsEnabled.toString(),
         caPem,
-        Topics.mqttClientId(mqttClientId, deviceId),
+        Topics.mqttClientId(mqttClientId, deviceId, clientSuffix),
         wireguardEnabled.toString(),
         sha256(wireguardConf),
     ).joinToString("|")

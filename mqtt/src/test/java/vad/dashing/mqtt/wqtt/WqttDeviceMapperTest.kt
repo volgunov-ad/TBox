@@ -70,7 +70,7 @@ class WqttDeviceMapperTest {
         val device = result.devices.single()
         assertEquals(19, device.type)
         assertEquals("PRESS", device.onOff.single().cmdOn)
-        assertEquals("PRESS", device.onOff.single().cmdOff)
+        assertEquals("NOOP", device.onOff.single().cmdOff)
         assertEquals("tbox/dashing/can_vehicle_99_open/set", device.onOff.single().topicCmd)
     }
 
@@ -99,6 +99,7 @@ class WqttDeviceMapperTest {
         assertEquals("Окно водителя: открыть", open.name)
         assertEquals(19, open.type)
         assertEquals("opened", open.onOff.single().cmdOn)
+        assertEquals("NOOP", open.onOff.single().cmdOff)
         assertEquals("tbox/dashing/window_front_left/set", open.onOff.single().topicCmd)
 
         val close = result.devices.single { it.stableKey == "entity_window_front_left_opt_closed" }

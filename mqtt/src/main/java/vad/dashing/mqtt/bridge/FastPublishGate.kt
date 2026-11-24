@@ -19,6 +19,11 @@ class FastPublishGate {
         lastSentAtMs[objectId] = nowMs
     }
 
+    /** A failed publish must not consume the interval. */
+    fun forget(objectId: String) {
+        lastSentAtMs.remove(objectId)
+    }
+
     fun retain(objectIds: Set<String>) {
         lastSentAtMs.keys.retainAll(objectIds)
     }

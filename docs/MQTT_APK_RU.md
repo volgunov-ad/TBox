@@ -357,8 +357,10 @@ auto, рециркуляция). Карточку `climate` Home Assistant из 
 быстрых данных, смена трека уходит сразу.
 
 Штатный MQTT Home Assistant не умеет сущность `media_player`. Датчик появляется сам.
-Карточка плеера — шаблон, его один раз вставляют в `configuration.yaml` (префикс и
-идентификатор машины как в «Дополнительно»):
+Карточка плеера ниже — шаблон платформы `media_player` у интеграции `template`.
+В ядре Home Assistant такой платформы нет: нужен пользовательский компонент
+(HACS, Media Player Template). Без него фрагмент в `configuration.yaml` не загрузится.
+Префикс и идентификатор машины — как в «Дополнительно»:
 
 ```yaml
 template:
@@ -425,8 +427,10 @@ template:
 Отдельная строка «Местоположение» в группе «Поездка». По умолчанию выключена.
 В описании строки: координаты машины попадут в брокер и в Home Assistant.
 
-- Сущность — `device_tracker`, `source_type: gps`, `json_attributes_topic` =
+- Сущность — `device_tracker`, `source_type: gps`, без `state_topic`. Координаты и
+  `gps_accuracy` (0, отдельной точности в каталоге нет) уходят в `json_attributes_topic` =
   `tbox/<deviceId>/geo_position/attributes`. Широта и долгота из `geo_position` (source `app`).
+  `state_topic` с тем же JSON Home Assistant принимает как имя зоны, и зоны перестают работать.
 - Публикация не чаще интервала быстрых данных (по умолчанию 10 с) и только если машина сдвинулась хотя бы на 50 м
   от последней отправленной точки. При повторе состояний уходит последняя точка.
 - Недоступная позиция не публикуется: в Home Assistant остаётся место парковки.
@@ -460,7 +464,10 @@ Home Assistant обновляет подпись того же устройст�
 возвращает «Jetour Dashing». Длина после обрезки пробелов — до 64 символов.
 `manufacturer` и `model` фиксированы.
 
-У каждой сущности: `name`, `unique_id` (`tbox_<deviceId>_<object_id>`), `state_topic`.
+У каждой сущности: `name`, `unique_id` (`tbox_<deviceId>_<object_id>`), `default_entity_id`
+(`<component>.tbox_<deviceId>_<object_id>`; с Home Assistant 2025.10 это замена `object_id`)
+и по-прежнему `object_id` для Home Assistant старше 2025.10. У датчиков и переключателей есть
+`state_topic`. У `device_tracker` его нет: только `json_attributes_topic`.
 
 Доступность разная:
 

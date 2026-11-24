@@ -47,7 +47,7 @@ class MonitorApi(
 ) {
     fun health(port: Int): HealthSnapshot {
         val body = get(port, "/v1/health", token = null)
-        val json = JSONObject(body)
+        val json = jsonObject(body)
         return HealthSnapshot(
             ok = json.optBoolean("ok"),
             catalogVersion = json.optInt("catalogVersion"),
@@ -61,7 +61,7 @@ class MonitorApi(
             .put("clientKind", "mqtt")
             .toString()
         val body = post(port, "/v1/pair/request", token = null, json = payload, accept202 = true)
-        val json = JSONObject(body)
+        val json = jsonObject(body)
         val requestId = json.optString("requestId")
         if (requestId.isBlank()) error("Monitor не вернул requestId")
         return PairRequestResult(requestId)
@@ -75,7 +75,7 @@ class MonitorApi(
         val body = execute(
             Request.Builder().url(url).header("Accept", "application/json").get().build(),
         )
-        val json = JSONObject(body)
+        val json = jsonObject(body)
         return PairStatusResult(
             status = json.optString("status"),
             accessToken = json.optString("accessToken").takeIf { it.isNotBlank() },
@@ -87,7 +87,7 @@ class MonitorApi(
 
     fun automations(port: Int, token: String): List<AutomationSummary> {
         val body = get(port, "/v1/automations", token)
-        val array = JSONObject(body).optJSONArray("automations") ?: return emptyList()
+        val array = jsonObject(body).optJSONArray("automations") ?: return emptyList()
         return buildList {
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
@@ -112,7 +112,7 @@ class MonitorApi(
                 .get()
                 .build(),
         )
-        val array = JSONObject(body).optJSONArray("signals") ?: return emptyList()
+        val array = jsonObject(body).optJSONArray("signals") ?: return emptyList()
         return buildList {
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
@@ -123,7 +123,7 @@ class MonitorApi(
 
     fun invoke(port: Int, token: String, actionsJson: String): Boolean {
         val body = post(port, "/v1/actions/invoke", token, actionsJson, accept202 = false)
-        val results = JSONObject(body).optJSONArray("results") ?: return false
+        val results = jsonObject(body).optJSONArray("results") ?: return false
         if (results.length() == 0) return false
         for (i in 0 until results.length()) {
             val item = results.optJSONObject(i) ?: return false
@@ -135,7 +135,15 @@ class MonitorApi(
     fun runAutomation(port: Int, token: String, id: String): Boolean {
         val encoded = java.net.URLEncoder.encode(id, Charsets.UTF_8.name()).replace("+", "%20")
         val body = post(port, "/v1/automations/$encoded/run", token, "{}", accept202 = true)
-        return JSONObject(body).optBoolean("accepted")
+        return jsonObject(body).optBoolean("accepted")
+    }
+
+    private fun jsonObject(body: String): JSONObject {
+        try {
+            return JSONObject(body)
+        } catch (_: Exception) {
+            throw ApiCallException("bad_response", "Monitor вернул не JSON", 0)
+        }
     }
 
     private fun parseSignal(item: JSONObject): SignalSample {

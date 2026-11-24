@@ -19,6 +19,7 @@ class DiscoveryPayloadTest {
         )
         assertEquals("tbox/dashing/drive_mode/state", json.getString("state_topic"))
         assertEquals("tbox/dashing/drive_mode/set", json.getString("command_topic"))
+        assertEquals("select.tbox_dashing_drive_mode", json.getString("default_entity_id"))
         assertFalse(json.has("force_update"))
         assertEquals("all", json.getString("availability_mode"))
         assertEquals(2, json.getJSONArray("availability").length())
@@ -61,6 +62,9 @@ class DiscoveryPayloadTest {
             "tbox/dashing/geo_position/attributes",
             json.getString("json_attributes_topic"),
         )
+        assertFalse(json.has("state_topic"))
+        assertEquals("device_tracker.tbox_dashing_geo_position", json.getString("default_entity_id"))
+        assertEquals("geo_position", json.getString("object_id"))
         assertFalse(json.has("availability"))
         val link = JSONObject(DiscoveryPayload.connectivityConfig("tbox", "dashing", "Jetour Dashing", "0.1.0"))
         assertEquals("connectivity", link.getString("device_class"))
