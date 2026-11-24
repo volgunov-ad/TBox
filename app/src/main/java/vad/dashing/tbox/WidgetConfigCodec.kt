@@ -3,6 +3,9 @@ package vad.dashing.tbox
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
+import vad.dashing.tbox.esp.isEspBleRelayWidgetDataKey
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
@@ -419,10 +422,13 @@ fun serializeWidgetConfigsToJsonArray(
         ) {
             obj.put("espRelayMode", config.espRelayMode.storageKey)
         }
-        if ((config.dataKey == "espBleRelay0" || config.dataKey == "espBleRelay1") &&
-            config.espBleRelayId.isNotBlank()
-        ) {
-            obj.put("espBleRelayId", config.espBleRelayId.trim().lowercase())
+        if (isEspBleRelayWidgetDataKey(config.dataKey)) {
+            val id = EspBleRelayIds.normalize(config.espBleRelayId)
+            if (id.isNotEmpty()) obj.put("espBleRelayId", id)
+            val channel = config.espBleRelayChannel
+                .takeIf(EspBleRelayChannel::inRange)
+                ?: EspBleRelayChannel.DEFAULT
+            obj.put("espBleRelayChannel", channel)
         }
         if (isCruiseWidgetDataKey(config.dataKey) &&
             config.cruiseControlType != CruiseControlType.DEFAULT
@@ -991,10 +997,17 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             EspRelayWidgetMode.DEFAULT
                         },
-                        espBleRelayId = if (dataKey == "espBleRelay0" || dataKey == "espBleRelay1") {
-                            item.optString("espBleRelayId", "").trim().lowercase()
+                        espBleRelayId = if (isEspBleRelayWidgetDataKey(dataKey)) {
+                            EspBleRelayIds.normalize(item.optString("espBleRelayId", ""))
                         } else {
                             ""
+                        },
+                        espBleRelayChannel = if (isEspBleRelayWidgetDataKey(dataKey)) {
+                            item.optInt("espBleRelayChannel", EspBleRelayChannel.DEFAULT)
+                                .takeIf(EspBleRelayChannel::inRange)
+                                ?: EspBleRelayChannel.DEFAULT
+                        } else {
+                            EspBleRelayChannel.DEFAULT
                         },
                         cruiseControlType = if (isCruiseWidgetDataKey(dataKey)) {
                             CruiseControlType.fromStorageKey(

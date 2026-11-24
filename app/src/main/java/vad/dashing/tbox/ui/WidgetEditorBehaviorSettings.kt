@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,6 +31,11 @@ import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.espBleRelayLegacyIndex
+import vad.dashing.tbox.esp.isEspBleRelayWidgetDataKey
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -397,6 +403,52 @@ internal fun TileBehaviorSettings(
                     description = stringResource(R.string.widget_esp_relay_mode_desc),
                     enabled = state.togglesEnabled,
                     options = relayModeEntries,
+                    selectorWidth = WidgetDialogDropdownSelectorWidth,
+                )
+            }
+            if (isEspBleRelayWidgetDataKey(state.selectedDataKey)) {
+                val relays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
+                val chooseLabel = stringResource(R.string.widget_esp_ble_relay_choose)
+                val selectedRelayId = EspBleRelayIds.normalize(state.espBleRelayId)
+                val missingLabel = stringResource(
+                    R.string.widget_esp_ble_relay_missing_choice,
+                    selectedRelayId,
+                )
+                val deviceChoices = bleRelayDeviceChoices(
+                    relays = relays,
+                    selectedId = state.espBleRelayId,
+                    missingLabel = missingLabel,
+                    chooseLabel = chooseLabel,
+                )
+                LaunchedEffect(relays, state.selectedDataKey) {
+                    if (EspBleRelayIds.normalize(state.espBleRelayId).isNotEmpty()) return@LaunchedEffect
+                    val index = espBleRelayLegacyIndex(state.selectedDataKey) ?: return@LaunchedEffect
+                    val id = EspBleRelayIds.normalize(relays.getOrNull(index)?.id)
+                    if (id.isNotEmpty()) state.espBleRelayId = id
+                }
+                val selectedDevice = deviceChoices.find { it.id == state.espBleRelayId }
+                    ?: deviceChoices.first()
+                SettingDropdownGeneric(
+                    selectedValue = selectedDevice,
+                    onValueChange = { state.espBleRelayId = it.id },
+                    text = stringResource(R.string.widget_esp_ble_relay_device_title),
+                    description = stringResource(R.string.widget_esp_ble_relay_device_desc),
+                    enabled = state.togglesEnabled && deviceChoices.any { it.id.isNotEmpty() },
+                    options = deviceChoices,
+                    selectorWidth = WidgetDialogDropdownSelectorWidth,
+                )
+                val channelChoices = (0 until EspBleRelayChannel.COUNT).map { channel ->
+                    BleRelayChannelChoice(channel, EspBleRelayChannel.displayNumber(channel).toString())
+                }
+                val selectedChannel = channelChoices.find { it.channel == state.espBleRelayChannel }
+                    ?: channelChoices.first()
+                SettingDropdownGeneric(
+                    selectedValue = selectedChannel,
+                    onValueChange = { state.espBleRelayChannel = it.channel },
+                    text = stringResource(R.string.widget_esp_ble_relay_channel_title),
+                    description = stringResource(R.string.widget_esp_ble_relay_channel_desc),
+                    enabled = state.togglesEnabled,
+                    options = channelChoices,
                     selectorWidth = WidgetDialogDropdownSelectorWidth,
                 )
             }

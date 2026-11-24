@@ -28,6 +28,8 @@ import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
@@ -131,11 +133,11 @@ internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalVal
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
 
-/** Bit 0 of a per-id mask map; index picks the paired board from `bleStatus.relays`. */
+/** One mask bit of one paired board. A blank id is not an index lookup. */
 internal fun espRelayMaskMapBitFlow(
     masks: Flow<Map<String, Int>>,
-    index: Int,
-    relayId: String? = null,
+    relayId: String?,
+    channel: Int,
 ): Flow<AutomationSignalValue> =
     combine(
         masks,
@@ -143,16 +145,16 @@ internal fun espRelayMaskMapBitFlow(
         EspCompanionRepository.connected,
     ) { maskMap, relays, connected ->
         if (!connected) return@combine AutomationSignalValue.Unavailable
-        val wanted = relayId?.trim()?.lowercase().orEmpty()
-        val id = if (wanted.length == 8) {
-            relays.firstOrNull { it.id.equals(wanted, ignoreCase = true) }?.id
-                ?: return@combine AutomationSignalValue.Unavailable
-        } else {
-            relays.getOrNull(index)?.id
-                ?: return@combine AutomationSignalValue.Unavailable
+        val id = EspBleRelayIds.normalize(relayId)
+        if (id.isEmpty() || !EspBleRelayChannel.inRange(channel)) {
+            return@combine AutomationSignalValue.Unavailable
+        }
+        if (relays.none { it.id.equals(id, ignoreCase = true) }) {
+            return@combine AutomationSignalValue.Unavailable
         }
         val value = maskMap[id] ?: return@combine AutomationSignalValue.Unavailable
-        AutomationSignalValue.State(if ((value and 1) != 0) "on" else "off")
+        val closed = EspBleRelayChannel.isClosed(value, channel)
+        AutomationSignalValue.State(if (closed) "on" else "off")
     }
 
 /**

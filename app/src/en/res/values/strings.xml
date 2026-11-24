@@ -1574,7 +1574,14 @@
     <string name="data_title_esp_gpio_in_2">Companion input 2</string>
     <string name="data_title_esp_gpio_in_3">Companion input 3</string>
     <string name="widget_desc_esp_relay">Companion output: button or relay mode (tile setting)</string>
-    <string name="widget_desc_esp_ble_relay">BLE relay channel on the ESP32 board (via companion)</string>
+    <string name="widget_desc_esp_ble_relay">BLE relay board and channel (via the companion). Channel 1 is the only coil on current boards</string>
+    <string name="widget_esp_ble_relay_device_title">Board</string>
+    <string name="widget_esp_ble_relay_device_desc">The tile stores the board id. Forgetting another board does not retarget it</string>
+    <string name="widget_esp_ble_relay_channel_title">Channel</string>
+    <string name="widget_esp_ble_relay_channel_desc">Channel 1 is mask bit 0. Current boards close only that coil. Channels 2–8 are stored for later firmware</string>
+    <string name="widget_esp_ble_relay_choose">Choose a board</string>
+    <string name="widget_esp_ble_relay_missing_choice">%1$s (not in the list)</string>
+    <string name="esp_ble_relay_missing">Relay missing</string>
     <string name="widget_desc_esp_gpio">Companion GPIO input state</string>
     <string name="widget_desc_esp_connected">USB connection to ESP32 companion (yes/no)</string>
     <string name="widget_esp_relay_mode_title">Operating mode</string>

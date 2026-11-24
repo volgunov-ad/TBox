@@ -36,6 +36,7 @@ import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
+import vad.dashing.tbox.automation.isBleRelaySignal
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AutomationStartupBehavior
 import vad.dashing.tbox.automation.AutomationSystemEvent
@@ -570,14 +571,19 @@ private fun StateTriggerFields(
                     } else {
                         trigger.startupBehavior
                     },
-                    relayId = bleRelayIdForSignal(signal),
                 ),
             )
         },
     )
     AutomationSignalValueHint(trigger.signal)
-    BleRelaySignalIdField(trigger.signal, trigger.relayId) {
-        onChange(trigger.copy(relayId = it))
+    if (isBleRelaySignal(trigger.signal)) {
+        BleRelaySignalTargetFields(
+            relayId = trigger.relayId,
+            relayChannel = trigger.relayChannel,
+            legacyIndex = if (trigger.signal == AutomationSignalId.ESP_BLE_RELAY_1) 1 else 0,
+        ) { id, channel ->
+            onChange(trigger.copy(relayId = id, relayChannel = channel))
+        }
     }
     val descriptor = AutomationSignalCatalog.get(trigger.signal)
     val isForegroundApp = trigger.signal == AutomationSignalId.FOREGROUND_APP

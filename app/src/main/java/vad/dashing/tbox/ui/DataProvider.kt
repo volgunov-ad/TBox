@@ -30,6 +30,10 @@ import vad.dashing.tbox.wifimodem.regStatusLabel
 import vad.dashing.tbox.wifimodem.simStatusLabel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.fuelLitersForDisplay
+import vad.dashing.tbox.esp.ESP_BLE_RELAY_UNSET_VALUE_KEY
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
@@ -122,30 +126,33 @@ class TboxDataProvider(
     private val emptyFlow = MutableStateFlow("").asStateFlow()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-    /** BLE relay tile text: closed/open by board id; empty when the board is absent. */
-    private fun bleRelayStateText(
-        index: Int,
-        yesLabel: String,
-        noLabel: String,
-        id: String = "",
-    ): StateFlow<String> = combine(
-        vad.dashing.tbox.esp.EspCompanionRepository.bleRelayMasks,
-        vad.dashing.tbox.esp.EspCompanionRepository.bleRelays,
-    ) { masks, relays ->
-        val relay = if (id.isNotBlank()) {
-            relays.firstOrNull { it.id == id }
-                ?: return@combine context.getString(R.string.esp_ble_relay_missing)
-        } else {
-            relays.getOrNull(index) ?: return@combine ""
+    /**
+     * BLE relay tile text for one board id and channel bit.
+     * A blank id asks the user to pick a board. A missing mask stays "—" until a relayDev report.
+     */
+    private fun bleRelayStateText(id: String, channel: Int): StateFlow<String> {
+        val relayId = EspBleRelayIds.normalize(id)
+        if (relayId.isEmpty() || !EspBleRelayChannel.inRange(channel)) {
+            return MutableStateFlow(context.getString(R.string.widget_esp_ble_relay_choose)).asStateFlow()
         }
-        val mask = masks[relay.id] ?: return@combine "—"
-        val closed = (mask and 1) != 0
-        valueToString(closed, booleanTrue = yesLabel, booleanFalse = noLabel)
-    }.distinctUntilChanged().stateIn(
-        scope = viewModel.viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "",
-    )
+        return combine(
+            EspCompanionRepository.bleRelayMasks,
+            EspCompanionRepository.bleRelays,
+        ) { masks, relays ->
+            val paired = relays.any { EspBleRelayIds.normalize(it.id) == relayId }
+            if (!paired) return@combine context.getString(R.string.esp_ble_relay_missing)
+            val mask = masks[relayId] ?: return@combine "—"
+            valueToString(
+                EspBleRelayChannel.isClosed(mask, channel),
+                booleanTrue = yesLabel,
+                booleanFalse = noLabel,
+            )
+        }.distinctUntilChanged().stateIn(
+            scope = viewModel.viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "—",
+        )
+    }
     private val localTimeFlow = flow {
         val formatter = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
         while (true) {
@@ -185,8 +192,14 @@ class TboxDataProvider(
 
     private fun createFlowForKey(key: String, accuracy: Int?, dateTimeFormat: String): StateFlow<String> {
         fun eff(defaultDigits: Int) = effectiveDecimalPlaces(defaultDigits, accuracy)
+        if (key == ESP_BLE_RELAY_UNSET_VALUE_KEY) {
+            return MutableStateFlow(context.getString(R.string.widget_esp_ble_relay_choose)).asStateFlow()
+        }
         if (key.startsWith("espBleRelayId:")) {
-            return bleRelayStateText(-1, yesLabel, noLabel, key.removePrefix("espBleRelayId:"))
+            val parts = key.removePrefix("espBleRelayId:").split(':')
+            val id = parts.getOrNull(0).orEmpty()
+            val channel = parts.getOrNull(1)?.toIntOrNull() ?: return emptyFlow
+            return bleRelayStateText(id, channel)
         }
         return when (key) {
             "voltage" -> combine(canViewModel.voltage, HuMcuBoardVoltage.state) { fromTbox, fromHeadUnit ->
@@ -472,8 +485,8 @@ class TboxDataProvider(
             "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
                 valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
             }
-            "espBleRelay0" -> bleRelayStateText(0, yesLabel, noLabel)
-            "espBleRelay1" -> bleRelayStateText(1, yesLabel, noLabel)
+            "espBleRelay0", "espBleRelay1" ->
+                MutableStateFlow(context.getString(R.string.widget_esp_ble_relay_choose)).asStateFlow()
             else -> emptyFlow
         }
     }

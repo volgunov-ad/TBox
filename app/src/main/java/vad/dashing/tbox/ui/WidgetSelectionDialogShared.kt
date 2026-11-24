@@ -29,7 +29,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import vad.dashing.tbox.esp.EspCompanionRepository
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
@@ -141,6 +140,8 @@ import vad.dashing.tbox.normalizeHvacTempWidgetStepTenths
 import vad.dashing.tbox.isHvacTempWidgetDataKey
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.isEspBleRelayWidgetDataKey
 import vad.dashing.tbox.isEspRelayWidgetDataKey
 import vad.dashing.tbox.normalizePanelGridSpacingDp
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP
@@ -988,10 +989,17 @@ internal class WidgetSelectionDialogState(
         },
     )
     var espBleRelayId by mutableStateOf(
-        if (initialConfig.dataKey == "espBleRelay0" || initialConfig.dataKey == "espBleRelay1") {
+        if (isEspBleRelayWidgetDataKey(initialConfig.dataKey)) {
             initialConfig.espBleRelayId
         } else {
             ""
+        },
+    )
+    var espBleRelayChannel by mutableIntStateOf(
+        if (isEspBleRelayWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.espBleRelayChannel
+        } else {
+            0
         },
     )
     var cruiseControlType by mutableStateOf(
@@ -1150,8 +1158,9 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsEspRelayMode(key)) {
             espRelayMode = EspRelayWidgetMode.DEFAULT
         }
-        if (key != "espBleRelay0" && key != "espBleRelay1") {
+        if (!isEspBleRelayWidgetDataKey(key)) {
             espBleRelayId = ""
+            espBleRelayChannel = EspBleRelayChannel.DEFAULT
         }
         if (!isCruiseWidgetDataKey(key)) {
             cruiseControlType = CruiseControlType.DEFAULT
@@ -1609,7 +1618,12 @@ internal class WidgetSelectionDialogState(
             } else {
                 EspRelayWidgetMode.DEFAULT
             },
-            espBleRelayId = bleRelayIdForDraft(selectedDataKey, espBleRelayId),
+            espBleRelayId = if (isEspBleRelayWidgetDataKey(selectedDataKey)) espBleRelayId else "",
+            espBleRelayChannel = if (isEspBleRelayWidgetDataKey(selectedDataKey)) {
+                espBleRelayChannel
+            } else {
+                EspBleRelayChannel.DEFAULT
+            },
             cruiseControlType = if (isCruiseWidgetDataKey(selectedDataKey)) {
                 cruiseControlType
             } else {
@@ -2043,10 +2057,11 @@ internal class WidgetSelectionDialogState(
         } else {
             EspRelayWidgetMode.DEFAULT
         }
-        espBleRelayId = if (selectedDataKey == "espBleRelay0" || selectedDataKey == "espBleRelay1") {
-            cfg.espBleRelayId
+        espBleRelayId = if (isEspBleRelayWidgetDataKey(selectedDataKey)) cfg.espBleRelayId else ""
+        espBleRelayChannel = if (isEspBleRelayWidgetDataKey(selectedDataKey)) {
+            cfg.espBleRelayChannel
         } else {
-            ""
+            EspBleRelayChannel.DEFAULT
         }
         if (isCruiseWidgetDataKey(selectedDataKey)) {
             cruiseControlType = cfg.cruiseControlType
@@ -2853,12 +2868,4 @@ internal fun resolveStoredMediaSelectedPlayer(
     } else {
         orderedPlayers.first()
     }
-}
-
-private fun bleRelayIdForDraft(dataKey: String, stored: String): String {
-    if (dataKey != "espBleRelay0" && dataKey != "espBleRelay1") return ""
-    val trimmed = stored.trim().lowercase()
-    if (trimmed.isNotEmpty()) return trimmed
-    val index = if (dataKey == "espBleRelay0") 0 else 1
-    return EspCompanionRepository.bleRelays.value.getOrNull(index)?.id.orEmpty()
 }

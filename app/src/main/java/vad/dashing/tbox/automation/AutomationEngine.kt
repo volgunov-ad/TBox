@@ -757,10 +757,11 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
 
             is AutomationTrigger.StateEquals ->
                 add(
-                    AutomationSignalKey(
+                    bleRelaySignalKey(
                         trigger.signal,
                         trigger.source,
-                        relayId = trigger.relayId.trim().lowercase().ifBlank { null },
+                        trigger.relayId,
+                        trigger.relayChannel,
                     ),
                 )
 
@@ -801,10 +802,11 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
 
         is AutomationCondition.State ->
             add(
-                AutomationSignalKey(
+                bleRelaySignalKey(
                     condition.signal,
                     condition.source,
-                    relayId = condition.relayId.trim().lowercase().ifBlank { null },
+                    condition.relayId,
+                    condition.relayChannel,
                 ),
             )
 

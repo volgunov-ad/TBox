@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -58,5 +59,44 @@ class WidgetConfigCodecEspRelayModeTest {
         val raw = """[{"dataKey":"espRelay0","espRelayMode":"nope"}]"""
         val parsed = parseWidgetConfigsFromString(raw)
         assertEquals(EspRelayWidgetMode.DEFAULT, parsed[0].espRelayMode)
+    }
+
+    @Test
+    fun roundTripsBleRelayBoardAndChannel() {
+        val original = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = "espBleRelay0",
+                espBleRelayId = "AABBCCDD",
+                espBleRelayChannel = 3,
+            ),
+            FloatingDashboardWidgetConfig(
+                dataKey = "espConnected",
+                espBleRelayId = "aabbccdd",
+                espBleRelayChannel = 3,
+            ),
+        )
+        val json = serializeWidgetConfigs(original)
+        val parsed = parseWidgetConfigsFromString(json)
+        assertEquals("aabbccdd", parsed[0].espBleRelayId)
+        assertEquals(3, parsed[0].espBleRelayChannel)
+        assertEquals("", parsed[1].espBleRelayId)
+        assertEquals(0, parsed[1].espBleRelayChannel)
+        assertFalse(JSONArray(json).getJSONObject(1).has("espBleRelayId"))
+        assertFalse(JSONArray(json).getJSONObject(1).has("espBleRelayChannel"))
+    }
+
+    @Test
+    fun missingOrOutOfRangeBleChannelBecomesZero() {
+        val missing = parseWidgetConfigsFromString("""[{"dataKey":"espBleRelay1","espBleRelayId":"11223344"}]""")
+        assertEquals("11223344", missing[0].espBleRelayId)
+        assertEquals(0, missing[0].espBleRelayChannel)
+        val high = parseWidgetConfigsFromString(
+            """[{"dataKey":"espBleRelay1","espBleRelayId":"11223344","espBleRelayChannel":99}]""",
+        )
+        assertEquals(0, high[0].espBleRelayChannel)
+        val saved = serializeWidgetConfigs(
+            listOf(FloatingDashboardWidgetConfig(dataKey = "espBleRelay0", espBleRelayChannel = 0)),
+        )
+        assertTrue(saved.contains("\"espBleRelayChannel\":0"))
     }
 }

@@ -71,15 +71,16 @@ fun DashboardWidgetItem(
     dateTimeFormat: String = "",
     textColor: Color? = null,
     backgroundColor: Color? = null,
-    valueKey: String = widget.dataKey,
+    valueKey: String? = null,
 ) {
     val onlyText: Boolean
 
     val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
-    val valueFlow = remember(valueKey, widget.valueAccuracy, dateTimeFormat) {
+    val flowKey = valueKey ?: widget.dataKey
+    val valueFlow = remember(flowKey, widget.valueAccuracy, dateTimeFormat) {
         dataProvider.getValueFlow(
-            key = valueKey,
+            key = flowKey,
             accuracy = widget.valueAccuracy,
             dateTimeFormat = dateTimeFormat,
         )

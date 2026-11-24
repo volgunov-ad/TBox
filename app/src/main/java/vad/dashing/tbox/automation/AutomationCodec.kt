@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.esp.EspBleRelayIds
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 
@@ -199,10 +200,7 @@ object AutomationCodec {
                 .put("expectedState", trigger.expectedState)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
-                .apply {
-                    val relayId = trigger.relayId.trim().lowercase()
-                    if (relayId.isNotEmpty()) put("relayId", relayId)
-                }
+                .apply { putBleRelayTarget(trigger.signal, trigger.relayId, trigger.relayChannel) }
 
             is AutomationTrigger.Geofence -> JSONObject()
                 .put(KEY_TYPE, "geofence")
@@ -352,7 +350,8 @@ object AutomationCodec {
                             stored
                         }
                     },
-                    relayId = json.optString("relayId", "").trim().lowercase(),
+                    relayId = json.optString("relayId", ""),
+                    relayChannel = json.optInt("relayChannel", 0),
                 )
             }
 
@@ -418,10 +417,7 @@ object AutomationCodec {
                 .put("signal", condition.signal.storageKey)
                 .put("source", condition.source.storageKey)
                 .put("expectedState", condition.expectedState)
-                .apply {
-                    val relayId = condition.relayId.trim().lowercase()
-                    if (relayId.isNotEmpty()) put("relayId", relayId)
-                }
+                .apply { putBleRelayTarget(condition.signal, condition.relayId, condition.relayChannel) }
 
             is AutomationCondition.TriggeredBy -> JSONObject()
                 .put(KEY_TYPE, "triggered_by")
@@ -497,7 +493,8 @@ object AutomationCodec {
                         signal = signal,
                         source = source,
                         expectedState = expectedState,
-                        relayId = json.optString("relayId", "").trim().lowercase(),
+                        relayId = json.optString("relayId", ""),
+                        relayChannel = json.optInt("relayChannel", 0),
                     ),
                 )
             }
@@ -801,6 +798,17 @@ object AutomationCodec {
     private fun JSONObject.optNullableInt(key: String): Int? {
         if (!has(key) || isNull(key)) return null
         return requireInt(key)
+    }
+
+    private fun JSONObject.putBleRelayTarget(
+        signal: AutomationSignalId,
+        relayId: String,
+        relayChannel: Int,
+    ) {
+        if (!isBleRelaySignal(signal)) return
+        val id = EspBleRelayIds.normalize(relayId)
+        if (id.isNotEmpty()) put("relayId", id)
+        put("relayChannel", relayChannel)
     }
 
     private fun JSONObject.optBleMac(signal: AutomationSignalId): String {

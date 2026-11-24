@@ -6,6 +6,7 @@ import java.util.UUID
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.esp.EspBleRelayIds
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 
@@ -667,10 +668,13 @@ sealed interface AutomationTrigger {
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
         /**
-         * Paired BLE relay id when [signal] is ESP_BLE_RELAY_0 or ESP_BLE_RELAY_1.
-         * Blank keeps the index fallback.
+         * Paired BLE relay id when [signal] is [AutomationSignalId.ESP_BLE_RELAY_0]
+         * or [AutomationSignalId.ESP_BLE_RELAY_1]. Blank is an old slot-only rule;
+         * it is not read as “whatever board is at that index now”.
          */
         val relayId: String = "",
+        /** 0-based mask bit. 0 is the X1 coil (shown as channel 1). */
+        val relayChannel: Int = 0,
     ) : AutomationTrigger
 
     data class Geofence(
@@ -722,8 +726,10 @@ sealed interface AutomationCondition {
         val signal: AutomationSignalId,
         val source: AutomationSignalSource,
         val expectedState: String,
-        /** Paired BLE relay id for ESP_BLE_RELAY_0/1. Blank keeps the index fallback. */
+        /** Paired BLE relay id for [AutomationSignalId.ESP_BLE_RELAY_0]/[AutomationSignalId.ESP_BLE_RELAY_1]. */
         val relayId: String = "",
+        /** 0-based mask bit. 0 is the X1 coil (shown as channel 1). */
+        val relayChannel: Int = 0,
     ) : AutomationCondition
 
     data class TriggeredBy(
@@ -1111,10 +1117,30 @@ data class AutomationSignalKey(
      */
     val mac: String? = null,
     /**
-     * Paired BLE relay id for ESP_BLE_RELAY_0/1. Null keeps the index fallback.
+     * Paired BLE relay id for [AutomationSignalId.ESP_BLE_RELAY_0]/[AutomationSignalId.ESP_BLE_RELAY_1].
+     * Null is not an index lookup.
      */
     val relayId: String? = null,
+    /** 0-based mask bit for that board. Ignored for every other signal. */
+    val relayChannel: Int = 0,
 )
+
+internal fun bleRelaySignalKey(
+    signal: AutomationSignalId,
+    source: AutomationSignalSource,
+    relayId: String,
+    relayChannel: Int,
+): AutomationSignalKey {
+    if (!isBleRelaySignal(signal)) {
+        return AutomationSignalKey(signal, source)
+    }
+    return AutomationSignalKey(
+        signal = signal,
+        source = source,
+        relayId = EspBleRelayIds.normalize(relayId).ifBlank { null },
+        relayChannel = relayChannel,
+    )
+}
 
 /** Non-blank MAC only for [AutomationSignalId.ESP_BLE_BATTERY]; otherwise null. */
 fun automationSignalMacOrNull(signal: AutomationSignalId, mac: String): String? {
