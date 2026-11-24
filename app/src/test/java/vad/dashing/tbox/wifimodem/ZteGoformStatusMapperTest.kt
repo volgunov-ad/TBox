@@ -19,8 +19,8 @@ class ZteGoformStatusMapperTest {
         val fields = ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll.json"))
         val snap = ZteReqprocStatusMapper.map(fields)
 
-        assertEquals("нет сети", snap.netState.netStatus)
-        assertEquals("нет SIM", snap.netState.simStatus)
+        assertEquals("none", snap.netState.netStatus)
+        assertEquals("none", snap.netState.simStatus)
         assertFalse(snap.apnStatus)
         assertEquals("modem_sim_undetected", snap.modemMainStateRaw)
         assertEquals("ppp_disconnected", snap.pppStatusRaw)
@@ -38,7 +38,7 @@ class ZteGoformStatusMapperTest {
         // (-87 + 113) / 2 = 13 → level 2
         assertEquals(13, snap.netState.csq)
         assertEquals(2, snap.netState.signalLevel)
-        assertEquals("нет сети", snap.netState.netStatus)
+        assertEquals("none", snap.netState.netStatus)
         assertFalse(snap.apnStatus)
         assertTrue(snap.firmware.contains("MF79U") || snap.firmware.contains("BD_"))
     }
@@ -53,14 +53,14 @@ class ZteGoformStatusMapperTest {
         assertEquals("MTS", snap.netValues.operator)
         assertTrue(snap.apnStatus)
         assertEquals("10.20.30.40", snap.apnState.apnIP)
-        assertEquals("домашняя сеть", snap.netState.regStatus)
-        assertEquals("SIM готова", snap.netState.simStatus)
+        assertEquals("home", snap.netState.regStatus)
+        assertEquals("ready", snap.netState.simStatus)
     }
 
     @Test
     fun limitedServiceGsmIsNoNetworkNot2g() {
         assertEquals(
-            "нет сети",
+            "none",
             ZteReqprocStatusMapper.mapNetworkType("LIMITED_SERVICE_GSM"),
         )
     }
@@ -74,8 +74,8 @@ class ZteGoformStatusMapperTest {
         assertEquals(2, snap.netState.signalLevel)
         assertEquals("beeline", snap.netValues.operator)
         assertTrue(snap.apnStatus)
-        assertEquals("SIM готова", snap.netState.simStatus)
-        assertEquals("домашняя сеть", snap.netState.regStatus)
+        assertEquals("ready", snap.netState.simStatus)
+        assertEquals("home", snap.netState.regStatus)
     }
 
     @Test

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -100,11 +102,11 @@ class AutomationActionExecutor(
             val result = executeOne(action, context, signalSnapshot)
             if (!result.success) {
                 return AutomationActionResult.failure(
-                    "Действие ${index + 1}: ${result.message}",
+                    ruEn("Действие ${index + 1}: ${result.message}", "Action ${index + 1}: ${result.message}"),
                 )
             }
         }
-        return AutomationActionResult.ok("Выполнено действий: ${actions.size}")
+        return AutomationActionResult.ok(ruEn("Выполнено действий: ${actions.size}", "Actions completed: ${actions.size}"))
     }
 
     private suspend fun executeOne(
@@ -149,20 +151,20 @@ class AutomationActionExecutor(
         return withContext(Dispatchers.Default) {
             canCommandMutex.withLock {
                 val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-                    ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                    ?: return@withLock AutomationActionResult.failure(ruEn("CAN-команда не разрешена", "CAN command is not allowed"))
                 // Checks that do not depend on the backend run first: a broken action must
                 // not sit through the readiness wait. Mode-dependent ones follow the wait,
                 // because the mode can still change while the backend starts.
                 if (!entry.isActionAllowed(action)) {
                     return@withLock AutomationActionResult.failure(
-                        "Недопустимая операция или значение CAN",
+                        ruEn("Недопустимая операция или значение CAN", "Invalid CAN operation or value"),
                     )
                 }
                 if (action.bus == AutomationCanBus.AUDIO &&
                     action.operation == AutomationCanOperation.TRUNK_PULSE
                 ) {
                     return@withLock AutomationActionResult.failure(
-                        "Импульс багажника не относится к аудио",
+                        ruEn("Импульс багажника не относится к аудио", "The trunk pulse is not an audio action"),
                     )
                 }
                 if (!awaitCanBackendReadyForAction(
@@ -178,25 +180,25 @@ class AutomationActionExecutor(
                 val canMode = UniversalCanRepository.mode.value
                 val writeValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
                     ?: return@withLock AutomationActionResult.failure(
-                        "Недопустимая операция или значение CAN",
+                        ruEn("Недопустимая операция или значение CAN", "Invalid CAN operation or value"),
                     )
                 if (action.operation == AutomationCanOperation.SET &&
                     writeValue !in entry.allowedValuesFor(canMode)
                 ) {
                     return@withLock AutomationActionResult.failure(
-                        "Недопустимая операция или значение CAN",
+                        ruEn("Недопустимая операция или значение CAN", "Invalid CAN operation or value"),
                     )
                 }
                 if (action.operation == AutomationCanOperation.TRUNK_PULSE &&
                     writeValue !in setOf(1, 2)
                 ) {
                     return@withLock AutomationActionResult.failure(
-                        "Недопустимая операция или значение CAN",
+                        ruEn("Недопустимая операция или значение CAN", "Invalid CAN operation or value"),
                     )
                 }
                 if (!entry.supports(canMode)) {
                     return@withLock AutomationActionResult.failure(
-                        "CAN-действие не подтверждено для текущего backend ГУ",
+                        ruEn("CAN-действие не подтверждено для текущего backend ГУ", "CAN action is not confirmed for the current HU backend"),
                     )
                 }
                 val command = when (action.bus) {
@@ -220,7 +222,7 @@ class AutomationActionExecutor(
 
                         AutomationCanOperation.TRUNK_PULSE ->
                             return@withLock AutomationActionResult.failure(
-                                "Импульс багажника не относится к аудио",
+                                ruEn("Импульс багажника не относится к аудио", "The trunk pulse is not an audio action"),
                             )
                     }
                 }
@@ -239,7 +241,7 @@ class AutomationActionExecutor(
     ): AutomationActionResult {
         val packageName = action.packageName.trim()
         if (packageName.isEmpty()) {
-            return AutomationActionResult.failure("Не выбрано приложение")
+            return AutomationActionResult.failure(ruEn("Не выбрано приложение", "No app selected"))
         }
         return when (action.launchMode) {
             AppLauncherLaunchMode.FREEFORM -> {
@@ -263,9 +265,9 @@ class AutomationActionExecutor(
                         .first()
                 } != null
                 if (confirmed) {
-                    AutomationActionResult.ok("Freeform запущен")
+                    AutomationActionResult.ok(ruEn("Freeform запущен", "Freeform started"))
                 } else {
-                    AutomationActionResult.failure("Не удалось запустить freeform")
+                    AutomationActionResult.failure(ruEn("Не удалось запустить freeform", "Could not start freeform"))
                 }
             }
 
@@ -279,7 +281,7 @@ class AutomationActionExecutor(
                 }
                 AutomationActionResult(
                     launched,
-                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                    if (launched) ruEn("Приложение запущено", "App launched") else ruEn("Запуск приложения не удался", "Failed to launch the app"),
                 )
             }
 
@@ -288,7 +290,7 @@ class AutomationActionExecutor(
             AppLauncherLaunchMode.DCL_FULLSCREEN,
             -> {
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
-                    return AutomationActionResult.failure("Приложение не установлено")
+                    return AutomationActionResult.failure(ruEn("Приложение не установлено", "App is not installed"))
                 }
                 val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(
                     envEnabled = DclLauncherEnvironmentSetting.enabled,
@@ -303,17 +305,17 @@ class AutomationActionExecutor(
                 }
                 AutomationActionResult(
                     launched,
-                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                    if (launched) ruEn("Приложение запущено", "App launched") else ruEn("Запуск приложения не удался", "Failed to launch the app"),
                 )
             }
 
             AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
                 val displayId = action.virtualDisplayId
                 if (displayId == null || displayId <= 0) {
-                    return AutomationActionResult.failure("Не выбран виртуальный дисплей")
+                    return AutomationActionResult.failure(ruEn("Не выбран виртуальный дисплей", "No virtual display selected"))
                 }
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
-                    return AutomationActionResult.failure("Приложение не установлено")
+                    return AutomationActionResult.failure(ruEn("Приложение не установлено", "App is not installed"))
                 }
                 awaitAfterWindowModeExit { true }
                 val cached = vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(
@@ -340,8 +342,8 @@ class AutomationActionExecutor(
                 when (outcome) {
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success ->
                         AutomationActionResult.ok(
-                            "Приложение запущено на дисплее ${outcome.displayId}" +
-                                if (outcome.remapped) " (было $displayId)" else "",
+                            ruEn("Приложение запущено на дисплее ${outcome.displayId}", "App launched on display ${outcome.displayId}") +
+                                if (outcome.remapped) ruEn(" (было $displayId)", " (was $displayId)") else "",
                         )
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
                         AutomationActionResult.failure(
@@ -370,7 +372,7 @@ class AutomationActionExecutor(
         dclMode: String,
     ): AutomationActionResult {
         if (dclModeCapabilityMissing(dclMode, DclLauncherApiRepository.capabilities.value)) {
-            return rawFallbackAfterDcl("DCL capability missing ($dclMode) — обычный запуск", packageName)
+            return rawFallbackAfterDcl(ruEn("DCL capability missing ($dclMode) — обычный запуск", "DCL capability missing ($dclMode) — normal launch"), packageName)
         }
         val result = DclLauncherApiRepository.launchApp(
             packageName = packageName,
@@ -378,7 +380,7 @@ class AutomationActionExecutor(
             context = appContext,
         )
         if (result is DclCallResult.Ok && result.value.success) {
-            return AutomationActionResult.ok("Приложение запущено через DCL ($dclMode)")
+            return AutomationActionResult.ok(ruEn("Приложение запущено через DCL ($dclMode)", "App launched via DCL ($dclMode)"))
         }
         if (dclLaunchShouldUseRawFallback(result)) {
             val detail = when (result) {
@@ -393,7 +395,7 @@ class AutomationActionExecutor(
                 DclCallResult.Unavailable -> "API unavailable"
             }
             return rawFallbackAfterDcl(
-                "DCL недоступен ($detail) — обычный запуск",
+                ruEn("DCL недоступен ($detail) — обычный запуск", "DCL unavailable ($detail) — normal launch"),
                 packageName,
             )
         }
@@ -421,7 +423,7 @@ class AutomationActionExecutor(
         }
         return AutomationActionResult(
             launched,
-            if (launched) message else "Запуск приложения не удался",
+            if (launched) message else ruEn("Запуск приложения не удался", "Failed to launch the app"),
         )
     }
 
@@ -433,9 +435,9 @@ class AutomationActionExecutor(
         return when (action.target) {
             AutomationMainScreenTarget.CURRENT_WINDOW -> {
                 if (FreeformCompanionSession.pinOverlayPage(page)) {
-                    AutomationActionResult.ok("Страница оконного режима: $page")
+                    AutomationActionResult.ok(ruEn("Страница оконного режима: $page", "Window-mode page: $page"))
                 } else {
-                    AutomationActionResult.failure("Оконный режим не активен")
+                    AutomationActionResult.failure(ruEn("Оконный режим не активен", "Window mode is not active"))
                 }
             }
 
@@ -445,7 +447,7 @@ class AutomationActionExecutor(
                 val opened = awaitAfterWindowModeExit(::bringMainActivityToFront)
                 AutomationActionResult(
                     opened,
-                    if (opened) "Главный экран, страница $page" else "Главный экран не открыт",
+                    if (opened) ruEn("Главный экран, страница $page", "Home screen, page $page") else ruEn("Главный экран не открыт", "Home screen was not opened"),
                 )
             }
         }
@@ -456,25 +458,25 @@ class AutomationActionExecutor(
     ): AutomationActionResult {
         if (action.openBrowser) {
             val url = browserUrlFromHttpRequestYaml(action.yaml).getOrElse {
-                return AutomationActionResult.failure(it.message ?: "Некорректный URL")
+                return AutomationActionResult.failure(it.message ?: ruEn("Некорректный URL", "Invalid URL"))
             }
             return if (openHttpRequestWidgetUrlInBrowser(appContext, url)) {
-                AutomationActionResult.ok("Браузер открыт")
+                AutomationActionResult.ok(ruEn("Браузер открыт", "Browser opened"))
             } else {
-                AutomationActionResult.failure("Не удалось открыть браузер")
+                AutomationActionResult.failure(ruEn("Не удалось открыть браузер", "Could not open the browser"))
             }
         }
         val config = parseHttpRequestWidgetYaml(action.yaml).getOrElse {
-            return AutomationActionResult.failure(it.message ?: "Некорректный HTTP YAML")
+            return AutomationActionResult.failure(it.message ?: ruEn("Некорректный HTTP YAML", "Invalid HTTP YAML"))
         }
         val result = executeHttpRequestWidget(appContext, config)
         return AutomationActionResult(
             success = httpRequestWidgetIsSuccess(result),
             message = if (httpRequestWidgetIsSuccess(result)) {
                 if (result is HttpRequestWidgetResult.Success && result.code == 0) {
-                    "Запрос передан приложению"
+                    ruEn("Запрос передан приложению", "Request sent to the app")
                 } else {
-                    "HTTP выполнен"
+                    ruEn("HTTP выполнен", "HTTP completed")
                 }
             } else {
                 httpRequestWidgetErrorMessage(result)
@@ -489,7 +491,7 @@ class AutomationActionExecutor(
             val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
             settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(layout))
             withContext(Dispatchers.Main) { bringMainActivityToFront() }
-            AutomationActionResult.ok("Меню открыто")
+            AutomationActionResult.ok(ruEn("Меню открыто", "Menu opened"))
         }
 
         AutomationBuiltinActionType.FINISH_AND_START_TRIP ->
@@ -499,7 +501,7 @@ class AutomationActionExecutor(
             CarDataRepository.setMotorHours(0f)
             appDataManager.saveMotorHours(0f)
             CarDataRepository.markPersisted(0f)
-            AutomationActionResult.ok("Моточасы сброшены")
+            AutomationActionResult.ok(ruEn("Моточасы сброшены", "Engine hours reset"))
         }
 
         AutomationBuiltinActionType.RESTART_TBOX ->
@@ -509,14 +511,14 @@ class AutomationActionExecutor(
             val ok = withContext(Dispatchers.Main) {
                 HeadUnitDayNightRepository.toggleManualTheme(appContext)
             }
-            AutomationActionResult(ok, if (ok) "Тема переключена" else "Тема не переключена")
+            AutomationActionResult(ok, if (ok) ruEn("Тема переключена", "Theme toggled") else ruEn("Тема не переключена", "Theme was not toggled"))
         }
 
         AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> {
             val ok = withContext(Dispatchers.Main) {
                 HeadUnitDayNightRepository.enableAutoMode(appContext)
             }
-            AutomationActionResult(ok, if (ok) "Автотема включена" else "Автотема недоступна")
+            AutomationActionResult(ok, if (ok) ruEn("Автотема включена", "Auto theme on") else ruEn("Автотема недоступна", "Auto theme unavailable"))
         }
 
         AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
@@ -528,7 +530,7 @@ class AutomationActionExecutor(
                 else -> null
             }
             if (modeValue == null) {
-                AutomationActionResult.failure("Тема: light / dark / auto")
+                AutomationActionResult.failure(ruEn("Тема: light / dark / auto", "Theme: light / dark / auto"))
             } else {
                 val ok = withContext(Dispatchers.Main) {
                     if (modeValue == HeadUnitDayNightRepository.NIGHT_MODE_AUTO) {
@@ -538,13 +540,13 @@ class AutomationActionExecutor(
                     }
                 }
                 val label = when (key) {
-                    "light" -> "светлая"
-                    "dark" -> "тёмная"
-                    else -> "авто"
+                    "light" -> ruEn("светлая", "light")
+                    "dark" -> ruEn("тёмная", "dark")
+                    else -> ruEn("авто", "auto")
                 }
                 AutomationActionResult(
                     ok,
-                    if (ok) "Тема ГУ: $label" else "Не удалось установить тему ГУ",
+                    if (ok) ruEn("Тема ГУ: $label", "HU theme: $label") else ruEn("Не удалось установить тему ГУ", "Could not set the HU theme"),
                 )
             }
         }
@@ -554,7 +556,7 @@ class AutomationActionExecutor(
                 MirrorAdjustModeRepository.toggleMirrorAdjustMode(appContext)
                 true
             }.getOrDefault(false)
-            AutomationActionResult(ok, if (ok) "Режим зеркал переключён" else "Ошибка режима зеркал")
+            AutomationActionResult(ok, if (ok) ruEn("Режим зеркал переключён", "Mirror mode toggled") else ruEn("Ошибка режима зеркал", "Mirror mode error"))
         }
 
         AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS ->
@@ -626,25 +628,25 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> setPlatformVolume(
             PlatformAudioDomain.VolumeChannel.Media,
             action.intValue,
-            "медиа",
+            ruEn("медиа", "media"),
         )
 
         AutomationBuiltinActionType.SET_PHONE_VOLUME -> setPlatformVolume(
             PlatformAudioDomain.VolumeChannel.Phone,
             action.intValue,
-            "телефона",
+            ruEn("телефона", "phone"),
         )
 
         AutomationBuiltinActionType.SET_NAVI_VOLUME -> setPlatformVolume(
             PlatformAudioDomain.VolumeChannel.Navi,
             action.intValue,
-            "навигатора",
+            ruEn("навигатора", "navigation"),
         )
 
         AutomationBuiltinActionType.SET_VOICE_VOLUME -> setPlatformVolume(
             PlatformAudioDomain.VolumeChannel.Voice,
             action.intValue,
-            "голоса",
+            ruEn("голоса", "voice"),
         )
 
         AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
@@ -655,7 +657,7 @@ class AutomationActionExecutor(
                 else -> null
             }
             if (ui == null) {
-                AutomationActionResult.failure("Подголовник: only / assist / off")
+                AutomationActionResult.failure(ruEn("Подголовник: only / assist / off", "Headrest: only / assist / off"))
             } else {
                 // On Adayo/A10 the headrest goes through AdayoSettingsService, not VHAL.
                 if (!HeadUnitDayNightMapping.usesAdayoKeys()) {
@@ -671,9 +673,9 @@ class AutomationActionExecutor(
                 AutomationActionResult(
                     ok,
                     if (ok) {
-                        "Динамик подголовника установлен"
+                        ruEn("Динамик подголовника установлен", "Headrest speaker set")
                     } else {
-                        "Не удалось установить динамик подголовника"
+                        ruEn("Не удалось установить динамик подголовника", "Could not set the headrest speaker")
                     },
                 )
             }
@@ -685,7 +687,7 @@ class AutomationActionExecutor(
                 settingsManager.mockCanSpeedModeFlow.first(),
             )
             settingsManager.saveMockPowerAndModeSetting(next.power, next.mode)
-            AutomationActionResult.ok("Режим подмены геопозиции переключён")
+            AutomationActionResult.ok(ruEn("Режим подмены геопозиции переключён", "Mock-location mode toggled"))
         }
 
         AutomationBuiltinActionType.GNSS_MODULE_REBOOT ->
@@ -697,7 +699,7 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> {
             if (action.boolValue) GeoDebugLogRecorder.start() else GeoDebugLogRecorder.stop()
             AutomationActionResult.ok(
-                if (action.boolValue) "Запись гео-журнала запущена" else "Запись остановлена",
+                if (action.boolValue) ruEn("Запись гео-журнала запущена", "Geo log recording started") else ruEn("Запись остановлена", "Recording stopped"),
             )
         }
 
@@ -733,7 +735,7 @@ class AutomationActionExecutor(
 
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
             if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
-                AutomationActionResult.failure("Яркость экрана ГУ недоступна")
+                AutomationActionResult.failure(ruEn("Яркость экрана ГУ недоступна", "HU screen brightness is unavailable"))
             } else {
                 val level = action.intValue.coerceIn(1, 10)
                 val ok = withContext(Dispatchers.Main) {
@@ -742,9 +744,9 @@ class AutomationActionExecutor(
                 AutomationActionResult(
                     ok,
                     if (ok) {
-                        "Яркость экрана ГУ: $level"
+                        ruEn("Яркость экрана ГУ: $level", "HU screen brightness: $level")
                     } else {
-                        "Не удалось установить яркость экрана ГУ"
+                        ruEn("Не удалось установить яркость экрана ГУ", "Could not set the HU screen brightness")
                     },
                 )
             }
@@ -752,7 +754,7 @@ class AutomationActionExecutor(
 
         AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> {
             if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
-                AutomationActionResult.failure("Автояркость экрана ГУ недоступна")
+                AutomationActionResult.failure(ruEn("Автояркость экрана ГУ недоступна", "HU screen auto-brightness unavailable"))
             } else {
                 val ok = withContext(Dispatchers.Main) {
                     HeadUnitBrightnessRepository.writeAutoBrightness(appContext, action.boolValue)
@@ -761,12 +763,12 @@ class AutomationActionExecutor(
                     ok,
                     if (ok) {
                         if (action.boolValue) {
-                            "Автояркость экрана ГУ включена"
+                            ruEn("Автояркость экрана ГУ включена", "HU screen auto-brightness on")
                         } else {
-                            "Автояркость экрана ГУ выключена"
+                            ruEn("Автояркость экрана ГУ выключена", "HU screen auto-brightness off")
                         }
                     } else {
-                        "Не удалось изменить автояркость экрана ГУ"
+                        ruEn("Не удалось изменить автояркость экрана ГУ", "Could not change HU screen auto-brightness")
                     },
                 )
             }
@@ -775,25 +777,25 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
             val triggerId = action.stringValue.trim()
             if (triggerId.isEmpty()) {
-                AutomationActionResult.failure("ID триггера пуст")
+                AutomationActionResult.failure(ruEn("ID триггера пуст", "Trigger ID is empty"))
             } else {
                 when (builtinActionTriggerWidgetCommand(action)) {
                     AutomationTriggerWidgetCommand.ACTIVATE -> {
                         AutomationTriggerWidgetState.setActive(triggerId, true)
-                        AutomationActionResult.ok("Триггер-виджет активирован")
+                        AutomationActionResult.ok(ruEn("Триггер-виджет активирован", "Trigger widget activated"))
                     }
                     AutomationTriggerWidgetCommand.DEACTIVATE -> {
                         AutomationTriggerWidgetState.setActive(triggerId, false)
-                        AutomationActionResult.ok("Триггер-виджет деактивирован")
+                        AutomationActionResult.ok(ruEn("Триггер-виджет деактивирован", "Trigger widget deactivated"))
                     }
                     AutomationTriggerWidgetCommand.TOGGLE -> {
                         val nextActive = !AutomationTriggerWidgetState.isActive(triggerId)
                         AutomationTriggerWidgetState.setActive(triggerId, nextActive)
                         AutomationActionResult.ok(
                             if (nextActive) {
-                                "Триггер-виджет активирован"
+                                ruEn("Триггер-виджет активирован", "Trigger widget activated")
                             } else {
-                                "Триггер-виджет деактивирован"
+                                ruEn("Триггер-виджет деактивирован", "Trigger widget deactivated")
                             },
                         )
                     }
@@ -804,7 +806,7 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> {
             val automationId = action.stringValue.trim()
             if (automationId.isEmpty()) {
-                AutomationActionResult.failure("ID автоматизации пуст")
+                AutomationActionResult.failure(ruEn("ID автоматизации пуст", "Automation ID is empty"))
             } else {
                 serviceActions.setAutomationEnabled(automationId, action.boolValue)
             }
@@ -813,17 +815,17 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.SHOW_TOAST -> {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {
-                AutomationActionResult.failure("Текст пуст")
+                AutomationActionResult.failure(ruEn("Текст пуст", "Text is empty"))
             } else {
                 AutomationUserMessageOverlay.showToast(appContext, text)
-                AutomationActionResult.ok("Toast показан")
+                AutomationActionResult.ok(ruEn("Toast показан", "Toast shown"))
             }
         }
 
         AutomationBuiltinActionType.SHOW_ALERT -> {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {
-                AutomationActionResult.failure("Текст пуст")
+                AutomationActionResult.failure(ruEn("Текст пуст", "Text is empty"))
             } else if (
                 !AutomationUserMessageOverlay.showCloseableMessage(
                     context = appContext,
@@ -832,10 +834,10 @@ class AutomationActionExecutor(
                 )
             ) {
                 AutomationActionResult.failure(
-                    "Нет разрешения «поверх других окон» для сообщения на экране",
+                    ruEn("Нет разрешения «поверх других окон» для сообщения на экране", "No “display over other apps” permission for the on-screen message"),
                 )
             } else {
-                AutomationActionResult.ok("Сообщение закрыто")
+                AutomationActionResult.ok(ruEn("Сообщение закрыто", "Message closed"))
             }
         }
 
@@ -857,17 +859,17 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.CAMD_KEEP_AVM -> executeCamd(
             camdKeepAvmCommandLine(action.boolValue),
             if (action.boolValue) {
-                "Штатный AVM удерживается выключенным"
+                ruEn("Штатный AVM удерживается выключенным", "Stock AVM is held off")
             } else {
-                "Штатный AVM включён"
+                ruEn("Штатный AVM включён", "Stock AVM on")
             },
         )
         AutomationBuiltinActionType.CAMD_RECORDER -> executeCamd(
             camdRecorderCommandLine(action.boolValue),
             if (action.boolValue) {
-                "Регистратор Камеры ГУ включён"
+                ruEn("Регистратор Камеры ГУ включён", "HU Cameras recorder on")
             } else {
-                "Регистратор Камеры ГУ выключен"
+                ruEn("Регистратор Камеры ГУ выключен", "HU Cameras recorder off")
             },
         )
         AutomationBuiltinActionType.CAMD_RECORDER_SOS -> {
@@ -875,14 +877,14 @@ class AutomationActionExecutor(
                 CamdWindowClient.command(camdRecorderSosCommandLine(), context = appContext)
             }
             when (parseCamdRecorderSosResult(result)) {
-                CamdRecorderSosResult.Started -> AutomationActionResult.ok("Важный кадр сохраняется")
-                CamdRecorderSosResult.Busy -> AutomationActionResult.ok("Сохранение уже идёт")
+                CamdRecorderSosResult.Started -> AutomationActionResult.ok(ruEn("Важный кадр сохраняется", "Important frame is being saved"))
+                CamdRecorderSosResult.Busy -> AutomationActionResult.ok(ruEn("Сохранение уже идёт", "A save is already in progress"))
                 CamdRecorderSosResult.RecorderOff ->
-                    AutomationActionResult.failure("Регистратор выключен — включите его плиткой «Регистратор»")
+                    AutomationActionResult.failure(ruEn("Регистратор выключен — включите его плиткой «Регистратор»", "The recorder is off — turn it on with the “Recorder” tile"))
                 CamdRecorderSosResult.NoSosFolder ->
-                    AutomationActionResult.failure("Регистратор: нет папки SOS в «Камерах ГУ»")
+                    AutomationActionResult.failure(ruEn("Регистратор: нет папки SOS в «Камерах ГУ»", "Recorder: no SOS folder in “HU Cameras”"))
                 CamdRecorderSosResult.Failed ->
-                    AutomationActionResult.failure("Камеры ГУ не отвечают")
+                    AutomationActionResult.failure(ruEn("Камеры ГУ не отвечают", "HU Cameras is not responding"))
             }
         }
 
@@ -901,7 +903,7 @@ class AutomationActionExecutor(
             "" -> null
             else -> {
                 return AutomationActionResult.failure(
-                    "configEnabled: true / false или пусто",
+                    ruEn("configEnabled: true / false или пусто", "configEnabled: true / false or empty"),
                 )
             }
         }
@@ -914,41 +916,41 @@ class AutomationActionExecutor(
             )
         ) {
             is DclCallResult.Ok -> AutomationActionResult.ok(
-                if (action.boolValue) "DCL Умный ACC включён" else "DCL Умный ACC выключен",
+                if (action.boolValue) ruEn("DCL Умный ACC включён", "DCL Smart ACC on") else ruEn("DCL Умный ACC выключен", "DCL Smart ACC off"),
             )
             is DclCallResult.Error -> AutomationActionResult.failure(
                 result.error.message
                     ?: result.error.errorCode
-                    ?: "DCL Smart ACC: ошибка",
+                    ?: ruEn("DCL Smart ACC: ошибка", "DCL Smart ACC: error"),
             )
             DclCallResult.Unavailable -> AutomationActionResult.failure(
-                "DCL Launcher API недоступен",
+                ruEn("DCL Launcher API недоступен", "DCL Launcher API is unavailable"),
             )
         }
     }
 
     private suspend fun executeDclToggleSmartAcc(): AutomationActionResult =
         when (val result = DclLauncherApiRepository.toggleSmartAcc(appContext)) {
-            is DclCallResult.Ok -> AutomationActionResult.ok("DCL Умный ACC переключён")
+            is DclCallResult.Ok -> AutomationActionResult.ok(ruEn("DCL Умный ACC переключён", "DCL Smart ACC toggled"))
             is DclCallResult.Error -> AutomationActionResult.failure(
                 result.error.message
                     ?: result.error.errorCode
-                    ?: "DCL Smart ACC: ошибка",
+                    ?: ruEn("DCL Smart ACC: ошибка", "DCL Smart ACC: error"),
             )
             DclCallResult.Unavailable -> AutomationActionResult.failure(
-                "DCL Launcher API недоступен",
+                ruEn("DCL Launcher API недоступен", "DCL Launcher API is unavailable"),
             )
         }
 
     private suspend fun executeCamdWindow(action: AutomationAction.Builtin): AutomationActionResult {
         val line = camdAutomationCommandLine(action.intValue, action.stringValue)
-            ?: return AutomationActionResult.failure("Некорректные параметры окна камеры")
+            ?: return AutomationActionResult.failure(ruEn("Некорректные параметры окна камеры", "Invalid camera window parameters"))
         val mode = parseCamdAutomationWindowArgs(action.stringValue)?.mode
         val ok = when (mode) {
-            CAMD_ACTION_CLOSE_ALL -> "Окна камер закрыты"
-            CAMD_ACTION_CLOSE -> "Окно камеры закрыто"
-            CAMD_ACTION_OPEN -> "Окно камеры открыто"
-            else -> "Команда камеры выполнена"
+            CAMD_ACTION_CLOSE_ALL -> ruEn("Окна камер закрыты", "Camera windows closed")
+            CAMD_ACTION_CLOSE -> ruEn("Окно камеры закрыто", "Camera window closed")
+            CAMD_ACTION_OPEN -> ruEn("Окно камеры открыто", "Camera window opened")
+            else -> ruEn("Команда камеры выполнена", "Camera command completed")
         }
         return executeCamd(line, ok)
     }
@@ -964,7 +966,7 @@ class AutomationActionExecutor(
                 val text = if (detail.startsWith("ERR") || detail.contains("state=")) {
                     detail
                 } else {
-                    "Камеры ГУ не отвечают"
+                    ruEn("Камеры ГУ не отвечают", "HU Cameras is not responding")
                 }
                 AutomationActionResult.failure(text)
             },
@@ -973,7 +975,7 @@ class AutomationActionExecutor(
 
     private fun placeCall(rawNumber: String): AutomationActionResult {
         return when (val result = placeOutgoingCall(appContext, rawNumber)) {
-            PlaceCallResult.Success -> AutomationActionResult.ok("Звонок начат")
+            PlaceCallResult.Success -> AutomationActionResult.ok(ruEn("Звонок начат", "Call started"))
             is PlaceCallResult.Failure -> {
                 if (result.reason == PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION) {
                     // First-failure path for API / automation users without a dial tile (S9).
@@ -991,7 +993,7 @@ class AutomationActionExecutor(
             val result = vad.dashing.tbox.phone.PhoneCallStateRepository.answerIncomingCall()
         ) {
             vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
-                AutomationActionResult.ok("Ответ на звонок")
+                AutomationActionResult.ok(ruEn("Ответ на звонок", "Answer call"))
             is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
                 AutomationActionResult.failure(result.message)
         }
@@ -1000,7 +1002,7 @@ class AutomationActionExecutor(
     private fun hangupCall(): AutomationActionResult {
         return when (val result = vad.dashing.tbox.phone.PhoneCallStateRepository.hangupCall()) {
             vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
-                AutomationActionResult.ok("Звонок сброшен")
+                AutomationActionResult.ok(ruEn("Звонок сброшен", "Call ended"))
             is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
                 AutomationActionResult.failure(result.message)
         }
@@ -1014,11 +1016,11 @@ class AutomationActionExecutor(
         }
         return runCatching {
             appContext.startActivity(intent)
-            AutomationActionResult.ok("VAD Voice: слушаю")
+            AutomationActionResult.ok(ruEn("VAD Voice: слушаю", "VAD Voice: listening"))
         }.getOrElse { error ->
             AutomationActionResult.failure(
                 error.message?.takeIf { it.isNotBlank() }
-                    ?: "VAD Voice не установлен",
+                    ?: ruEn("VAD Voice не установлен", "VAD Voice is not installed"),
             )
         }
     }
@@ -1036,7 +1038,7 @@ class AutomationActionExecutor(
         }
         return AutomationActionResult(
             ok,
-            if (ok) "Громкость $label установлена" else "Ошибка громкости $label",
+            if (ok) ruEn("Громкость $label установлена", "Volume $label set") else ruEn("Ошибка громкости $label", "Volume $label error"),
         )
     }
 
@@ -1055,9 +1057,9 @@ class AutomationActionExecutor(
             SharedMediaControlService.updateSourceSelection(appContext, MEDIA_SOURCE_ID, packages)
             runCatching {
                 block(packages, preferred)
-                AutomationActionResult.ok("Медиа-команда отправлена")
+                AutomationActionResult.ok(ruEn("Медиа-команда отправлена", "Media command sent"))
             }.getOrElse {
-                AutomationActionResult.failure(it.message ?: "Ошибка медиа-команды")
+                AutomationActionResult.failure(it.message ?: ruEn("Ошибка медиа-команды", "Media command error"))
             }.also { result ->
                 if (holdForPlayerLaunch && result.success) {
                     SharedMediaControlService.scheduleSourceSelectionRelease(
@@ -1105,7 +1107,7 @@ class AutomationActionExecutor(
         internal const val CAN_EXEC_RETRY_WINDOW_MS = 12_000L
         internal const val CAN_EXEC_RETRY_DELAY_MS = 500L
         internal const val CAN_EXEC_MAX_WRITE_FAILURE_RETRIES = 2
-        internal const val CAN_NOT_READY_MESSAGE = "CAN ГУ не готов"
+        internal val CAN_NOT_READY_MESSAGE = ruEn("CAN ГУ не готов", "HU CAN is not ready")
     }
 }
 

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadlightMode
@@ -249,8 +251,8 @@ object AutomationCanCatalog {
         val policy = entry.policy
         if (policy is MbCanCommandPolicy.ToggleBinary) {
             return when (value) {
-                policy.offValue -> "Выключить"
-                policy.onValue -> "Включить"
+                policy.offValue -> ruEn("Выключить", "Off")
+                policy.onValue -> ruEn("Включить", "On")
                 else -> value.toString()
             }
         }
@@ -277,64 +279,64 @@ object AutomationCanCatalog {
             HeadlightMode.fromRaw(value)?.widgetLabel ?: value.toString()
 
         MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY -> when (value) {
-            FollowMeHomeMode.Sec30.mbCanWriteValue -> "30 с"
-            FollowMeHomeMode.Sec60.mbCanWriteValue -> "60 с"
-            FollowMeHomeMode.Off.mbCanWriteValue -> "Выкл"
+            FollowMeHomeMode.Sec30.mbCanWriteValue -> ruEn("30 с", "30 s")
+            FollowMeHomeMode.Sec60.mbCanWriteValue -> ruEn("60 с", "60 s")
+            FollowMeHomeMode.Off.mbCanWriteValue -> ruEn("Выкл", "Off")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE -> when (value) {
-            1 -> "Водитель"
-            2 -> "Все"
+            1 -> ruEn("Водитель", "Driver")
+            2 -> ruEn("Все", "All")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.DEFENCES_PROMPT -> when (value) {
-            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT -> "Свет"
-            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_HORN -> "Сигнал"
-            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT_HORN -> "Свет и сигнал"
+            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT -> ruEn("Свет", "Light")
+            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_HORN -> ruEn("Сигнал", "Horn")
+            CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT_HORN -> ruEn("Свет и сигнал", "Light and horn")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
         MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
-        -> "Уровень $value"
+        -> ruEn("Уровень $value", "Level $value")
 
         MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT ->
-            CarSettingsLocksLightsDomain.turnFlashCountBlinks(value)?.let { "$it миганий" }
+            CarSettingsLocksLightsDomain.turnFlashCountBlinks(value)?.let { ruEn("$it миганий", "$it flashes") }
                 ?: value.toString()
 
         MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION -> when (value) {
             MbCanKnownVehiclePropertyId.LAS_MODE_LDW -> "LDW"
             MbCanKnownVehiclePropertyId.LAS_MODE_LKA -> "LKA"
-            MbCanKnownVehiclePropertyId.LAS_MODE_OFF -> "Выкл"
+            MbCanKnownVehiclePropertyId.LAS_MODE_OFF -> ruEn("Выкл", "Off")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY -> when (CarSettingsAdasDomain.decodeFcwSensitivityMbCan(value)) {
-            FcwSensitivity.Far -> "Дальняя"
-            FcwSensitivity.Standard -> "Стандарт"
-            FcwSensitivity.Near -> "Ближняя"
+            FcwSensitivity.Far -> ruEn("Дальняя", "Far")
+            FcwSensitivity.Standard -> ruEn("Стандарт", "Standard")
+            FcwSensitivity.Near -> ruEn("Ближняя", "Near")
             null -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> when (CarSettingsAdasDomain.decodeAccTimeGapRequest(value)) {
-            AccTimeGap.Near -> "Ближняя"
-            AccTimeGap.Medium -> "Средняя"
-            AccTimeGap.Far -> "Дальняя"
+            AccTimeGap.Near -> ruEn("Ближняя", "Near")
+            AccTimeGap.Medium -> ruEn("Средняя", "Medium")
+            AccTimeGap.Far -> ruEn("Дальняя", "Far")
             null -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL -> when (CarSettingsAdasDomain.decodeLdwSensitivityMbCan(value)) {
-            LdwSensitivity.High -> "Высокая"
-            LdwSensitivity.Low -> "Низкая"
+            LdwSensitivity.High -> ruEn("Высокая", "High")
+            LdwSensitivity.Low -> ruEn("Низкая", "Low")
             null -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM -> when (value) {
             MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO -> "ECO"
-            MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT -> "Комфорт"
-            MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG -> "Сильный"
+            MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT -> ruEn("Комфорт", "Comfort")
+            MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG -> ruEn("Сильный", "Strong")
             else -> value.toString()
         }
 
@@ -346,38 +348,38 @@ object AutomationCanCatalog {
         }
 
         MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION -> when (value) {
-            1 -> "Низкая"
-            2 -> "Средняя"
-            3 -> "Высокая"
+            1 -> ruEn("Низкая", "Low")
+            2 -> ruEn("Средняя", "Medium")
+            3 -> ruEn("Высокая", "High")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> when (value) {
-            CarSettingsHudDomain.HUD_MODE_STANDARD -> "Стандарт"
-            CarSettingsHudDomain.HUD_MODE_SNOW -> "Снег"
+            CarSettingsHudDomain.HUD_MODE_STANDARD -> ruEn("Стандарт", "Standard")
+            CarSettingsHudDomain.HUD_MODE_SNOW -> ruEn("Снег", "Snow")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.HUD_HEIGHT,
         MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS,
         MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL,
-        -> "Уровень $value"
+        -> ruEn("Уровень $value", "Level $value")
 
         MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE -> when (value) {
-            0 -> "Авто"
-            1 -> "Вручную"
+            0 -> ruEn("Авто", "Auto")
+            1 -> ruEn("Вручную", "Manual")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET ->
-            CarSettingsHudDomain.decodeOverspeedKmh(value)?.let { "$it км/ч" } ?: value.toString()
+            CarSettingsHudDomain.decodeOverspeedKmh(value)?.let { ruEn("$it км/ч", "$it km/h") } ?: value.toString()
 
         MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> when (value) {
-            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE -> "Лицо"
-            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT -> "Ноги"
-            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT -> "Лицо и ноги"
-            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST -> "Лобовое"
-            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT -> "Лобовое и ноги"
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE -> ruEn("Лицо", "Face")
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT -> ruEn("Ноги", "Feet")
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT -> ruEn("Лицо и ноги", "Face and feet")
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST -> ruEn("Лобовое", "Windshield")
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT -> ruEn("Лобовое и ноги", "Windshield and feet")
             else -> value.toString()
         }
 
@@ -397,28 +399,28 @@ object AutomationCanCatalog {
         }?.widgetLabel ?: value.toString()
 
         MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH -> when (value) {
-            SlaSpeedLimitDomain.SLA_SWITCH_OFF -> "Выключить"
-            SlaSpeedLimitDomain.SLA_SWITCH_ON -> "Включить"
+            SlaSpeedLimitDomain.SLA_SWITCH_OFF -> ruEn("Выключить", "Off")
+            SlaSpeedLimitDomain.SLA_SWITCH_ON -> ruEn("Включить", "On")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE -> when (value) {
-            1 -> "Салон"
-            2 -> "Снаружи"
+            1 -> ruEn("Салон", "Cabin")
+            2 -> ruEn("Снаружи", "Outside")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ -> when (value) {
-            1 -> "Выкл"
-            2 -> "Вкл"
-            3 -> "Авто"
+            1 -> ruEn("Выкл", "Off")
+            2 -> ruEn("Вкл", "On")
+            3 -> ruEn("Авто", "Auto")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ -> when (value) {
-            1 -> "Низкая"
-            2 -> "Средняя"
-            3 -> "Высокая"
+            1 -> ruEn("Низкая", "Low")
+            2 -> ruEn("Средняя", "Medium")
+            3 -> ruEn("Высокая", "High")
             else -> value.toString()
         }
 
@@ -426,31 +428,31 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
         -> HvacClimateDomain.mbCanTempRawToCelsius(value)?.let(::formatCelsius) ?: value.toString()
 
-        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED -> "Скорость $value"
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED -> ruEn("Скорость $value", "Speed $value")
 
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> when (value) {
-            1 -> "Открыть"
-            2 -> "Закрыть"
+            1 -> ruEn("Открыть", "Open")
+            2 -> ruEn("Закрыть", "Close")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH -> when (value) {
-            1 -> "Сложить"
-            2 -> "Разложить"
+            1 -> ruEn("Сложить", "Fold")
+            2 -> ruEn("Разложить", "Unfold")
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.SUNSHADE_POS -> when (value) {
-            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто (0%)"
-            BodyComfortWrite.SHADE_VALUES.last -> "Открыто (100%)"
+            BodyComfortWrite.SHADE_VALUES.first -> ruEn("Закрыто (0%)", "Closed (0%)")
+            BodyComfortWrite.SHADE_VALUES.last -> ruEn("Открыто (100%)", "Open (100%)")
             in 2..10 -> "${(value - 1) * 10}%"
             else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> when (value) {
-            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто (0%)"
-            BodyComfortWrite.SHADE_VALUES.last -> "Открыто (100%)"
-            MbCanKnownVehiclePropertyId.SUNROOF_TILT -> "Откинуть"
+            BodyComfortWrite.SHADE_VALUES.first -> ruEn("Закрыто (0%)", "Closed (0%)")
+            BodyComfortWrite.SHADE_VALUES.last -> ruEn("Открыто (100%)", "Open (100%)")
+            MbCanKnownVehiclePropertyId.SUNROOF_TILT -> ruEn("Откинуть", "Tilt")
             in 2..10 -> "${(value - 1) * 10}%"
             else -> value.toString()
         }
@@ -462,9 +464,9 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
         -> if (mode == HeadUnitCanMode.Android10Vhal) {
             when (value) {
-                MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE -> "Закрыть"
-                MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN -> "Открыть"
-                MbCanKnownVehiclePropertyId.WINDOW_A10_VENT -> "Щель"
+                MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE -> ruEn("Закрыть", "Close")
+                MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN -> ruEn("Открыть", "Open")
+                MbCanKnownVehiclePropertyId.WINDOW_A10_VENT -> ruEn("Щель", "Vent")
                 else -> value.toString()
             }
         } else {
@@ -476,25 +478,25 @@ object AutomationCanCatalog {
 
     private fun audioValueLabel(propertyId: Int, value: Int): String = when (propertyId) {
         MbCanKnownAudioPropertyId.VOLUME_SPEED -> when (value) {
-            1 -> "Выкл"
-            2 -> "Низкий"
-            3 -> "Средний"
-            4 -> "Высокий"
+            1 -> ruEn("Выкл", "Off")
+            2 -> ruEn("Низкий", "Low")
+            3 -> ruEn("Средний", "Medium")
+            4 -> ruEn("Высокий", "High")
             else -> value.toString()
         }
 
         MbCanKnownAudioPropertyId.VOLUME_KEY -> when (value) {
-            0 -> "Выкл"
-            1 -> "Низкий"
-            2 -> "Средний"
-            3 -> "Высокий"
+            0 -> ruEn("Выкл", "Off")
+            1 -> ruEn("Низкий", "Low")
+            2 -> ruEn("Средний", "Medium")
+            3 -> ruEn("Высокий", "High")
             else -> value.toString()
         }
 
         MbCanKnownAudioPropertyId.VOLUME_RADAR -> when (value) {
-            1 -> "Низкий"
-            2 -> "Средний"
-            3 -> "Высокий"
+            1 -> ruEn("Низкий", "Low")
+            2 -> ruEn("Средний", "Medium")
+            3 -> ruEn("Высокий", "High")
             else -> value.toString()
         }
 
@@ -512,21 +514,21 @@ object AutomationCanCatalog {
     }
 
     private fun frontSeatValueLabel(value: Int): String = when (value) {
-        1 -> "Выкл."
-        2 -> "Подогрев 1"
-        3 -> "Подогрев 2"
-        4 -> "Подогрев 3"
-        5 -> "Вентиляция 1"
-        6 -> "Вентиляция 2"
-        7 -> "Вентиляция 3"
+        1 -> ruEn("Выкл.", "Off.")
+        2 -> ruEn("Подогрев 1", "Heat 1")
+        3 -> ruEn("Подогрев 2", "Heat 2")
+        4 -> ruEn("Подогрев 3", "Heat 3")
+        5 -> ruEn("Вентиляция 1", "Ventilation 1")
+        6 -> ruEn("Вентиляция 2", "Ventilation 2")
+        7 -> ruEn("Вентиляция 3", "Ventilation 3")
         else -> value.toString()
     }
 
     private fun rearSeatValueLabel(value: Int): String = when (value) {
-        1 -> "Выкл."
-        2 -> "Подогрев 1"
-        3 -> "Подогрев 2"
-        4 -> "Подогрев 3"
+        1 -> ruEn("Выкл.", "Off.")
+        2 -> ruEn("Подогрев 1", "Heat 1")
+        3 -> ruEn("Подогрев 2", "Heat 2")
+        4 -> ruEn("Подогрев 3", "Heat 3")
         else -> value.toString()
     }
 

@@ -9,6 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.fuel.FuelCostAccounting
 import vad.dashing.tbox.fuel.FuelPriceData
 import vad.dashing.tbox.fuel.FuelPriceResolver
@@ -19,6 +20,18 @@ import vad.dashing.tbox.fuel.RefuelRecord
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class FuelPriceResolverTest {
+
+    @Test
+    fun fuelTypeOption_toString_usesDisplayName() {
+        val option = FuelTypes.optionFor(11)
+        assertEquals("Аи-95", option.label)
+        assertEquals(FuelTypes.displayName(option.label), option.toString())
+        if (BuildConfig.FLAVOR == "en") {
+            assertEquals("RON 95", option.toString())
+            assertEquals("Diesel", FuelTypes.optionFor(3).toString())
+            assertEquals("CNG", FuelTypes.options.first { it.id == 18 }.toString())
+        }
+    }
 
     @Test
     fun resolve_prefersExactNearestStationPrice() {

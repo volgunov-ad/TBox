@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -86,21 +88,21 @@ object AutomationRoadMatchSignals {
     }
 
     fun highwayClassOptionLabel(raw: String): String? = when (RoadHighwayClass.normalize(raw)) {
-        "motorway" -> "Автомагистраль"
-        "motorway_link" -> "Съезд с автомагистрали"
-        "trunk" -> "Магистраль"
-        "trunk_link" -> "Съезд с магистрали"
-        "primary" -> "Главная дорога"
-        "primary_link" -> "Съезд с главной"
-        "secondary" -> "Второстепенная"
-        "secondary_link" -> "Съезд со второстепенной"
-        "tertiary" -> "Третьестепенная"
-        "tertiary_link" -> "Съезд с третьестепенной"
-        "unclassified" -> "Без классификации"
-        "residential" -> "Жилая зона"
-        "living_street" -> "Жилая улица"
-        "service" -> "Служебный проезд"
-        "track" -> "Просёлок"
+        "motorway" -> ruEn("Автомагистраль", "Motorway")
+        "motorway_link" -> ruEn("Съезд с автомагистрали", "Motorway link")
+        "trunk" -> ruEn("Магистраль", "Trunk road")
+        "trunk_link" -> ruEn("Съезд с магистрали", "Trunk link")
+        "primary" -> ruEn("Главная дорога", "Primary road")
+        "primary_link" -> ruEn("Съезд с главной", "Primary link")
+        "secondary" -> ruEn("Второстепенная", "Secondary")
+        "secondary_link" -> ruEn("Съезд со второстепенной", "Secondary link")
+        "tertiary" -> ruEn("Третьестепенная", "Tertiary")
+        "tertiary_link" -> ruEn("Съезд с третьестепенной", "Tertiary link")
+        "unclassified" -> ruEn("Без классификации", "Unclassified")
+        "residential" -> ruEn("Жилая зона", "Residential")
+        "living_street" -> ruEn("Жилая улица", "Living street")
+        "service" -> ruEn("Служебный проезд", "Service road")
+        "track" -> ruEn("Просёлок", "Track")
         else -> null
     }
 }

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -10,155 +12,155 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
  */
 object AutomationParameterLabels {
     fun vehicleLabel(propertyId: Int): String = when (propertyId) {
-        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH -> "Обогрев руля"
-        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH -> "Сервисное положение дворников"
-        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH -> "Парковочный радар"
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH -> ruEn("Обогрев руля", "Steering wheel heat")
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH -> ruEn("Сервисное положение дворников", "Wiper service position")
+        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH -> ruEn("Парковочный радар", "Parking radar")
         MbCanKnownVehiclePropertyId.AVH_SWITCH -> "Auto Hold (AVH)"
-        MbCanKnownVehiclePropertyId.HDC_SWITCH -> "Помощь при спуске (HDC)"
-        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH -> "Отключение ESP (стабилизация)"
-        MbCanKnownVehiclePropertyId.LIGHTCONTROL -> "Режим фар"
-        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT -> "Задний противотуманный фонарь"
-        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK -> "Автозапирание дверей"
-        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK -> "Отпирание при выключении зажигания"
-        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY -> "Задержка Follow Me Home"
-        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE -> "Режим отпирания двери водителя"
-        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT -> "Подтверждение запирания"
-        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY -> "Чувствительность дворников"
-        MbCanKnownVehiclePropertyId.REAR_WIPER -> "Задний дворник"
-        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW -> "Автоскладывание зеркал"
-        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST -> "Высота ближнего света"
-        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT -> "Количество комфортных миганий"
-        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION -> "Режим удержания полосы"
-        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH -> "NGP (умный пилот)"
-        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION -> "Контроль слепых зон (BSD)"
-        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING -> "Предупреждение об открытой двери (DOW)"
-        MbCanKnownVehiclePropertyId.FCW_SWITCH -> "Предупреждение столкновения (FCW)"
-        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH -> "Автоторможение AEB"
-        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING -> "Предупреждение дистанции"
-        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY -> "Чувствительность FCW"
-        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> "Дистанция ACC"
-        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL -> "Чувствительность LDW"
-        MbCanKnownVehiclePropertyId.HMA_SWITCH -> "Автоматический дальний свет (HMA)"
-        MbCanKnownVehiclePropertyId.HVAC_CUSTOM -> "Режим климата"
-        MbCanKnownVehiclePropertyId.HVAC_AC_MAX -> "Максимальное охлаждение (AC MAX)"
-        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH -> "Обогрев лобового стекла"
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> "Обогрев заднего стекла и зеркал"
-        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> "Рециркуляция воздуха"
-        MbCanKnownVehiclePropertyId.HVAC_POWER -> "Управление кондиционером"
-        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY -> "Очистка кондиционера при запирании"
-        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> "Автоматический режим климата"
-        MbCanKnownVehiclePropertyId.HVAC_AQS -> "Очистка воздуха / анионы"
-        MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH -> "Ароматизация"
-        MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL -> "Аромат"
-        MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION -> "Интенсивность аромата"
-        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH -> "Первичная продувка"
-        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED -> "Снижение вентилятора при Bluetooth"
-        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH -> "Автоматическая вентиляция"
-        MbCanKnownVehiclePropertyId.HUD_SWITCH -> "Проекционный дисплей (HUD)"
-        MbCanKnownVehiclePropertyId.HUD_HEIGHT -> "Высота HUD"
-        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS -> "Яркость HUD"
-        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> "Режим HUD"
-        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS -> "Автояркость HUD"
-        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE -> "Автояркость приборной панели"
-        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL -> "Яркость приборной панели"
-        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET -> "Предупреждение превышения скорости"
-        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> "Направление обдува"
-        MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH -> "Беспроводная зарядка"
-        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE -> "Режим рулевого управления"
-        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE -> "Режим усилителя руля"
-        MbCanKnownVehiclePropertyId.SYSTEM_MODE -> "Системный режим автомобиля"
-        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE -> "Режим движения"
-        MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE -> "Режим силовой установки"
-        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET -> "Режим движения 6DCT"
-        MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH -> "Распознавание дорожных знаков"
-        MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE -> "Отображение PM2.5"
-        MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ -> "УФ-лампа"
-        MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ -> "Интенсивность стерилизации"
-        MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE -> "Отклик педали тормоза"
-        MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE -> "Режим станции источника"
-        MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET -> "Режим мойки"
-        MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH -> "Левое переднее сиденье"
-        MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH -> "Правое переднее сиденье"
-        MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH -> "Левое заднее сиденье"
-        MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH -> "Правое заднее сиденье"
-        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT -> "Температура климата слева"
-        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT -> "Температура климата справа"
-        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED -> "Скорость вентилятора"
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> "Передний климат"
-        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH -> "Синхронизация климата"
-        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> "Электропривод багажника"
-        MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH -> "Складывание зеркал"
-        MbCanKnownVehiclePropertyId.SUNSHADE_POS -> "Шторка"
-        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> "Люк"
-        MbCanKnownVehiclePropertyId.WINDOW_POS -> "Все стёкла"
-        MbCanKnownVehiclePropertyId.WINDOW_FL_POS -> "Стекло переднее левое"
-        MbCanKnownVehiclePropertyId.WINDOW_FR_POS -> "Стекло переднее правое"
-        MbCanKnownVehiclePropertyId.WINDOW_RL_POS -> "Стекло заднее левое"
-        MbCanKnownVehiclePropertyId.WINDOW_RR_POS -> "Стекло заднее правое"
-        else -> "CAN-параметр $propertyId"
+        MbCanKnownVehiclePropertyId.HDC_SWITCH -> ruEn("Помощь при спуске (HDC)", "Hill descent control (HDC)")
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH -> ruEn("Отключение ESP (стабилизация)", "ESP off (stability)")
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL -> ruEn("Режим фар", "Headlight mode")
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT -> ruEn("Задний противотуманный фонарь", "Rear fog light")
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK -> ruEn("Автозапирание дверей", "Auto door lock")
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK -> ruEn("Отпирание при выключении зажигания", "Unlock when the ignition turns off")
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY -> ruEn("Задержка Follow Me Home", "Follow Me Home delay")
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE -> ruEn("Режим отпирания двери водителя", "Driver door unlock mode")
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT -> ruEn("Подтверждение запирания", "Lock confirmation")
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY -> ruEn("Чувствительность дворников", "Wiper sensitivity")
+        MbCanKnownVehiclePropertyId.REAR_WIPER -> ruEn("Задний дворник", "Rear wiper")
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW -> ruEn("Автоскладывание зеркал", "Auto mirror fold")
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST -> ruEn("Высота ближнего света", "Low beam height")
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT -> ruEn("Количество комфортных миганий", "Comfort flash count")
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION -> ruEn("Режим удержания полосы", "Lane keeping mode")
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH -> ruEn("NGP (умный пилот)", "NGP (smart pilot)")
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION -> ruEn("Контроль слепых зон (BSD)", "Blind spot detection (BSD)")
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING -> ruEn("Предупреждение об открытой двери (DOW)", "Door open warning (DOW)")
+        MbCanKnownVehiclePropertyId.FCW_SWITCH -> ruEn("Предупреждение столкновения (FCW)", "Forward collision warning (FCW)")
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH -> ruEn("Автоторможение AEB", "Automatic braking AEB")
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING -> ruEn("Предупреждение дистанции", "Distance warning")
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY -> ruEn("Чувствительность FCW", "FCW sensitivity")
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> ruEn("Дистанция ACC", "ACC distance")
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL -> ruEn("Чувствительность LDW", "LDW sensitivity")
+        MbCanKnownVehiclePropertyId.HMA_SWITCH -> ruEn("Автоматический дальний свет (HMA)", "Automatic high beam (HMA)")
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM -> ruEn("Режим климата", "Climate mode")
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX -> ruEn("Максимальное охлаждение (AC MAX)", "Maximum cooling (AC MAX)")
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH -> ruEn("Обогрев лобового стекла", "Windshield heat")
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> ruEn("Обогрев заднего стекла и зеркал", "Rear window and mirror heat")
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> ruEn("Рециркуляция воздуха", "Air recirculation")
+        MbCanKnownVehiclePropertyId.HVAC_POWER -> ruEn("Управление кондиционером", "A/C control")
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY -> ruEn("Очистка кондиционера при запирании", "A/C purge when locking")
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> ruEn("Автоматический режим климата", "Automatic climate mode")
+        MbCanKnownVehiclePropertyId.HVAC_AQS -> ruEn("Очистка воздуха / анионы", "Air purification / ions")
+        MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH -> ruEn("Ароматизация", "Fragrance")
+        MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL -> ruEn("Аромат", "Fragrance")
+        MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION -> ruEn("Интенсивность аромата", "Fragrance intensity")
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH -> ruEn("Первичная продувка", "Initial purge")
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED -> ruEn("Снижение вентилятора при Bluetooth", "Fan reduction with Bluetooth")
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH -> ruEn("Автоматическая вентиляция", "Automatic ventilation")
+        MbCanKnownVehiclePropertyId.HUD_SWITCH -> ruEn("Проекционный дисплей (HUD)", "Head-up display (HUD)")
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT -> ruEn("Высота HUD", "HUD height")
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS -> ruEn("Яркость HUD", "HUD brightness")
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> ruEn("Режим HUD", "HUD mode")
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS -> ruEn("Автояркость HUD", "HUD auto-brightness")
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE -> ruEn("Автояркость приборной панели", "Cluster auto-brightness")
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL -> ruEn("Яркость приборной панели", "Cluster brightness")
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET -> ruEn("Предупреждение превышения скорости", "Overspeed warning")
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> ruEn("Направление обдува", "Airflow direction")
+        MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH -> ruEn("Беспроводная зарядка", "Wireless charging")
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE -> ruEn("Режим рулевого управления", "Steering mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE -> ruEn("Режим усилителя руля", "Power steering mode")
+        MbCanKnownVehiclePropertyId.SYSTEM_MODE -> ruEn("Системный режим автомобиля", "Vehicle system mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE -> ruEn("Режим движения", "Drive mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE -> ruEn("Режим силовой установки", "Powertrain mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET -> ruEn("Режим движения 6DCT", "6DCT drive mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH -> ruEn("Распознавание дорожных знаков", "Traffic sign recognition")
+        MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE -> ruEn("Отображение PM2.5", "PM2.5 display")
+        MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ -> ruEn("УФ-лампа", "UV lamp")
+        MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ -> ruEn("Интенсивность стерилизации", "Sterilization intensity")
+        MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE -> ruEn("Отклик педали тормоза", "Brake pedal response")
+        MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE -> ruEn("Режим станции источника", "Source station mode")
+        MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET -> ruEn("Режим мойки", "Car wash mode")
+        MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH -> ruEn("Левое переднее сиденье", "Front left seat")
+        MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH -> ruEn("Правое переднее сиденье", "Front right seat")
+        MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH -> ruEn("Левое заднее сиденье", "Rear left seat")
+        MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH -> ruEn("Правое заднее сиденье", "Rear right seat")
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT -> ruEn("Температура климата слева", "Left climate temperature")
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT -> ruEn("Температура климата справа", "Right climate temperature")
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED -> ruEn("Скорость вентилятора", "Fan speed")
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> ruEn("Передний климат", "Front climate")
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH -> ruEn("Синхронизация климата", "Climate sync")
+        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> ruEn("Электропривод багажника", "Power trunk")
+        MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH -> ruEn("Складывание зеркал", "Mirror fold")
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS -> ruEn("Шторка", "Sunshade")
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> ruEn("Люк", "Sunroof")
+        MbCanKnownVehiclePropertyId.WINDOW_POS -> ruEn("Все стёкла", "All windows")
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS -> ruEn("Стекло переднее левое", "Front left window")
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS -> ruEn("Стекло переднее правое", "Front right window")
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS -> ruEn("Стекло заднее левое", "Rear left window")
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS -> ruEn("Стекло заднее правое", "Rear right window")
+        else -> ruEn("CAN-параметр $propertyId", "CAN property $propertyId")
     }
 
     fun audioLabel(propertyId: Int): String = when (propertyId) {
-        MbCanKnownAudioPropertyId.VOLUME_SPEED -> "Громкость в зависимости от скорости"
-        MbCanKnownAudioPropertyId.VOLUME_KEY -> "Громкость звука клавиш"
-        MbCanKnownAudioPropertyId.VOLUME_RADAR -> "Громкость парковочного радара"
-        MbCanKnownAudioPropertyId.EQ_MODE -> "Режим эквалайзера"
-        MbCanKnownAudioPropertyId.EQ_BAND_BASS -> "Низкие частоты"
-        MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE -> "Средние частоты"
-        MbCanKnownAudioPropertyId.EQ_BAND_TREBLE -> "Высокие частоты"
-        MbCanKnownAudioPropertyId.BALANCE -> "Баланс аудио"
-        MbCanKnownAudioPropertyId.FADER -> "Фейдер аудио"
-        else -> "Аудиопараметр $propertyId"
+        MbCanKnownAudioPropertyId.VOLUME_SPEED -> ruEn("Громкость в зависимости от скорости", "Speed-dependent volume")
+        MbCanKnownAudioPropertyId.VOLUME_KEY -> ruEn("Громкость звука клавиш", "Key beep volume")
+        MbCanKnownAudioPropertyId.VOLUME_RADAR -> ruEn("Громкость парковочного радара", "Parking radar volume")
+        MbCanKnownAudioPropertyId.EQ_MODE -> ruEn("Режим эквалайзера", "Equalizer mode")
+        MbCanKnownAudioPropertyId.EQ_BAND_BASS -> ruEn("Низкие частоты", "Bass")
+        MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE -> ruEn("Средние частоты", "Midrange")
+        MbCanKnownAudioPropertyId.EQ_BAND_TREBLE -> ruEn("Высокие частоты", "Treble")
+        MbCanKnownAudioPropertyId.BALANCE -> ruEn("Баланс аудио", "Audio balance")
+        MbCanKnownAudioPropertyId.FADER -> ruEn("Фейдер аудио", "Audio fader")
+        else -> ruEn("Аудиопараметр $propertyId", "Audio property $propertyId")
     }
 
     fun signalLabel(signal: AutomationSignalId): String = when (signal) {
-        AutomationSignalId.ENGINE_RPM -> "Обороты двигателя"
-        AutomationSignalId.CAR_SPEED -> "Скорость автомобиля"
-        AutomationSignalId.ENGINE_TEMPERATURE -> "Температура двигателя"
-        AutomationSignalId.OUTSIDE_TEMPERATURE -> "Температура снаружи"
-        AutomationSignalId.INSIDE_TEMPERATURE -> "Температура в салоне"
-        AutomationSignalId.FUEL_LEVEL_PERCENT -> "Уровень топлива"
-        AutomationSignalId.ODOMETER_KM -> "Одометр"
-        AutomationSignalId.CURRENT_FUEL_CONSUMPTION -> "Текущий расход топлива"
-        AutomationSignalId.DISTANCE_TO_EMPTY_KM -> "Запас хода"
-        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM -> "До обслуживания"
-        AutomationSignalId.VOLTAGE -> "Напряжение"
-        AutomationSignalId.STEERING_ANGLE -> "Угол руля"
-        AutomationSignalId.STEERING_SPEED -> "Скорость вращения руля"
-        AutomationSignalId.CRUISE_SET_SPEED -> "Уставка круиза"
-        AutomationSignalId.GEAR_MODE -> "Режим КПП"
-        AutomationSignalId.ACC_STATUS -> "Статус ACC (ключ)"
-        AutomationSignalId.IGNITION_KEY -> "Положение ключа"
-        AutomationSignalId.HU_SYSTEM_MODE -> "Режим головного устройства"
-        AutomationSignalId.ACC_CRUISE_STATE -> "Состояние ACC (круиз)"
-        AutomationSignalId.CCS_CRUISE_STATE -> "Состояние CCS (круиз)"
-        AutomationSignalId.GAS_PEDAL -> "Педаль газа"
-        AutomationSignalId.BRAKE_PEDAL -> "Педаль тормоза"
-        AutomationSignalId.CURRENT_GEAR -> "Текущая передача"
-        AutomationSignalId.TARGET_GEAR -> "Целевая передача"
-        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> "Давление переднего левого колеса"
-        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> "Давление переднего правого колеса"
-        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> "Давление заднего левого колеса"
-        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE -> "Давление заднего правого колеса"
-        AutomationSignalId.FRONT_LEFT_WHEEL_TEMPERATURE -> "Температура переднего левого колеса"
-        AutomationSignalId.FRONT_RIGHT_WHEEL_TEMPERATURE -> "Температура переднего правого колеса"
-        AutomationSignalId.REAR_LEFT_WHEEL_TEMPERATURE -> "Температура заднего левого колеса"
-        AutomationSignalId.REAR_RIGHT_WHEEL_TEMPERATURE -> "Температура заднего правого колеса"
-        AutomationSignalId.INSIDE_AIR_QUALITY -> "Качество воздуха в салоне"
-        AutomationSignalId.OUTSIDE_AIR_QUALITY -> "Качество наружного воздуха"
+        AutomationSignalId.ENGINE_RPM -> ruEn("Обороты двигателя", "Engine speed")
+        AutomationSignalId.CAR_SPEED -> ruEn("Скорость автомобиля", "Vehicle speed")
+        AutomationSignalId.ENGINE_TEMPERATURE -> ruEn("Температура двигателя", "Engine temperature")
+        AutomationSignalId.OUTSIDE_TEMPERATURE -> ruEn("Температура снаружи", "Outside temperature")
+        AutomationSignalId.INSIDE_TEMPERATURE -> ruEn("Температура в салоне", "Cabin temperature")
+        AutomationSignalId.FUEL_LEVEL_PERCENT -> ruEn("Уровень топлива", "Fuel level")
+        AutomationSignalId.ODOMETER_KM -> ruEn("Одометр", "Odometer")
+        AutomationSignalId.CURRENT_FUEL_CONSUMPTION -> ruEn("Текущий расход топлива", "Current fuel consumption")
+        AutomationSignalId.DISTANCE_TO_EMPTY_KM -> ruEn("Запас хода", "Range")
+        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM -> ruEn("До обслуживания", "Distance to service")
+        AutomationSignalId.VOLTAGE -> ruEn("Напряжение", "Voltage")
+        AutomationSignalId.STEERING_ANGLE -> ruEn("Угол руля", "Steering angle")
+        AutomationSignalId.STEERING_SPEED -> ruEn("Скорость вращения руля", "Steering speed")
+        AutomationSignalId.CRUISE_SET_SPEED -> ruEn("Уставка круиза", "Cruise setpoint")
+        AutomationSignalId.GEAR_MODE -> ruEn("Режим КПП", "Gearbox mode")
+        AutomationSignalId.ACC_STATUS -> ruEn("Статус ACC (ключ)", "ACC status (key)")
+        AutomationSignalId.IGNITION_KEY -> ruEn("Положение ключа", "Key position")
+        AutomationSignalId.HU_SYSTEM_MODE -> ruEn("Режим головного устройства", "Head unit mode")
+        AutomationSignalId.ACC_CRUISE_STATE -> ruEn("Состояние ACC (круиз)", "ACC state (cruise)")
+        AutomationSignalId.CCS_CRUISE_STATE -> ruEn("Состояние CCS (круиз)", "CCS state (cruise)")
+        AutomationSignalId.GAS_PEDAL -> ruEn("Педаль газа", "Accelerator pedal")
+        AutomationSignalId.BRAKE_PEDAL -> ruEn("Педаль тормоза", "Brake pedal")
+        AutomationSignalId.CURRENT_GEAR -> ruEn("Текущая передача", "Current gear")
+        AutomationSignalId.TARGET_GEAR -> ruEn("Целевая передача", "Target gear")
+        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> ruEn("Давление переднего левого колеса", "Front left tire pressure")
+        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> ruEn("Давление переднего правого колеса", "Front right tire pressure")
+        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> ruEn("Давление заднего левого колеса", "Rear left tire pressure")
+        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE -> ruEn("Давление заднего правого колеса", "Rear right tire pressure")
+        AutomationSignalId.FRONT_LEFT_WHEEL_TEMPERATURE -> ruEn("Температура переднего левого колеса", "Front left tire temperature")
+        AutomationSignalId.FRONT_RIGHT_WHEEL_TEMPERATURE -> ruEn("Температура переднего правого колеса", "Front right tire temperature")
+        AutomationSignalId.REAR_LEFT_WHEEL_TEMPERATURE -> ruEn("Температура заднего левого колеса", "Rear left tire temperature")
+        AutomationSignalId.REAR_RIGHT_WHEEL_TEMPERATURE -> ruEn("Температура заднего правого колеса", "Rear right tire temperature")
+        AutomationSignalId.INSIDE_AIR_QUALITY -> ruEn("Качество воздуха в салоне", "Cabin air quality")
+        AutomationSignalId.OUTSIDE_AIR_QUALITY -> ruEn("Качество наружного воздуха", "Outside air quality")
         AutomationSignalId.STEERING_WHEEL_HEAT -> vehicleLabel(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH)
         AutomationSignalId.WIPER_MAINTENANCE -> vehicleLabel(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH)
-        AutomationSignalId.WIPER_STS -> "Режим дворников"
-        AutomationSignalId.RAIN_DETECTED -> "Детектор дождя"
-        AutomationSignalId.HIGH_BEAM -> "Дальний свет"
-        AutomationSignalId.HAZARD -> "Аварийка"
-        AutomationSignalId.TURN_SIGNAL_LEFT -> "Поворотник левый"
-        AutomationSignalId.TURN_SIGNAL_RIGHT -> "Поворотник правый"
-        AutomationSignalId.TURN_STABILIZED -> "Поворотник (стабилизированный)"
-        AutomationSignalId.DRL -> "ДХО"
-        AutomationSignalId.EPB_PARK_LAMP -> "Лампа EPB (паркинг)"
-        AutomationSignalId.ENGINE_OIL_PRESSURE -> "Давление масла (предупреждение)"
-        AutomationSignalId.BRAKE_FLUID -> "Тормозная жидкость (предупреждение)"
+        AutomationSignalId.WIPER_STS -> ruEn("Режим дворников", "Wiper mode")
+        AutomationSignalId.RAIN_DETECTED -> ruEn("Детектор дождя", "Rain sensor")
+        AutomationSignalId.HIGH_BEAM -> ruEn("Дальний свет", "High beam")
+        AutomationSignalId.HAZARD -> ruEn("Аварийка", "Hazard lights")
+        AutomationSignalId.TURN_SIGNAL_LEFT -> ruEn("Поворотник левый", "Left turn signal")
+        AutomationSignalId.TURN_SIGNAL_RIGHT -> ruEn("Поворотник правый", "Right turn signal")
+        AutomationSignalId.TURN_STABILIZED -> ruEn("Поворотник (стабилизированный)", "Turn signal (stabilized)")
+        AutomationSignalId.DRL -> ruEn("ДХО", "DRL")
+        AutomationSignalId.EPB_PARK_LAMP -> ruEn("Лампа EPB (паркинг)", "EPB lamp (parking)")
+        AutomationSignalId.ENGINE_OIL_PRESSURE -> ruEn("Давление масла (предупреждение)", "Oil pressure (warning)")
+        AutomationSignalId.BRAKE_FLUID -> ruEn("Тормозная жидкость (предупреждение)", "Brake fluid (warning)")
         AutomationSignalId.FRM_DX_TAR_OBJ -> "FRM DxTarObj"
         AutomationSignalId.SUNSHADE -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
         AutomationSignalId.SUNROOF -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)
@@ -180,20 +182,20 @@ object AutomationParameterLabels {
         AutomationSignalId.HVAC_SYNC -> vehicleLabel(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH)
         AutomationSignalId.DRIVE_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
         AutomationSignalId.HEADLIGHT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.LIGHTCONTROL)
-        AutomationSignalId.REVERSE_GEAR -> "Задняя передача"
+        AutomationSignalId.REVERSE_GEAR -> ruEn("Задняя передача", "Reverse")
         AutomationSignalId.FRONT_LEFT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH)
         AutomationSignalId.FRONT_RIGHT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH)
         AutomationSignalId.REAR_LEFT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH)
         AutomationSignalId.REAR_RIGHT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH)
-        AutomationSignalId.GEO_POSITION -> "Геопозиция"
-        AutomationSignalId.GEO_ALTITUDE_M -> "Геопозиция: высота"
-        AutomationSignalId.GEO_SPEED_KMH -> "Геопозиция: скорость"
-        AutomationSignalId.GEO_SPEED_SOURCE -> "Геопозиция: источник скорости"
-        AutomationSignalId.GEO_BEARING_DEG -> "Геопозиция: курс"
-        AutomationSignalId.GEO_SATELLITES_VISIBLE -> "Геопозиция: спутники видимые"
-        AutomationSignalId.GEO_SATELLITES_USED -> "Геопозиция: спутники в решении"
-        AutomationSignalId.GEO_FIX_VALID -> "Геопозиция: правдивость"
-        AutomationSignalId.GEO_SOURCE -> "Геопозиция: источник"
+        AutomationSignalId.GEO_POSITION -> ruEn("Геопозиция", "Location")
+        AutomationSignalId.GEO_ALTITUDE_M -> ruEn("Геопозиция: высота", "Location: altitude")
+        AutomationSignalId.GEO_SPEED_KMH -> ruEn("Геопозиция: скорость", "Location: speed")
+        AutomationSignalId.GEO_SPEED_SOURCE -> ruEn("Геопозиция: источник скорости", "Location: speed source")
+        AutomationSignalId.GEO_BEARING_DEG -> ruEn("Геопозиция: курс", "Location: heading")
+        AutomationSignalId.GEO_SATELLITES_VISIBLE -> ruEn("Геопозиция: спутники видимые", "Location: satellites visible")
+        AutomationSignalId.GEO_SATELLITES_USED -> ruEn("Геопозиция: спутники в решении", "Location: satellites in the fix")
+        AutomationSignalId.GEO_FIX_VALID -> ruEn("Геопозиция: правдивость", "Location: truthfulness")
+        AutomationSignalId.GEO_SOURCE -> ruEn("Геопозиция: источник", "Location: source")
         AutomationSignalId.DOOR_AUTO_LOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK)
         AutomationSignalId.DOOR_IGNOFF_UNLOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK)
         AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME -> vehicleLabel(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY)
@@ -240,10 +242,10 @@ object AutomationParameterLabels {
         AutomationSignalId.DRIVE_MODE_6DCT -> vehicleLabel(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
         AutomationSignalId.TSR_SWITCH -> vehicleLabel(MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH)
         AutomationSignalId.TRUNK_DOOR -> vehicleLabel(MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL)
-        AutomationSignalId.DOOR_FRONT_LEFT -> "Дверь: передняя левая"
-        AutomationSignalId.DOOR_FRONT_RIGHT -> "Дверь: передняя правая"
-        AutomationSignalId.DOOR_REAR_LEFT -> "Дверь: задняя левая"
-        AutomationSignalId.DOOR_REAR_RIGHT -> "Дверь: задняя правая"
+        AutomationSignalId.DOOR_FRONT_LEFT -> ruEn("Дверь: передняя левая", "Door: front left")
+        AutomationSignalId.DOOR_FRONT_RIGHT -> ruEn("Дверь: передняя правая", "Door: front right")
+        AutomationSignalId.DOOR_REAR_LEFT -> ruEn("Дверь: задняя левая", "Door: rear left")
+        AutomationSignalId.DOOR_REAR_RIGHT -> ruEn("Дверь: задняя правая", "Door: rear right")
         AutomationSignalId.AUDIO_VOLUME_SPEED_MODE -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_SPEED)
         AutomationSignalId.AUDIO_KEY_TONE_VOLUME -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_KEY)
         AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_RADAR)
@@ -253,76 +255,76 @@ object AutomationParameterLabels {
         AutomationSignalId.AUDIO_EQ_TREBLE -> audioLabel(MbCanKnownAudioPropertyId.EQ_BAND_TREBLE)
         AutomationSignalId.AUDIO_BALANCE -> audioLabel(MbCanKnownAudioPropertyId.BALANCE)
         AutomationSignalId.AUDIO_FADER -> audioLabel(MbCanKnownAudioPropertyId.FADER)
-        AutomationSignalId.ESP_GPIO_IN_0 -> "ESP-вход 0"
-        AutomationSignalId.ESP_GPIO_IN_1 -> "ESP-вход 1"
-        AutomationSignalId.ESP_GPIO_IN_2 -> "ESP-вход 2"
-        AutomationSignalId.ESP_GPIO_IN_3 -> "ESP-вход 3"
-        AutomationSignalId.ESP_RELAY_0 -> "ESP-реле 0"
-        AutomationSignalId.ESP_RELAY_1 -> "ESP-реле 1"
-        AutomationSignalId.ESP_BLE_RELAY_0 -> "BLE-реле 0"
-        AutomationSignalId.ESP_BLE_RELAY_1 -> "BLE-реле 1"
-        AutomationSignalId.ESP_BLE_BOUND -> "ESP BLE пульт привязан"
-        AutomationSignalId.ESP_BLE_BATTERY -> "ESP BLE батарея пульта"
+        AutomationSignalId.ESP_GPIO_IN_0 -> ruEn("ESP-вход 0", "ESP input 0")
+        AutomationSignalId.ESP_GPIO_IN_1 -> ruEn("ESP-вход 1", "ESP input 1")
+        AutomationSignalId.ESP_GPIO_IN_2 -> ruEn("ESP-вход 2", "ESP input 2")
+        AutomationSignalId.ESP_GPIO_IN_3 -> ruEn("ESP-вход 3", "ESP input 3")
+        AutomationSignalId.ESP_RELAY_0 -> ruEn("ESP-реле 0", "ESP relay 0")
+        AutomationSignalId.ESP_RELAY_1 -> ruEn("ESP-реле 1", "ESP relay 1")
+        AutomationSignalId.ESP_BLE_RELAY_0 -> ruEn("BLE-реле 0", "BLE relay 0")
+        AutomationSignalId.ESP_BLE_RELAY_1 -> ruEn("BLE-реле 1", "BLE relay 1")
+        AutomationSignalId.ESP_BLE_BOUND -> ruEn("ESP BLE пульт привязан", "ESP BLE remote paired")
+        AutomationSignalId.ESP_BLE_BATTERY -> ruEn("ESP BLE батарея пульта", "ESP BLE remote battery")
         AutomationSignalId.WIFI_ENABLED -> "Wi-Fi"
-        AutomationSignalId.WIFI_ASSOCIATED -> "Wi-Fi: подключение к сети"
-        AutomationSignalId.WIFI_SSID -> "Wi-Fi: точка доступа"
-        AutomationSignalId.HU_INTERNET_STATUS -> "Интернет ГУ"
-        AutomationSignalId.WIFI_MODEM_LINK_STATUS -> "Wi‑Fi модем: связь"
-        AutomationSignalId.PHONE_HFP_CONNECTED -> "Телефон HFP"
-        AutomationSignalId.PHONE_CALL_STATE -> "Состояние звонка"
-        AutomationSignalId.PHONE_CALL_DIRECTION -> "Направление звонка"
-        AutomationSignalId.PHONE_CALL_NUMBER -> "Номер звонка"
-        AutomationSignalId.MODEM_MOBILE_DATA -> "Модем: передача данных"
-        AutomationSignalId.MODEM_NET_TYPE -> "Модем: тип сети"
-        AutomationSignalId.MODEM_SIM_STATUS -> "Модем: SIM"
-        AutomationSignalId.FOREGROUND_APP -> "Приложение на экране"
-        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> "DCL: панель ADAS"
-        AutomationSignalId.DCL_TOP_BAR_VISIBLE -> "DCL: верхняя панель"
-        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> "DCL: нижняя панель"
-        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED -> "DCL: шторка уведомлений"
-        AutomationSignalId.DCL_SCREEN_MODE -> "DCL: режим экрана"
-        AutomationSignalId.DCL_SMART_ACC_ACTIVE -> "DCL: Умный ACC"
-        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED -> "DCL: АСС по ограничению (настройка)"
-        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE -> "DCL: состояние круиза (Smart ACC)"
-        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT -> "DCL: эффективный лимит, км/ч"
-        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET -> "DCL: оффсет АСС, км/ч"
-        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED -> "DCL: целевая скорость АСС, км/ч"
-        AutomationSignalId.CAMD_RECORDER_ENABLED -> "Камеры ГУ: регистратор включён"
-        AutomationSignalId.CAMD_RECORDING_ACTIVE -> "Камеры ГУ: запись идёт"
-        AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
-        AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
-        AutomationSignalId.HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
-        AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
-        AutomationSignalId.HU_MEDIA_VOLUME -> "Громкость медиа (микшер ГУ)"
-        AutomationSignalId.HU_PHONE_VOLUME -> "Громкость телефона (микшер ГУ)"
-        AutomationSignalId.HU_NAVI_VOLUME -> "Громкость навигатора (микшер ГУ)"
-        AutomationSignalId.HU_VOICE_VOLUME -> "Громкость голоса (микшер ГУ)"
-        AutomationSignalId.HU_HEADREST_SPEAKER -> "Динамик подголовника"
-        AutomationSignalId.TBOX_CONNECTED -> "TBox на связи"
-        AutomationSignalId.MODEM_SIGNAL_LEVEL -> "Модем: уровень сигнала"
-        AutomationSignalId.MODEM_RSSI_DBM -> "Модем: RSSI, дБм"
-        AutomationSignalId.MODEM_REGISTERED -> "Модем: регистрация в сети"
-        AutomationSignalId.MODEM_OPERATOR -> "Модем: оператор"
-        AutomationSignalId.MODEM_SOURCE -> "Модем: источник"
-        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS -> "Модем: скорость вниз, кбит/с"
-        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS -> "Модем: скорость вверх, кбит/с"
-        AutomationSignalId.LOCATE_STATUS -> "Геопозиция: фиксация"
-        AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> "Топливо % (фильтр)"
-        AutomationSignalId.FUEL_LEVEL_LITERS -> "Топливо, л (калибровка)"
-        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE -> "Температура масла КПП"
-        AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM -> "Поездка: пробег"
-        AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM -> "Поездка: средний расход"
-        AutomationSignalId.ACTIVE_TRIP_DURATION_S -> "Поездка: длительность"
-        AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS -> "Поездка: моточасы"
-        AutomationSignalId.MOTOR_HOURS -> "Моточасы"
-        AutomationSignalId.MEDIA_TITLE -> "Медиа: трек"
-        AutomationSignalId.MEDIA_ARTIST -> "Медиа: исполнитель"
-        AutomationSignalId.MEDIA_PLAYING -> "Медиа: воспроизведение"
-        AutomationSignalId.MEDIA_POSITION_MS -> "Медиа: позиция"
-        AutomationSignalId.MEDIA_DURATION_MS -> "Медиа: длительность"
-        AutomationSignalId.ROAD_HIGHWAY_CLASS -> "Дорога: класс (OSM)"
-        AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> "Дорога: лимит по карте (OSM), км/ч"
-        AutomationSignalId.ROAD_TUNNEL -> "Дорога: тоннель"
-        AutomationSignalId.ROAD_SETTLEMENT -> "Дорога: населённый пункт"
+        AutomationSignalId.WIFI_ASSOCIATED -> ruEn("Wi-Fi: подключение к сети", "Wi-Fi: network connection")
+        AutomationSignalId.WIFI_SSID -> ruEn("Wi-Fi: точка доступа", "Wi-Fi: hotspot")
+        AutomationSignalId.HU_INTERNET_STATUS -> ruEn("Интернет ГУ", "HU internet")
+        AutomationSignalId.WIFI_MODEM_LINK_STATUS -> ruEn("Wi‑Fi модем: связь", "Wi‑Fi modem: link")
+        AutomationSignalId.PHONE_HFP_CONNECTED -> ruEn("Телефон HFP", "HFP phone")
+        AutomationSignalId.PHONE_CALL_STATE -> ruEn("Состояние звонка", "Call state")
+        AutomationSignalId.PHONE_CALL_DIRECTION -> ruEn("Направление звонка", "Call direction")
+        AutomationSignalId.PHONE_CALL_NUMBER -> ruEn("Номер звонка", "Call number")
+        AutomationSignalId.MODEM_MOBILE_DATA -> ruEn("Модем: передача данных", "Modem: mobile data")
+        AutomationSignalId.MODEM_NET_TYPE -> ruEn("Модем: тип сети", "Modem: network type")
+        AutomationSignalId.MODEM_SIM_STATUS -> ruEn("Модем: SIM", "Modem: SIM")
+        AutomationSignalId.FOREGROUND_APP -> ruEn("Приложение на экране", "App on screen")
+        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> ruEn("DCL: панель ADAS", "DCL: ADAS panel")
+        AutomationSignalId.DCL_TOP_BAR_VISIBLE -> ruEn("DCL: верхняя панель", "DCL: top bar")
+        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> ruEn("DCL: нижняя панель", "DCL: bottom bar")
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED -> ruEn("DCL: шторка уведомлений", "DCL: notification shade")
+        AutomationSignalId.DCL_SCREEN_MODE -> ruEn("DCL: режим экрана", "DCL: screen mode")
+        AutomationSignalId.DCL_SMART_ACC_ACTIVE -> ruEn("DCL: Умный ACC", "DCL: Smart ACC")
+        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED -> ruEn("DCL: АСС по ограничению (настройка)", "DCL: ACC by speed limit (setting)")
+        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE -> ruEn("DCL: состояние круиза (Smart ACC)", "DCL: cruise state (Smart ACC)")
+        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT -> ruEn("DCL: эффективный лимит, км/ч", "DCL: effective limit, km/h")
+        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET -> ruEn("DCL: оффсет АСС, км/ч", "DCL: ACC offset, km/h")
+        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED -> ruEn("DCL: целевая скорость АСС, км/ч", "DCL: ACC target speed, km/h")
+        AutomationSignalId.CAMD_RECORDER_ENABLED -> ruEn("Камеры ГУ: регистратор включён", "HU Cameras: recorder on")
+        AutomationSignalId.CAMD_RECORDING_ACTIVE -> ruEn("Камеры ГУ: запись идёт", "HU Cameras: recording")
+        AutomationSignalId.APP_THEME_MODE -> ruEn("Тема приложения: режим", "App theme: mode")
+        AutomationSignalId.APP_THEME -> ruEn("Тема приложения: сейчас", "App theme: now")
+        AutomationSignalId.HU_SCREEN_BRIGHTNESS -> ruEn("Яркость экрана ГУ", "HU screen brightness")
+        AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> ruEn("Автояркость экрана ГУ", "HU screen auto-brightness")
+        AutomationSignalId.HU_MEDIA_VOLUME -> ruEn("Громкость медиа (микшер ГУ)", "Media volume (HU mixer)")
+        AutomationSignalId.HU_PHONE_VOLUME -> ruEn("Громкость телефона (микшер ГУ)", "Phone volume (HU mixer)")
+        AutomationSignalId.HU_NAVI_VOLUME -> ruEn("Громкость навигатора (микшер ГУ)", "Navigation volume (HU mixer)")
+        AutomationSignalId.HU_VOICE_VOLUME -> ruEn("Громкость голоса (микшер ГУ)", "Voice volume (HU mixer)")
+        AutomationSignalId.HU_HEADREST_SPEAKER -> ruEn("Динамик подголовника", "Headrest speaker")
+        AutomationSignalId.TBOX_CONNECTED -> ruEn("TBox на связи", "TBox connected")
+        AutomationSignalId.MODEM_SIGNAL_LEVEL -> ruEn("Модем: уровень сигнала", "Modem: signal level")
+        AutomationSignalId.MODEM_RSSI_DBM -> ruEn("Модем: RSSI, дБм", "Modem: RSSI, dBm")
+        AutomationSignalId.MODEM_REGISTERED -> ruEn("Модем: регистрация в сети", "Modem: network registration")
+        AutomationSignalId.MODEM_OPERATOR -> ruEn("Модем: оператор", "Modem: operator")
+        AutomationSignalId.MODEM_SOURCE -> ruEn("Модем: источник", "Modem: source")
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS -> ruEn("Модем: скорость вниз, кбит/с", "Modem: download speed, kbit/s")
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS -> ruEn("Модем: скорость вверх, кбит/с", "Modem: upload speed, kbit/s")
+        AutomationSignalId.LOCATE_STATUS -> ruEn("Геопозиция: фиксация", "Location: fix")
+        AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> ruEn("Топливо % (фильтр)", "Fuel % (filter)")
+        AutomationSignalId.FUEL_LEVEL_LITERS -> ruEn("Топливо, л (калибровка)", "Fuel, L (calibration)")
+        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE -> ruEn("Температура масла КПП", "Gearbox oil temperature")
+        AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM -> ruEn("Поездка: пробег", "Trip: distance")
+        AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM -> ruEn("Поездка: средний расход", "Trip: average consumption")
+        AutomationSignalId.ACTIVE_TRIP_DURATION_S -> ruEn("Поездка: длительность", "Trip: duration")
+        AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS -> ruEn("Поездка: моточасы", "Trip: engine hours")
+        AutomationSignalId.MOTOR_HOURS -> ruEn("Моточасы", "Engine hours")
+        AutomationSignalId.MEDIA_TITLE -> ruEn("Медиа: трек", "Media: title")
+        AutomationSignalId.MEDIA_ARTIST -> ruEn("Медиа: исполнитель", "Media: artist")
+        AutomationSignalId.MEDIA_PLAYING -> ruEn("Медиа: воспроизведение", "Media: playback")
+        AutomationSignalId.MEDIA_POSITION_MS -> ruEn("Медиа: позиция", "Media: position")
+        AutomationSignalId.MEDIA_DURATION_MS -> ruEn("Медиа: длительность", "Media: duration")
+        AutomationSignalId.ROAD_HIGHWAY_CLASS -> ruEn("Дорога: класс (OSM)", "Road: class (OSM)")
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> ruEn("Дорога: лимит по карте (OSM), км/ч", "Road: map limit (OSM), km/h")
+        AutomationSignalId.ROAD_TUNNEL -> ruEn("Дорога: тоннель", "Road: tunnel")
+        AutomationSignalId.ROAD_SETTLEMENT -> ruEn("Дорога: населённый пункт", "Road: settlement")
     }
 }

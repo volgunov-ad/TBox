@@ -2,6 +2,7 @@ package vad.dashing.tbox.update
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import vad.dashing.tbox.BuildConfig
 
 class UpdateSizeFormatTest {
 
@@ -19,12 +20,14 @@ class UpdateSizeFormatTest {
 
     @Test
     fun formatDownloadSpeed_formatsKilobytesPerSecond() {
-        assertEquals("512 КБ/с", formatDownloadSpeed(512L * 1024L))
+        val kb = if (BuildConfig.FLAVOR.equals("en", ignoreCase = true)) "KB/s" else "КБ/с"
+        assertEquals("512 $kb", formatDownloadSpeed(512L * 1024L))
     }
 
     @Test
     fun formatDownloadSpeed_formatsMegabytesPerSecond() {
-        assertEquals("1.5 МБ/с", formatDownloadSpeed((1.5 * 1024 * 1024).toLong()))
+        val mb = if (BuildConfig.FLAVOR.equals("en", ignoreCase = true)) "MB/s" else "МБ/с"
+        assertEquals("1.5 $mb", formatDownloadSpeed((1.5 * 1024 * 1024).toLong()))
     }
 
     @Test

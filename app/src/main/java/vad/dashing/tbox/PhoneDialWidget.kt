@@ -149,12 +149,16 @@ fun placeOutgoingCall(context: Context, rawNumber: String): PlaceCallResult {
 
 fun placeCallFailureUserMessage(reason: PlaceCallFailureReason, detail: String? = null): String =
     when (reason) {
-        PlaceCallFailureReason.EMPTY_NUMBER -> "Задайте номер телефона"
-        PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION -> "Нет разрешения на звонки"
-        PlaceCallFailureReason.NO_HFP -> "Телефон не подключён по Bluetooth"
-        PlaceCallFailureReason.ACTIVITY_NOT_FOUND -> "Нет обработчика звонка"
+        PlaceCallFailureReason.EMPTY_NUMBER -> ruEn("Задайте номер телефона", "Set a phone number")
+        PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION ->
+            ruEn("Нет разрешения на звонки", "No permission to place calls")
+        PlaceCallFailureReason.NO_HFP ->
+            ruEn("Телефон не подключён по Bluetooth", "Phone is not connected via Bluetooth")
+        PlaceCallFailureReason.ACTIVITY_NOT_FOUND ->
+            ruEn("Нет обработчика звонка", "No call handler")
         PlaceCallFailureReason.START_FAILED ->
-            detail?.takeIf { it.isNotBlank() } ?: "Не удалось начать звонок"
+            detail?.takeIf { it.isNotBlank() }
+                ?: ruEn("Не удалось начать звонок", "Couldn't start the call")
     }
 
 /** Toast text for the dial tile (localized for the reasons a user can fix). */

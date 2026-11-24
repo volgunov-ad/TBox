@@ -25,8 +25,8 @@ class OlaxReqprocStatusMapperTest {
         assertEquals(4, snap.netState.signalLevel) // signalbar 5 → 4
         assertEquals("BeeLine/Vimp", snap.netValues.operator)
         assertTrue(snap.apnStatus)
-        assertEquals("SIM готова", snap.netState.simStatus)
-        assertEquals("домашняя сеть", snap.netState.regStatus)
+        assertEquals("ready", snap.netState.simStatus)
+        assertEquals("home", snap.netState.regStatus)
         assertEquals(368304L, snap.netState.downloadSpeedBps)
         assertEquals(12684L, snap.netState.uploadSpeedBps)
     }
@@ -124,7 +124,7 @@ class OlaxReqprocStatusMapperTest {
         assertEquals("ppp_connected", next.pppStatusRaw)
         assertEquals("REDACTED_IMEI", next.netValues.imei)
         assertEquals("BeeLine/Vimp", next.netValues.operator)
-        assertEquals("SIM готова", next.netState.simStatus)
+        assertEquals("ready", next.netState.simStatus)
         assertEquals("4G", next.netState.netStatus)
         assertEquals(-80, next.netState.signalDbm)
         assertEquals(368304L, next.netState.downloadSpeedBps)

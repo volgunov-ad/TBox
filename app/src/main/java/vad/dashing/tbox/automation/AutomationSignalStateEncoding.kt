@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.mbcan.BodyComfortDomain
@@ -277,83 +279,83 @@ object AutomationSignalStateEncoding {
     }
 
     fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
-        "on" -> "Включено"
-        "off" -> "Выключено"
-        "standby" -> "Ожидание"
-        "active" -> "Активен"
-        "override" -> "Перебивка газом"
-        "fault" -> "Ошибка"
-        "none" -> "Нет сети"
-        "unknown" -> "Неизвестно"
-        "checking" -> "Проверка"
-        "online" -> "Есть"
-        "offline" -> "Нет"
-        "idle" -> "Нет опроса"
-        "ok" -> "Связь OK"
-        "auth_failed" -> "Ошибка входа"
-        "unreachable" -> "Недоступен"
-        "error" -> "Ошибка"
+        "on" -> ruEn("Включено", "On")
+        "off" -> ruEn("Выключено", "Off")
+        "standby" -> ruEn("Ожидание", "Standby")
+        "active" -> ruEn("Активен", "Active")
+        "override" -> ruEn("Перебивка газом", "Throttle override")
+        "fault" -> ruEn("Ошибка", "Error")
+        "none" -> ruEn("Нет сети", "No network")
+        "unknown" -> ruEn("Неизвестно", "Unknown")
+        "checking" -> ruEn("Проверка", "Checking")
+        "online" -> ruEn("Есть", "Online")
+        "offline" -> ruEn("Нет", "No")
+        "idle" -> ruEn("Нет опроса", "Not polling")
+        "ok" -> ruEn("Связь OK", "Link OK")
+        "auth_failed" -> ruEn("Ошибка входа", "Sign-in error")
+        "unreachable" -> ruEn("Недоступен", "Unavailable")
+        "error" -> ruEn("Ошибка", "Error")
         "2g" -> "2G"
         "3g" -> "3G"
         "4g" -> "4G"
-        "ready" -> "Готова"
-        "pin" -> "Нужен PIN"
+        "ready" -> ruEn("Готова", "Ready")
+        "pin" -> ruEn("Нужен PIN", "PIN required")
         "acc" -> "ACC ON"
         "ign" -> "ON"
-        "crank" -> "Стартер"
-        "hold_15m" -> "15 минут работы ГУ"
-        "sleep" -> "Сон"
+        "crank" -> ruEn("Стартер", "Starter")
+        "hold_15m" -> ruEn("15 минут работы ГУ", "15 minutes of HU runtime")
+        "sleep" -> ruEn("Сон", "Sleep")
         "int" -> "INT"
         "low" -> "Low"
         "high" -> "High"
-        "closed" -> "Закрыто"
-        "open" -> "Открыто"
-        "tilt" -> "Откинут"
-        "vent" -> "Щель"
-        "only" -> "Только подголовник"
-        "assist" -> "Подголовник + основные"
-        "heat_1" -> "Подогрев 1"
-        "heat_2" -> "Подогрев 2"
-        "heat_3" -> "Подогрев 3"
-        "vent_1" -> "Вентиляция 1"
-        "vent_2" -> "Вентиляция 2"
-        "vent_3" -> "Вентиляция 3"
-        "30s" -> "30 с"
-        "60s" -> "60 с"
-        "driver" -> "Водитель"
-        "all" -> "Все"
-        "light" -> "Свет"
-        "horn" -> "Сигнал"
-        "light_horn" -> "Свет и сигнал"
+        "closed" -> ruEn("Закрыто", "Closed")
+        "open" -> ruEn("Открыто", "Open")
+        "tilt" -> ruEn("Откинут", "Tilted")
+        "vent" -> ruEn("Щель", "Vent")
+        "only" -> ruEn("Только подголовник", "Headrest only")
+        "assist" -> ruEn("Подголовник + основные", "Headrest + main")
+        "heat_1" -> ruEn("Подогрев 1", "Heat 1")
+        "heat_2" -> ruEn("Подогрев 2", "Heat 2")
+        "heat_3" -> ruEn("Подогрев 3", "Heat 3")
+        "vent_1" -> ruEn("Вентиляция 1", "Ventilation 1")
+        "vent_2" -> ruEn("Вентиляция 2", "Ventilation 2")
+        "vent_3" -> ruEn("Вентиляция 3", "Ventilation 3")
+        "30s" -> ruEn("30 с", "30 s")
+        "60s" -> ruEn("60 с", "60 s")
+        "driver" -> ruEn("Водитель", "Driver")
+        "all" -> ruEn("Все", "All")
+        "light" -> ruEn("Свет", "Light")
+        "horn" -> ruEn("Сигнал", "Horn")
+        "light_horn" -> ruEn("Свет и сигнал", "Light and horn")
         "ldw" -> "LDW"
         "lka" -> "LKA"
-        "far" -> "Дальняя"
-        "standard" -> "Стандарт"
-        "near" -> "Ближняя"
+        "far" -> ruEn("Дальняя", "Far")
+        "standard" -> ruEn("Стандарт", "Standard")
+        "near" -> ruEn("Ближняя", "Near")
         "eco" -> "ECO"
-        "comfort" -> "Комфорт"
-        "strong" -> "Сильный"
+        "comfort" -> ruEn("Комфорт", "Comfort")
+        "strong" -> ruEn("Сильный", "Strong")
         "meteor" -> "Meteor"
         "boss" -> "Boss"
         "tea" -> "Tea"
-        "medium" -> "Средняя"
-        "face" -> "Лицо"
-        "foot" -> "Ноги"
-        "face_foot" -> "Лицо и ноги"
-        "defrost" -> "Лобовое"
-        "defrost_foot" -> "Лобовое и ноги"
-        "snow" -> "Снег"
-        "day" -> "День"
-        "night" -> "Ночь"
-        "manual_day" -> "День (вручную)"
-        "manual_night" -> "Ночь (вручную)"
-        "auto_day" -> "День (авто)"
-        "auto_night" -> "Ночь (авто)"
-        "auto" -> "Авто"
-        "manual" -> "Вручную"
-        "sport" -> "Спорт"
-        "opening" -> "Открывается"
-        "closing" -> "Закрывается"
+        "medium" -> ruEn("Средняя", "Medium")
+        "face" -> ruEn("Лицо", "Face")
+        "foot" -> ruEn("Ноги", "Feet")
+        "face_foot" -> ruEn("Лицо и ноги", "Face and feet")
+        "defrost" -> ruEn("Лобовое", "Windshield")
+        "defrost_foot" -> ruEn("Лобовое и ноги", "Windshield and feet")
+        "snow" -> ruEn("Снег", "Snow")
+        "day" -> ruEn("День", "Day")
+        "night" -> ruEn("Ночь", "Night")
+        "manual_day" -> ruEn("День (вручную)", "Day (manual)")
+        "manual_night" -> ruEn("Ночь (вручную)", "Night (manual)")
+        "auto_day" -> ruEn("День (авто)", "Day (auto)")
+        "auto_night" -> ruEn("Ночь (авто)", "Night (auto)")
+        "auto" -> ruEn("Авто", "Auto")
+        "manual" -> ruEn("Вручную", "Manual")
+        "sport" -> ruEn("Спорт", "Sport")
+        "opening" -> ruEn("Открывается", "Opening")
+        "closing" -> ruEn("Закрывается", "Closing")
         "pop" -> "Pop"
         "rock" -> "Rock"
         "jazz" -> "Jazz"
@@ -367,12 +369,12 @@ object AutomationSignalStateEncoding {
         "snow_mode" -> "SNOW"
         "gnss" -> "GNSS"
         "can" -> "CAN"
-        "retention" -> "Удержание"
+        "retention" -> ruEn("Удержание", "Hold")
         "tbox" -> "TBox"
-        "companion" -> "Компаньон"
+        "companion" -> ruEn("Компаньон", "Companion")
         "android" -> "Android"
         "usb" -> "USB"
-        "phone" -> "Телефон"
+        "phone" -> ruEn("Телефон", "Phone")
         "wifi_http" -> "Wi‑Fi HTTP"
         else -> AutomationRoadMatchSignals.highwayClassOptionLabel(raw) ?: raw
     }

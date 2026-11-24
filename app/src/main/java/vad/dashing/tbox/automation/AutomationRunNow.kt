@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 /**
  * Manual «run now» uses the first trigger id so [AutomationCondition.TriggeredBy]
  * inside IfThenElse can still match. Top-level conditions are skipped by the engine.
@@ -12,7 +14,7 @@ internal object AutomationRunNow {
 
     fun rejection(definition: AutomationDefinition?): String? {
         if (definition == null) {
-            return "Автоматизация не найдена. Сначала сохраните правило."
+            return ruEn("Автоматизация не найдена. Сначала сохраните правило.", "Automation not found. Save the rule first.")
         }
         val issues = AutomationValidator.validate(definition)
         if (issues.isNotEmpty()) {

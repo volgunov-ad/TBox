@@ -993,7 +993,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `tbox_connected` | `app` | `on`, `off` — UDP-связь с TBox |
 | `locate_status` | `app` | `on`, `off` — фиксация у активного источника геопозиции |
 | `geo_fix_valid` | `app` | `on`, `off` — правдивость GNSS (`gnssTruthful`), отдельно от `locate_status` |
-| `modem_registered` | `app` | `on`, `off` — домашняя сеть или роуминг |
+| `modem_registered` | `app` | `on`, `off` — регистрация `home` / `roaming` |
 | `media_title` | `app` | название трека или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_artist` | `app` | исполнитель или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_playing` | `app` | `on` / `off` — сессия играет или на паузе |

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ruEn
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -366,7 +368,7 @@ internal fun AutomationConditionEditor(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         AutomationDropdown(
-            label = "Тип условия",
+            label = ruEn("Тип условия", "Condition type"),
             value = kind,
             options = ConditionUiKind.entries.sortedByAutomationLabel { it.label() },
             optionLabel = ConditionUiKind::label,
@@ -375,17 +377,17 @@ internal fun AutomationConditionEditor(
             },
         )
         when (condition) {
-            AutomationCondition.Always -> AutomationBodyText("Всегда истинно")
+            AutomationCondition.Always -> AutomationBodyText(ruEn("Всегда истинно", "Always true"))
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
             is AutomationCondition.State -> StateConditionFields(condition, apps, onChange)
             is AutomationCondition.Time -> TimeConditionFields(condition, onChange)
             is AutomationCondition.Solar -> SolarConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
                 if (triggerIds.isEmpty()) {
-                    AutomationBodyText("Нет триггеров")
+                    AutomationBodyText(ruEn("Нет триггеров", "No triggers"))
                 } else {
                     Text(
-                        text = "Подходящие ID триггеров",
+                        text = ruEn("Подходящие ID триггеров", "Matching trigger IDs"),
                         style = MaterialTheme.typography.tboxTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -412,7 +414,7 @@ internal fun AutomationConditionEditor(
             }
 
             is AutomationCondition.All -> ConditionGroupFields(
-                title = "Все условия",
+                title = ruEn("Все условия", "All conditions"),
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
                 apps = apps,
@@ -422,7 +424,7 @@ internal fun AutomationConditionEditor(
             )
 
             is AutomationCondition.Any -> ConditionGroupFields(
-                title = "Любое условие",
+                title = ruEn("Любое условие", "Any condition"),
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
                 apps = apps,
@@ -463,7 +465,7 @@ private fun NumericConditionFields(
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
     val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
     AutomationSearchablePickerField(
-        label = "Сигнал",
+        label = ruEn("Сигнал", "Signal"),
         value = condition.signal,
         options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
@@ -486,14 +488,14 @@ private fun NumericConditionFields(
     AutomationSignalValueHint(condition.signal)
     if (condition.signal == AutomationSignalId.ESP_BLE_BATTERY) {
         AutomationEspBleDevicePicker(
-            label = "Устройство",
+            label = ruEn("Устройство", "Device"),
             mac = condition.mac,
             onValueChange = { onChange(condition.copy(mac = it)) },
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Источник",
+            label = ruEn("Источник", "Source"),
             value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
             options = AutomationSignalCatalog.sourcesForUi(condition.signal),
             optionLabel = ::automationSourceLabel,
@@ -501,7 +503,7 @@ private fun NumericConditionFields(
             modifier = Modifier.weight(1f),
         )
         AutomationDropdown(
-            label = "Сравнение",
+            label = ruEn("Сравнение", "Comparison"),
             value = condition.comparison,
             options = AutomationComparison.entries,
             optionLabel = ::automationComparisonLabel,
@@ -509,7 +511,7 @@ private fun NumericConditionFields(
             modifier = Modifier.weight(1f),
         )
         AutomationDoubleField(
-            label = "Значение",
+            label = ruEn("Значение", "Value"),
             value = condition.expectedValue,
             onValueChange = { onChange(condition.copy(expectedValue = it)) },
             modifier = Modifier.weight(1f),
@@ -526,7 +528,7 @@ private fun StateConditionFields(
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
     val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
     AutomationSearchablePickerField(
-        label = "Сигнал",
+        label = ruEn("Сигнал", "Signal"),
         value = condition.signal,
         options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
@@ -550,7 +552,7 @@ private fun StateConditionFields(
     val isWifiSsid = condition.signal == AutomationSignalId.WIFI_SSID
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Источник",
+            label = ruEn("Источник", "Source"),
             value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
             options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
@@ -560,7 +562,7 @@ private fun StateConditionFields(
         if (!isForegroundApp && !isWifiSsid) {
             if (descriptor.stateOptions.isNotEmpty()) {
                 AutomationDropdown(
-                    label = "Состояние",
+                    label = ruEn("Состояние", "State"),
                     value = condition.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
                     optionLabel = { automationStateLabel(condition.signal, it) },
@@ -571,7 +573,7 @@ private fun StateConditionFields(
                 AutomationTextField(
                     value = condition.expectedState,
                     onValueChange = { onChange(condition.copy(expectedState = it)) },
-                    label = "Состояние",
+                    label = ruEn("Состояние", "State"),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -579,7 +581,7 @@ private fun StateConditionFields(
     }
     if (isForegroundApp) {
         AutomationPackagePicker(
-            label = "Приложение",
+            label = ruEn("Приложение", "App"),
             packageName = condition.expectedState,
             apps = apps,
             onValueChange = { onChange(condition.copy(expectedState = it)) },
@@ -587,7 +589,7 @@ private fun StateConditionFields(
     }
     if (isWifiSsid) {
         AutomationWifiSsidPicker(
-            label = "Точка доступа",
+            label = ruEn("Точка доступа", "Hotspot"),
             ssid = condition.expectedState,
             includeNone = true,
             onValueChange = { onChange(condition.copy(expectedState = it)) },
@@ -613,13 +615,13 @@ private fun TimeConditionFields(
                 ),
             )
         },
-        text = "После",
+        text = ruEn("После", "After"),
         description = "",
         enabled = true,
     )
     if (condition.after != null) {
         AutomationTimeOfDayPicker(
-            label = "После",
+            label = ruEn("После", "After"),
             value = condition.after,
             onValueChange = { onChange(condition.copy(after = it)) },
         )
@@ -637,13 +639,13 @@ private fun TimeConditionFields(
                 ),
             )
         },
-        text = "До",
+        text = ruEn("До", "Before"),
         description = "",
         enabled = true,
     )
     if (condition.before != null) {
         AutomationTimeOfDayPicker(
-            label = "До",
+            label = ruEn("До", "Before"),
             value = condition.before,
             onValueChange = { onChange(condition.copy(before = it)) },
         )
@@ -651,7 +653,7 @@ private fun TimeConditionFields(
     AutomationWeekdayPicker(
         selected = condition.weekdays,
         onChange = { onChange(condition.copy(weekdays = it)) },
-        caption = "Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь.",
+        caption = ruEn("Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь.", "Nothing selected — any day. If “after” is later than “before”, the window runs through midnight."),
     )
 }
 
@@ -673,7 +675,7 @@ private fun SolarConditionFields(
                 ),
             )
         },
-        text = "После",
+        text = ruEn("После", "After"),
         description = "",
         enabled = true,
     )
@@ -698,7 +700,7 @@ private fun SolarConditionFields(
                 ),
             )
         },
-        text = "До",
+        text = ruEn("До", "Before"),
         description = "",
         enabled = true,
     )
@@ -711,8 +713,8 @@ private fun SolarConditionFields(
     AutomationWeekdayPicker(
         selected = condition.weekdays,
         onChange = { onChange(condition.copy(weekdays = it)) },
-        caption = "Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь. " +
-            "Нет геопозиции или нет восхода/заката — условие ложно.",
+        caption = ruEn("Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь. ", "Nothing selected — any day. If “after” is later than “before”, the window runs through midnight. ") +
+            ruEn("Нет геопозиции или нет восхода/заката — условие ложно.", "No location, or no sunrise/sunset — the condition is false."),
     )
 }
 
@@ -724,33 +726,33 @@ internal fun AutomationSolarInstantFields(
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Событие",
+            label = ruEn("Событие", "Event"),
             value = instant.event,
             options = AutomationSolarEvent.entries,
             optionLabel = { event ->
                 when (event) {
-                    AutomationSolarEvent.SUNRISE -> "Восход"
-                    AutomationSolarEvent.SUNSET -> "Закат"
+                    AutomationSolarEvent.SUNRISE -> ruEn("Восход", "Sunrise")
+                    AutomationSolarEvent.SUNSET -> ruEn("Закат", "Sunset")
                 }
             },
             onValueChange = { onChange(instant.copy(event = it)) },
             modifier = Modifier.weight(1f),
         )
         AutomationDropdown(
-            label = "Смещение",
+            label = ruEn("Смещение", "Offset"),
             value = instant.offsetDirection,
             options = AutomationSolarOffsetDirection.entries,
             optionLabel = { direction ->
                 when (direction) {
-                    AutomationSolarOffsetDirection.BEFORE -> "До"
-                    AutomationSolarOffsetDirection.AFTER -> "После"
+                    AutomationSolarOffsetDirection.BEFORE -> ruEn("До", "Before")
+                    AutomationSolarOffsetDirection.AFTER -> ruEn("После", "After")
                 }
             },
             onValueChange = { onChange(instant.copy(offsetDirection = it)) },
             modifier = Modifier.weight(1f),
         )
         AutomationIntField(
-            label = "Минуты, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES",
+            label = ruEn("Минуты, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES", "Minutes, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES"),
             value = instant.offsetMinutes,
             onValueChange = { raw ->
                 // Skip empty draft; do not clamp here or the field fights typing.
@@ -796,7 +798,7 @@ private fun ConditionGroupFields(
         color = MaterialTheme.colorScheme.onSurface,
     )
     if (depth >= AUTOMATION_MAX_CONDITION_DEPTH) {
-        AutomationBodyText("Достигнута максимальная вложенность")
+        AutomationBodyText(ruEn("Достигнута максимальная вложенность", "Maximum nesting reached"))
         return
     }
     conditions.forEachIndexed { index, nested ->
@@ -817,14 +819,14 @@ private fun ConditionGroupFields(
                     onChange(conditions.filterIndexed { i, _ -> i != index })
                 },
             ) {
-                AutomationButtonLabel("Удалить условие")
+                AutomationButtonLabel(ruEn("Удалить условие", "Delete condition"))
             }
         }
     }
     OutlinedButton(
         onClick = rememberWrappedOnClick { onChange(conditions + defaultNumericCondition()) },
     ) {
-        AutomationButtonLabel("Добавить условие")
+        AutomationButtonLabel(ruEn("Добавить условие", "Add condition"))
     }
 }
 
@@ -855,20 +857,20 @@ private enum class ConditionUiKind {
     NOT;
 
     fun label(): String = when (this) {
-        ALWAYS -> "Всегда"
-        NUMERIC -> "Числовое сравнение"
-        STATE -> "Состояние"
-        GEOFENCE -> "Геозона"
-        UI_STATE -> "Состояние приложения"
-        TRIGGER_WIDGET -> "Виджет-триггер"
-        AUTOMATION_ENABLED -> "Автоматизация включена"
+        ALWAYS -> ruEn("Всегда", "Always")
+        NUMERIC -> ruEn("Числовое сравнение", "Numeric comparison")
+        STATE -> ruEn("Состояние", "State")
+        GEOFENCE -> ruEn("Геозона", "Geofence")
+        UI_STATE -> ruEn("Состояние приложения", "App state")
+        TRIGGER_WIDGET -> ruEn("Виджет-триггер", "Widget trigger")
+        AUTOMATION_ENABLED -> ruEn("Автоматизация включена", "Automation on")
         ADB_TCP -> "ADB TCP"
-        TRIGGERED_BY -> "Сработал триггер"
-        TIME -> "Время"
-        SOLAR -> "Восход / закат"
-        ALL -> "И — все"
-        ANY -> "ИЛИ — любое"
-        NOT -> "НЕ"
+        TRIGGERED_BY -> ruEn("Сработал триггер", "Trigger fired")
+        TIME -> ruEn("Время", "Time")
+        SOLAR -> ruEn("Восход / закат", "Sunrise / sunset")
+        ALL -> ruEn("И — все", "AND — all")
+        ANY -> ruEn("ИЛИ — любое", "OR — any")
+        NOT -> ruEn("НЕ", "NOT")
     }
 }
 
@@ -943,7 +945,7 @@ private fun defaultCondition(
 internal fun automationSourceLabel(source: AutomationSignalSource): String = when (source) {
     AutomationSignalSource.TBOX -> "TBox"
     AutomationSignalSource.HEAD_UNIT -> "mbCAN/VHAL"
-    AutomationSignalSource.APP -> "Приложение"
+    AutomationSignalSource.APP -> ruEn("Приложение", "App")
 }
 
 internal fun automationComparisonLabel(comparison: AutomationComparison): String = when (comparison) {
@@ -982,7 +984,7 @@ private fun GeofenceConditionFields(
                 ),
             )
         },
-        label = "Координаты или ссылка на точку",
+        label = ruEn("Координаты или ссылка на точку", "Coordinates or a link to a point"),
         singleLine = false,
         minLines = 2,
         modifier = Modifier.fillMaxWidth(),
@@ -990,11 +992,11 @@ private fun GeofenceConditionFields(
     Text(
         text = when {
             parsed != null ->
-                "Распознано: ${formatAutomationGeofenceCoord(parsed.lat)}, " +
+                ruEn("Распознано: ${formatAutomationGeofenceCoord(parsed.lat)}, ", "Recognized: ${formatAutomationGeofenceCoord(parsed.lat)}, ") +
                     formatAutomationGeofenceCoord(parsed.lon)
             condition.queryText.isBlank() ->
-                "Текущая геопозиция сравнивается с этой точкой и радиусом."
-            else -> "Строка не распознана"
+                ruEn("Текущая геопозиция сравнивается с этой точкой и радиусом.", "The current location is compared with this point and radius.")
+            else -> ruEn("Строка не распознана", "The line was not recognized")
         },
         style = MaterialTheme.typography.tboxCaption,
         color = if (parsed != null || condition.queryText.isBlank()) {
@@ -1005,19 +1007,19 @@ private fun GeofenceConditionFields(
         modifier = Modifier.fillMaxWidth(),
     )
     AutomationDropdown(
-        label = "Положение",
+        label = ruEn("Положение", "Position"),
         value = condition.presence,
         options = AutomationGeofencePresence.entries,
         optionLabel = {
             when (it) {
-                AutomationGeofencePresence.INSIDE -> "Внутри зоны"
-                AutomationGeofencePresence.OUTSIDE -> "Снаружи зоны"
+                AutomationGeofencePresence.INSIDE -> ruEn("Внутри зоны", "Inside the zone")
+                AutomationGeofencePresence.OUTSIDE -> ruEn("Снаружи зоны", "Outside the zone")
             }
         },
         onValueChange = { onChange(condition.copy(presence = it)) },
     )
     AutomationDoubleField(
-        label = "Радиус зоны, м",
+        label = ruEn("Радиус зоны, м", "Zone radius, m"),
         value = condition.zoneRadiusMeters,
         onValueChange = { onChange(condition.copy(zoneRadiusMeters = it)) },
     )
@@ -1029,14 +1031,14 @@ private fun UiStateConditionFields(
     onChange: (AutomationCondition) -> Unit,
 ) {
     AutomationDropdown(
-        label = "Состояние приложения",
+        label = ruEn("Состояние приложения", "App state"),
         value = condition.state,
         options = AutomationUiState.entries,
         optionLabel = {
             when (it) {
-                AutomationUiState.SERVICE_RUNNING -> "Фоновая служба запущена"
-                AutomationUiState.MAIN_SCREEN_OPEN -> "Открыт главный экран"
-                AutomationUiState.MENU_OPEN -> "Открыто меню"
+                AutomationUiState.SERVICE_RUNNING -> ruEn("Фоновая служба запущена", "Background service started")
+                AutomationUiState.MAIN_SCREEN_OPEN -> ruEn("Открыт главный экран", "Home screen opened")
+                AutomationUiState.MENU_OPEN -> ruEn("Открыто меню", "Menu is open")
             }
         },
         onValueChange = { onChange(condition.copy(state = it)) },
@@ -1075,18 +1077,18 @@ private fun TriggerWidgetConditionFields(
         onValueChange = { raw ->
             onChange(condition.copy(triggerId = raw.take(AUTOMATION_TRIGGER_ID_MAX_CHARS)))
         },
-        label = "ID триггера виджета",
+        label = ruEn("ID триггера виджета", "Widget trigger ID"),
         modifier = Modifier.fillMaxWidth(),
     )
     AutomationDropdown(
-        label = "Состояние",
+        label = ruEn("Состояние", "State"),
         value = condition.active,
         options = listOf(true, false),
-        optionLabel = { if (it) "Активен" else "Не активен" },
+        optionLabel = { if (it) ruEn("Активен", "Active") else ruEn("Не активен", "Inactive") },
         onValueChange = { onChange(condition.copy(active = it)) },
     )
     Text(
-        text = "Тот же ID, что у плитки «Триггер автоматизации» и действия «Триггер виджета».",
+        text = ruEn("Тот же ID, что у плитки «Триггер автоматизации» и действия «Триггер виджета».", "The same ID as the “Automation trigger” tile and the “Widget trigger” action."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -1100,21 +1102,21 @@ private fun AutomationEnabledConditionFields(
     onChange: (AutomationCondition) -> Unit,
 ) {
     AutomationRulePicker(
-        label = "Автоматизация",
+        label = ruEn("Автоматизация", "Automation"),
         selectedId = condition.automationId,
         peerAutomations = peerAutomations,
         onIdChange = { onChange(condition.copy(automationId = it)) },
     )
     AutomationDropdown(
-        label = "Состояние",
+        label = ruEn("Состояние", "State"),
         value = condition.enabled,
         options = listOf(true, false),
-        optionLabel = { if (it) "Включена" else "Выключена" },
+        optionLabel = { if (it) ruEn("Включена", "On") else ruEn("Выключена", "Off") },
         onValueChange = { onChange(condition.copy(enabled = it)) },
     )
     Text(
-        text = "Проверяет флаг enabled правила (не «сейчас выполняется»). " +
-            "Неизвестные id считаются выключенными. Взаимные A↔B петли — ответственность автора.",
+        text = ruEn("Проверяет флаг enabled правила (не «сейчас выполняется»). ", "Checks the rule’s enabled flag (not “running now”). ") +
+            ruEn("Неизвестные id считаются выключенными. Взаимные A↔B петли — ответственность автора.", "Unknown ids are treated as off. Mutual A↔B loops are the author’s responsibility."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -1136,7 +1138,7 @@ internal fun AutomationRulePicker(
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            text = "Список правил пуст — введите id вручную.",
+            text = ruEn("Список правил пуст — введите id вручную.", "The rule list is empty — enter the id manually."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -1150,7 +1152,7 @@ internal fun AutomationRulePicker(
         value = selected,
         options = peerAutomations,
         optionLabel = { def ->
-            val name = def.name.trim().ifEmpty { "Без названия" }
+            val name = def.name.trim().ifEmpty { ruEn("Без названия", "Untitled") }
             "$name (${def.id.take(8)})"
         },
         onValueChange = { onIdChange(it.id) },
@@ -1176,7 +1178,7 @@ internal fun AutomationTimeOfDayPicker(
         verticalAlignment = Alignment.Bottom,
     ) {
         AutomationDropdown(
-            label = "$label, ч",
+            label = ruEn("$label, ч", "$label, h"),
             value = safe.hour,
             options = hours,
             optionLabel = { it.toString().padStart(2, '0') },
@@ -1184,7 +1186,7 @@ internal fun AutomationTimeOfDayPicker(
             modifier = Modifier.weight(1f),
         )
         AutomationDropdown(
-            label = "мин",
+            label = ruEn("мин", "min"),
             value = safe.minute,
             options = minutes,
             optionLabel = { it.toString().padStart(2, '0') },
@@ -1201,7 +1203,7 @@ internal fun AutomationWeekdayPicker(
     caption: String,
 ) {
     Text(
-        text = "Дни недели",
+        text = ruEn("Дни недели", "Days of the week"),
         style = MaterialTheme.typography.tboxTitle,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -1300,8 +1302,8 @@ internal fun AutomationWifiSsidPicker(
         options = options,
         optionLabel = { value ->
             when {
-                value.isBlank() -> "Выберите…"
-                value.equals(WifiStaSsid.NONE, ignoreCase = true) -> "Нет сети"
+                value.isBlank() -> ruEn("Выберите…", "Choose…")
+                value.equals(WifiStaSsid.NONE, ignoreCase = true) -> ruEn("Нет сети", "No network")
                 else -> value
             }
         },
@@ -1315,7 +1317,7 @@ internal fun AutomationPackagePicker(
     packageName: String,
     apps: List<LaunchableAppEntry>,
     onValueChange: (String) -> Unit,
-    blankLabel: String = "Выберите…",
+    blankLabel: String = ruEn("Выберите…", "Choose…"),
 ) {
     val known = apps
         .filter { it.packageName.isNotBlank() }
@@ -1343,7 +1345,7 @@ internal fun AutomationPackagePicker(
     AutomationTextField(
         value = packageName,
         onValueChange = onValueChange,
-        label = "Пакет приложения",
+        label = ruEn("Пакет приложения", "App package"),
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -1370,7 +1372,7 @@ internal fun AutomationEspBleDevicePicker(
         options = options,
         optionLabel = { value ->
             when {
-                value.isBlank() -> "Выберите…"
+                value.isBlank() -> ruEn("Выберите…", "Choose…")
                 else -> EspBleDeviceNamesCodec.label(value, names)
             }
         },
@@ -1378,7 +1380,7 @@ internal fun AutomationEspBleDevicePicker(
     )
     if (selected.isNotEmpty() && selected !in bleMacs) {
         Text(
-            text = "MAC не в allowlist компаньона — обучите пульт снова или выберите другое устройство",
+            text = ruEn("MAC не в allowlist компаньона — обучите пульт снова или выберите другое устройство", "MAC is not in the companion allowlist — teach the remote again or choose another device"),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),

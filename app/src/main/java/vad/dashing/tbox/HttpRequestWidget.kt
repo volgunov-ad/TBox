@@ -65,11 +65,13 @@ sealed class HttpRequestWidgetResult {
 fun parseHttpRequestWidgetYaml(rawYaml: String): Result<HttpRequestWidgetConfig> = runCatching {
     val yaml = rawYaml.trim().ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
     val loaded = Load(LoadSettings.builder().build()).loadFromString(yaml)
-    val root = loaded as? Map<*, *> ?: throw IllegalArgumentException("YAML должен быть объектом")
+    val root = loaded as? Map<*, *> ?: throw IllegalArgumentException(
+        ruEn("YAML должен быть объектом", "YAML must be an object"),
+    )
     val url = root.stringValue("url")?.trim()
-        ?: throw IllegalArgumentException("Поле url обязательно")
+        ?: throw IllegalArgumentException(ruEn("Поле url обязательно", "Field url is required"))
     if (url.isBlank() || url == "http://" || url == "https://") {
-        throw IllegalArgumentException("Укажите полный URL")
+        throw IllegalArgumentException(ruEn("Укажите полный URL", "Enter a full URL"))
     }
     val method = root.stringValue("method")
         ?.trim()
@@ -77,7 +79,12 @@ fun parseHttpRequestWidgetYaml(rawYaml: String): Result<HttpRequestWidgetConfig>
         ?.ifBlank { "get" }
         ?: "get"
     if (method !in setOf("get", "patch", "post", "put", "delete")) {
-        throw IllegalArgumentException("method должен быть get, patch, post, put или delete")
+        throw IllegalArgumentException(
+            ruEn(
+                "method должен быть get, patch, post, put или delete",
+                "method must be get, patch, post, put or delete",
+            ),
+        )
     }
     val authentication = root.stringValue("authentication")
         ?.trim()
@@ -85,11 +92,18 @@ fun parseHttpRequestWidgetYaml(rawYaml: String): Result<HttpRequestWidgetConfig>
         ?.ifBlank { "basic" }
         ?: "basic"
     if (authentication !in setOf("basic", "digest")) {
-        throw IllegalArgumentException("authentication должен быть basic или digest")
+        throw IllegalArgumentException(
+            ruEn(
+                "authentication должен быть basic или digest",
+                "authentication must be basic or digest",
+            ),
+        )
     }
     val timeout = root.intValue("timeout") ?: DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS
     if (timeout !in 1..300) {
-        throw IllegalArgumentException("timeout должен быть от 1 до 300 секунд")
+        throw IllegalArgumentException(
+            ruEn("timeout должен быть от 1 до 300 секунд", "timeout must be from 1 to 300 seconds"),
+        )
     }
     HttpRequestWidgetConfig(
         url = url,
@@ -354,7 +368,9 @@ private fun Map<*, *>.stringValue(key: String): String? =
         when (value) {
             is String -> value
             is Number, is Boolean -> value.toString()
-            else -> throw IllegalArgumentException("Поле $key должно быть строкой")
+            else -> throw IllegalArgumentException(
+                ruEn("Поле $key должно быть строкой", "Field $key must be a string"),
+            )
         }
     }
 
@@ -363,8 +379,12 @@ private fun Map<*, *>.intValue(key: String): Int? =
         when (value) {
             is Number -> value.toInt()
             is String -> value.trim().toIntOrNull()
-                ?: throw IllegalArgumentException("Поле $key должно быть числом")
-            else -> throw IllegalArgumentException("Поле $key должно быть числом")
+                ?: throw IllegalArgumentException(
+                    ruEn("Поле $key должно быть числом", "Field $key must be a number"),
+                )
+            else -> throw IllegalArgumentException(
+                ruEn("Поле $key должно быть числом", "Field $key must be a number"),
+            )
         }
     }
 
@@ -375,21 +395,29 @@ private fun Map<*, *>.booleanValue(key: String): Boolean? =
             is String -> when (value.trim().lowercase(Locale.ROOT)) {
                 "true", "yes", "1" -> true
                 "false", "no", "0" -> false
-                else -> throw IllegalArgumentException("Поле $key должно быть true или false")
+                else -> throw IllegalArgumentException(
+                    ruEn("Поле $key должно быть true или false", "Field $key must be true or false"),
+                )
             }
-            else -> throw IllegalArgumentException("Поле $key должно быть true или false")
+            else -> throw IllegalArgumentException(
+                ruEn("Поле $key должно быть true или false", "Field $key must be true or false"),
+            )
         }
     }
 
 private fun Map<*, *>.stringMapValue(key: String): Map<String, String> {
     val value = this[key] ?: return emptyMap()
-    val map = value as? Map<*, *> ?: throw IllegalArgumentException("Поле $key должно быть map")
+    val map = value as? Map<*, *> ?: throw IllegalArgumentException(
+        ruEn("Поле $key должно быть map", "Field $key must be a map"),
+    )
     return map.entries.associate { (k, v) ->
         val name = k?.toString()?.trim().orEmpty()
         val headerValue = when (v) {
             is String -> v
             is Number, is Boolean -> v.toString()
-            else -> throw IllegalArgumentException("Значения $key должны быть строками")
+            else -> throw IllegalArgumentException(
+                ruEn("Значения $key должны быть строками", "Values of $key must be strings"),
+            )
         }
         name to headerValue
     }.filterKeys { it.isNotBlank() }

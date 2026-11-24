@@ -91,7 +91,7 @@ object ZteReqprocStatusMapper {
         val roam = fields["simcard_roam"].orEmpty()
         val regStatus = mapRegStatus(roam, modemMain, netStatus).let { mapped ->
             if (roam.isBlank() && previous?.netState?.regStatus != null &&
-                (mapped == "нет" || mapped.isBlank())
+                (mapped == ModemStatusCodes.REG_NONE || mapped.isBlank())
             ) {
                 previous.netState.regStatus
             } else {
@@ -195,13 +195,13 @@ object ZteReqprocStatusMapper {
         return when {
             // ZTE goform: LIMITED_SERVICE_GSM / LIMITED_SERVICE — before plain GSM
             u.contains("LIMITED") || u.contains("NO_SERVICE") || u == "NO SERVICE" ||
-                u.contains("NO_NETWORK") -> "нет сети"
+                u.contains("NO_NETWORK") -> ModemStatusCodes.NET_NONE
             u.contains("LTE") || u.contains("4G") || u == "FDD_LTE" || u == "TDD_LTE" -> "4G"
             u.contains("WCDMA") || u.contains("HSPA") || u.contains("UMTS") ||
                 u.contains("3G") || u == "TD_W" -> "3G"
             u.contains("GSM") || u.contains("GPRS") || u.contains("EDGE") ||
                 u.contains("2G") || u.contains("CDMA") -> "2G"
-            u.contains("NO_") -> "нет сети"
+            u.contains("NO_") -> ModemStatusCodes.NET_NONE
             else -> "-"
         }
     }
@@ -240,18 +240,17 @@ object ZteReqprocStatusMapper {
 
     internal fun mapRegStatus(roam: String, modemMain: String, netStatus: String): String {
         when (roam.trim().lowercase()) {
-            "home" -> return "домашняя сеть"
-            "roaming" -> return "роуминг"
+            "home" -> return ModemStatusCodes.REG_HOME
+            "roaming" -> return ModemStatusCodes.REG_ROAMING
         }
-        if (netStatus == "нет сети" || netStatus == "-") {
+        if (netStatus == ModemStatusCodes.NET_NONE || netStatus == "нет сети" || netStatus == "-") {
             val m = modemMain.lowercase()
             return when {
-                m.contains("search") -> "поиск сети"
-                m.contains("ready") || m.contains("modem_init_complete") -> "нет"
-                else -> "нет"
+                m.contains("search") -> ModemStatusCodes.REG_SEARCHING
+                else -> ModemStatusCodes.REG_NONE
             }
         }
-        return "домашняя сеть"
+        return ModemStatusCodes.REG_HOME
     }
 
     internal fun mapSimStatus(
@@ -261,32 +260,32 @@ object ZteReqprocStatusMapper {
     ): String {
         val pin = fields["pin_status"]?.trim().orEmpty()
         if (pin == "1" || pin.equals("pin_required", ignoreCase = true)) {
-            return "требуется PIN"
+            return ModemStatusCodes.SIM_PIN
         }
         val m = modemMain.lowercase()
         return when {
             // goform MF79U: modem_sim_undetected
             m.contains("modem_sim_undetected") || m.contains("sim_undetected") ||
-                m.contains("no_sim") -> "нет SIM"
-            m.contains("modem_sim_destroy") || m.contains("error") -> "ошибка SIM"
+                m.contains("no_sim") -> ModemStatusCodes.SIM_NONE
+            m.contains("modem_sim_destroy") || m.contains("error") -> ModemStatusCodes.SIM_ERROR
             m.contains("modem_init_complete") || m.contains("ready") || m.isEmpty() -> {
                 // Home multi_data often lacks IMSI; PPP connected implies a usable SIM.
                 val ppp = fields["ppp_status"].orEmpty().trim()
                 val imsi = firstNonBlank(fields, "sim_imsi", "imsi")
                 when {
-                    isPppConnected(ppp) -> "SIM готова"
-                    imsi.isNotEmpty() -> "SIM готова"
+                    isPppConnected(ppp) -> ModemStatusCodes.SIM_READY
+                    imsi.isNotEmpty() -> ModemStatusCodes.SIM_READY
                     // No SIM evidence in this poll (blank HOME / F90): keep previous.
                     ppp.isBlank() &&
                         !previousSimStatus.isNullOrBlank() && previousSimStatus != "-" ->
                         previousSimStatus
                     // Explicit disconnect with ready modem still implies a SIM.
-                    ppp.isNotBlank() && m.isNotEmpty() -> "SIM готова"
-                    m.isEmpty() -> "нет SIM"
-                    else -> "SIM готова"
+                    ppp.isNotBlank() && m.isNotEmpty() -> ModemStatusCodes.SIM_READY
+                    m.isEmpty() -> ModemStatusCodes.SIM_NONE
+                    else -> ModemStatusCodes.SIM_READY
                 }
             }
-            else -> "SIM готова"
+            else -> ModemStatusCodes.SIM_READY
         }
     }
 

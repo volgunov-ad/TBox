@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -22,9 +24,9 @@ class DclNotificationShadeSignalTest {
         assertEquals(AutomationSignalValueType.STATE, descriptor.id.valueType)
         assertEquals(setOf(AutomationSignalSource.APP), descriptor.sources)
         assertEquals(listOf("off", "on"), descriptor.stateOptions)
-        assertEquals("DCL: шторка уведомлений", descriptor.label)
+        assertEquals(ruEn("DCL: шторка уведомлений", "DCL: notification shade"), descriptor.label)
         assertEquals(
-            "DCL: шторка уведомлений",
+            ruEn("DCL: шторка уведомлений", "DCL: notification shade"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED),
         )
         assertEquals(

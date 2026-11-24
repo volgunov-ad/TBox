@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -83,8 +85,8 @@ class AutomationSignalCatalogTest {
             assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
             assertTrue(descriptor.valueHint().isNotBlank())
         }
-        assertEquals("Аварийка", AutomationParameterLabels.signalLabel(AutomationSignalId.HAZARD))
-        assertEquals("ДХО", AutomationParameterLabels.signalLabel(AutomationSignalId.DRL))
+        assertEquals(ruEn("Аварийка", "Hazard lights"), AutomationParameterLabels.signalLabel(AutomationSignalId.HAZARD))
+        assertEquals(ruEn("ДХО", "DRL"), AutomationParameterLabels.signalLabel(AutomationSignalId.DRL))
         assertEquals(MbCanSignal.Hazard, huInterestForSignal(AutomationSignalId.HAZARD))
         assertEquals(MbCanSignal.Drl, huInterestForSignal(AutomationSignalId.DRL))
     }
@@ -103,11 +105,11 @@ class AutomationSignalCatalogTest {
             assertEquals(MbCanSignal.TurnSignals, huInterestForSignal(id))
         }
         assertEquals(
-            "Поворотник левый",
+            ruEn("Поворотник левый", "Left turn signal"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_SIGNAL_LEFT),
         )
         assertEquals(
-            "Поворотник правый",
+            ruEn("Поворотник правый", "Right turn signal"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_SIGNAL_RIGHT),
         )
     }
@@ -118,7 +120,7 @@ class AutomationSignalCatalogTest {
         assertEquals(listOf("off", "on"), descriptor.stateOptions)
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
         assertEquals(
-            "Поворотник (стабилизированный)",
+            ruEn("Поворотник (стабилизированный)", "Turn signal (stabilized)"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_STABILIZED),
         )
         assertEquals(
@@ -213,9 +215,9 @@ class AutomationSignalCatalogTest {
         assertTrue(ccsHint, ccsHint.contains("standby"))
         assertTrue(ccsHint, ccsHint.contains("active"))
         assertFalse(ccsHint.contains("fault"))
-        assertEquals("Ожидание", AutomationSignalCatalog.stateOptionLabel("standby"))
-        assertEquals("Активен", AutomationSignalCatalog.stateOptionLabel("active"))
-        assertEquals("Ошибка", AutomationSignalCatalog.stateOptionLabel("fault"))
+        assertEquals(ruEn("Ожидание", "Standby"), AutomationSignalCatalog.stateOptionLabel("standby"))
+        assertEquals(ruEn("Активен", "Active"), AutomationSignalCatalog.stateOptionLabel("active"))
+        assertEquals(ruEn("Ошибка", "Error"), AutomationSignalCatalog.stateOptionLabel("fault"))
     }
 
     @Test
@@ -234,7 +236,7 @@ class AutomationSignalCatalogTest {
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
         assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
         val hint = descriptor.valueHint()
-        assertTrue(hint, hint.contains("Выключено"))
+        assertTrue(hint, hint.contains(ruEn("Выключено", "Off")))
         assertTrue(hint, hint.contains("INT"))
         assertTrue(hint, hint.contains("Low"))
         assertTrue(hint, hint.contains("High"))
@@ -243,7 +245,7 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("low"))
         assertTrue(hint, hint.contains("high"))
         assertTrue(hint, hint.contains("TTG"))
-        assertTrue(hint, hint.contains("Не сервисное положение"))
+        assertTrue(hint, hint.contains(ruEn("Не сервисное положение", "wiper service position")))
     }
 
     @Test
@@ -256,7 +258,7 @@ class AutomationSignalCatalogTest {
         assertTrue(shade.valueHint().contains("0%"))
         assertTrue(shade.valueHint().contains("100%"))
         assertEquals(BodyComfortDomain.SHADE_STATE_OPTIONS, shade.stateOptions)
-        assertTrue(roof.valueHint().contains("Откинут"))
+        assertTrue(roof.valueHint().contains(ruEn("Откинут", "Tilted")))
         assertTrue(roof.valueHint().contains("tilt"))
         assertEquals(BodyComfortDomain.ROOF_STATE_OPTIONS, roof.stateOptions)
         assertTrue(window.valueHint().contains("0%"))
@@ -264,7 +266,7 @@ class AutomationSignalCatalogTest {
         assertEquals(BodyComfortDomain.WINDOW_STATE_OPTIONS, window.stateOptions)
         assertEquals("0%", AutomationSignalCatalog.stateOptionLabel("0%"))
         assertEquals("100%", AutomationSignalCatalog.stateOptionLabel("100%"))
-        assertEquals("Откинут", AutomationSignalCatalog.stateOptionLabel("tilt"))
+        assertEquals(ruEn("Откинут", "Tilted"), AutomationSignalCatalog.stateOptionLabel("tilt"))
     }
 
     @Test
@@ -288,13 +290,13 @@ class AutomationSignalCatalogTest {
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
         assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
         val hint = descriptor.valueHint()
-        assertTrue(hint, hint.contains("Выключено"))
-        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains(ruEn("Выключено", "Off")))
+        assertTrue(hint, hint.contains(ruEn("Включено", "On")))
         assertTrue(hint, hint.contains("off"))
         assertTrue(hint, hint.contains("on"))
-        assertTrue(hint, hint.contains("дождь"))
+        assertTrue(hint, hint.contains(ruEn("дождь", "rain")))
         assertTrue(hint, hint.contains("RainDetected"))
-        assertTrue(hint, hint.contains("Не отказ датчика"))
+        assertTrue(hint, hint.contains(ruEn("Не отказ датчика", "sensor failure")))
     }
 
     @Test
@@ -303,8 +305,8 @@ class AutomationSignalCatalogTest {
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
         assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
         val hint = descriptor.valueHint()
-        assertTrue(hint, hint.contains("Выключено"))
-        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains(ruEn("Выключено", "Off")))
+        assertTrue(hint, hint.contains(ruEn("Включено", "On")))
         assertTrue(hint, hint.contains("off"))
         assertTrue(hint, hint.contains("on"))
     }
@@ -312,8 +314,8 @@ class AutomationSignalCatalogTest {
     @Test
     fun binaryState_listsOnOffLabels() {
         val hint = AutomationSignalCatalog.get(AutomationSignalId.AVH).valueHint()
-        assertTrue(hint, hint.contains("Выключено"))
-        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains(ruEn("Выключено", "Off")))
+        assertTrue(hint, hint.contains(ruEn("Включено", "On")))
         assertTrue(hint, hint.contains("off"))
         assertTrue(hint, hint.contains("on"))
     }
@@ -422,8 +424,8 @@ class AutomationSignalCatalogTest {
     @Test
     fun seatMode_listsHeatAndVent() {
         val hint = AutomationSignalCatalog.get(AutomationSignalId.FRONT_LEFT_SEAT_MODE).valueHint()
-        assertTrue(hint, hint.contains("Подогрев 1"))
-        assertTrue(hint, hint.contains("Вентиляция 3"))
+        assertTrue(hint, hint.contains(ruEn("Подогрев 1", "Heat 1")))
+        assertTrue(hint, hint.contains(ruEn("Вентиляция 3", "Ventilation 3")))
     }
 
     @Test
@@ -434,9 +436,9 @@ class AutomationSignalCatalogTest {
         assertFalse(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
         assertTrue(descriptor.stateOptions.isEmpty())
         val hint = descriptor.valueHint()
-        assertTrue(hint, hint.contains("статистик"))
-        assertTrue(hint, hint.contains("1 с"))
-        assertTrue(hint, hint.contains("10 с"))
+        assertTrue(hint, hint.contains(ruEn("статистик", "usage")))
+        assertTrue(hint, hint.contains(ruEn("1 с", "1 s")))
+        assertTrue(hint, hint.contains(ruEn("10 с", "10 s")))
         assertTrue(hint, hint.contains("com.mengbo.avm"))
     }
 
@@ -453,8 +455,8 @@ class AutomationSignalCatalogTest {
             assertTrue(id.name, AutomationSignalSource.APP in descriptor.sources)
             assertFalse(id.name, AutomationSignalSource.TBOX in descriptor.sources)
             val hint = descriptor.valueHint()
-            assertTrue(hint, hint.contains("Выключено"))
-            assertTrue(hint, hint.contains("Включено"))
+            assertTrue(hint, hint.contains(ruEn("Выключено", "Off")))
+            assertTrue(hint, hint.contains(ruEn("Включено", "On")))
         }
         val bat = AutomationSignalCatalog.get(AutomationSignalId.ESP_BLE_BATTERY)
         assertEquals("%", bat.unit)
@@ -470,7 +472,7 @@ class AutomationSignalCatalogTest {
         assertEquals(listOf("off", "on"), associated.stateOptions)
         assertTrue(ssid.stateOptions.isEmpty())
         assertTrue(enabled.valueHint().contains("wlan0"))
-        assertTrue(associated.valueHint().contains("явный off"))
+        assertTrue(associated.valueHint().contains(ruEn("явный off", "explicit off")))
         assertTrue(ssid.valueHint().contains("none"))
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(enabled.id))
     }
@@ -483,13 +485,13 @@ class AutomationSignalCatalogTest {
             signal.stateOptions,
         )
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(signal.id))
-        assertTrue(signal.valueHint().contains("двух"))
+        assertTrue(signal.valueHint().contains(ruEn("двух", "two")))
         assertEquals(
-            "Есть",
+            ruEn("Есть", "Online"),
             AutomationSignalCatalog.stateOptionLabel("online"),
         )
         assertEquals(
-            "Нет",
+            ruEn("Нет", "No"),
             AutomationSignalCatalog.stateOptionLabel("offline"),
         )
     }
@@ -510,9 +512,9 @@ class AutomationSignalCatalogTest {
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(link.id))
         assertTrue(link.valueHint().contains("Wi‑Fi HTTP"))
         assertTrue(data.valueHint().contains("apnStatus"))
-        assertEquals("Связь OK", AutomationSignalCatalog.stateOptionLabel("ok"))
+        assertEquals(ruEn("Связь OK", "Link OK"), AutomationSignalCatalog.stateOptionLabel("ok"))
         assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
-        assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
+        assertEquals(ruEn("Готова", "Ready"), AutomationSignalCatalog.stateOptionLabel("ready"))
     }
 
     @Test
@@ -532,7 +534,7 @@ class AutomationSignalCatalogTest {
         assertEquals(listOf("gnss", "can", "retention", "none"), speedSrc.stateOptions)
         assertEquals(listOf("off", "on"), fixValid.stateOptions)
         assertEquals(listOf("tbox", "companion", "android", "usb", "phone"), geoSource.stateOptions)
-        assertEquals("Телефон", AutomationSignalCatalog.stateOptionLabel("phone"))
+        assertEquals(ruEn("Телефон", "Phone"), AutomationSignalCatalog.stateOptionLabel("phone"))
         assertEquals(AutomationSignalValueType.NUMBER, rssi.id.valueType)
         assertEquals(listOf("off", "on"), registered.stateOptions)
         assertTrue(operator.stateOptions.isEmpty())
@@ -542,10 +544,10 @@ class AutomationSignalCatalogTest {
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(altitude.id))
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(rssi.id))
         assertEquals(
-            "Нет данных",
+            ruEn("Нет данных", "No data"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.GEO_SPEED_SOURCE, "none"),
         )
-        assertEquals("Компаньон", AutomationSignalCatalog.stateOptionLabel("companion"))
+        assertEquals(ruEn("Компаньон", "Companion"), AutomationSignalCatalog.stateOptionLabel("companion"))
         assertEquals("Wi‑Fi HTTP", AutomationSignalCatalog.stateOptionLabel("wifi_http"))
         assertTrue(rssi.valueHint().contains("CSQ"))
         assertTrue(down.valueHint().contains("Wi‑Fi HTTP"))
@@ -560,13 +562,13 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.preferredSource(descriptor.id),
         )
         assertEquals(
-            "Тема приложения: режим",
+            ruEn("Тема приложения: режим", "App theme: mode"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME_MODE),
         )
-        assertEquals("День (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_day"))
-        assertEquals("Ночь (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_night"))
-        assertEquals("День (авто)", AutomationSignalCatalog.stateOptionLabel("auto_day"))
-        assertEquals("Ночь (авто)", AutomationSignalCatalog.stateOptionLabel("auto_night"))
+        assertEquals(ruEn("День (вручную)", "Day (manual)"), AutomationSignalCatalog.stateOptionLabel("manual_day"))
+        assertEquals(ruEn("Ночь (вручную)", "Night (manual)"), AutomationSignalCatalog.stateOptionLabel("manual_night"))
+        assertEquals(ruEn("День (авто)", "Day (auto)"), AutomationSignalCatalog.stateOptionLabel("auto_day"))
+        assertEquals(ruEn("Ночь (авто)", "Night (auto)"), AutomationSignalCatalog.stateOptionLabel("auto_night"))
         assertTrue(descriptor.valueHint().isNotBlank())
     }
 
@@ -579,10 +581,10 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.preferredSource(descriptor.id),
         )
         assertEquals(
-            "Тема приложения: сейчас",
+            ruEn("Тема приложения: сейчас", "App theme: now"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME),
         )
-        assertTrue(descriptor.valueHint().contains("авто-день"))
+        assertTrue(descriptor.valueHint().contains(ruEn("авто-день", "auto day")))
     }
 
     @Test
@@ -594,11 +596,11 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.preferredSource(brightness.id),
         )
         assertEquals(
-            "Яркость экрана ГУ",
+            ruEn("Яркость экрана ГУ", "HU screen brightness"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
         )
         assertTrue(brightness.valueHint().contains("1…10"))
-        assertTrue(brightness.valueHint().contains("экран ГУ"))
+        assertTrue(brightness.valueHint().contains(ruEn("экран ГУ", "HU screen")))
         assertTrue(brightness.valueHint().contains("HUD"))
         assertTrue(brightness.valueHint().contains("ICM"))
 
@@ -609,7 +611,7 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.preferredSource(auto.id),
         )
         assertEquals(
-            "Автояркость экрана ГУ",
+            ruEn("Автояркость экрана ГУ", "HU screen auto-brightness"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
         )
     }
@@ -617,26 +619,26 @@ class AutomationSignalCatalogTest {
     @Test
     fun threeBrightnessLabels_areDistinct() {
         assertEquals(
-            "Яркость экрана ГУ",
+            ruEn("Яркость экрана ГУ", "HU screen brightness"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
         )
         assertEquals(
-            "Яркость HUD",
+            ruEn("Яркость HUD", "HUD brightness"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
         )
         assertEquals(
-            "Яркость приборной панели",
+            ruEn("Яркость приборной панели", "Cluster brightness"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
         )
         assertTrue(
             AutomationSignalCatalog.get(AutomationSignalId.HUD_BRIGHTNESS)
                 .valueHint()
-                .contains("не экран ГУ"),
+                .contains(ruEn("не экран ГУ", "not the HU screen")),
         )
         assertTrue(
             AutomationSignalCatalog.get(AutomationSignalId.ICM_BRIGHTNESS)
                 .valueHint()
-                .contains("не экран ГУ"),
+                .contains(ruEn("не экран ГУ", "not the HU screen")),
         )
     }
 
@@ -654,7 +656,7 @@ class AutomationSignalCatalogTest {
                 AutomationSignalSource.APP,
                 AutomationSignalCatalog.preferredSource(descriptor.id),
             )
-            assertTrue(descriptor.valueHint().contains("Микшер ГУ"))
+            assertTrue(descriptor.valueHint().contains(ruEn("Микшер ГУ", "HU mixer")))
         }
         val headrest = AutomationSignalCatalog.get(AutomationSignalId.HU_HEADREST_SPEAKER)
         assertEquals(listOf("only", "assist", "off"), headrest.stateOptions)
@@ -673,15 +675,15 @@ class AutomationSignalCatalogTest {
             )
         }
         assertEquals(
-            "Климат и воздух",
+            ruEn("Климат и воздух", "Climate and air"),
             AutomationSignalCatalog.signalGroup(AutomationSignalId.HVAC_FAN_DIRECTION).label,
         )
         assertEquals(
-            "ADAS и безопасность",
+            ruEn("ADAS и безопасность", "ADAS and safety"),
             AutomationSignalCatalog.signalGroup(AutomationSignalId.FCW).label,
         )
         assertEquals(
-            "Поездки и топливо",
+            ruEn("Поездки и топливо", "Trips and fuel"),
             AutomationSignalCatalog.signalGroup(AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM).label,
         )
     }

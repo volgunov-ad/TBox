@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 enum class AutomationFloatingPanelScope {
     ALL,
     SELECTED,
@@ -42,20 +44,20 @@ fun AutomationAction.Builtin.floatingPanelEnabledOp(): AutomationFloatingPanelEn
     }
 
 fun floatingPanelVisibilityOpLabel(op: AutomationFloatingPanelVisibilityOp): String = when (op) {
-    AutomationFloatingPanelVisibilityOp.TOGGLE -> "Переключить"
-    AutomationFloatingPanelVisibilityOp.HIDE -> "Скрыть"
-    AutomationFloatingPanelVisibilityOp.SHOW -> "Показать"
+    AutomationFloatingPanelVisibilityOp.TOGGLE -> ruEn("Переключить", "Toggle")
+    AutomationFloatingPanelVisibilityOp.HIDE -> ruEn("Скрыть", "Hide")
+    AutomationFloatingPanelVisibilityOp.SHOW -> ruEn("Показать", "Show")
 }
 
 fun floatingPanelEnabledOpLabel(op: AutomationFloatingPanelEnabledOp): String = when (op) {
-    AutomationFloatingPanelEnabledOp.TOGGLE -> "Переключить"
-    AutomationFloatingPanelEnabledOp.ENABLE -> "Включить"
-    AutomationFloatingPanelEnabledOp.DISABLE -> "Выключить"
+    AutomationFloatingPanelEnabledOp.TOGGLE -> ruEn("Переключить", "Toggle")
+    AutomationFloatingPanelEnabledOp.ENABLE -> ruEn("Включить", "On")
+    AutomationFloatingPanelEnabledOp.DISABLE -> ruEn("Выключить", "Off")
 }
 
 fun floatingPanelScopeLabel(scope: AutomationFloatingPanelScope): String = when (scope) {
-    AutomationFloatingPanelScope.ALL -> "Все панели"
-    AutomationFloatingPanelScope.SELECTED -> "Выбранная панель"
+    AutomationFloatingPanelScope.ALL -> ruEn("Все панели", "All panels")
+    AutomationFloatingPanelScope.SELECTED -> ruEn("Выбранная панель", "Selected panel")
 }
 
 fun floatingPanelVisibilityOpToInt(op: AutomationFloatingPanelVisibilityOp): Int = when (op) {
@@ -75,15 +77,15 @@ fun floatingPanelVisibilityResultMessage(
     op: AutomationFloatingPanelVisibilityOp,
 ): String = when (scope) {
     AutomationFloatingPanelScope.ALL -> when (op) {
-        AutomationFloatingPanelVisibilityOp.TOGGLE -> "Видимость всех плавающих панелей изменена"
-        AutomationFloatingPanelVisibilityOp.HIDE -> "Все плавающие панели скрыты"
-        AutomationFloatingPanelVisibilityOp.SHOW -> "Все плавающие панели показаны"
+        AutomationFloatingPanelVisibilityOp.TOGGLE -> ruEn("Видимость всех плавающих панелей изменена", "Visibility of all floating panels changed")
+        AutomationFloatingPanelVisibilityOp.HIDE -> ruEn("Все плавающие панели скрыты", "All floating panels hidden")
+        AutomationFloatingPanelVisibilityOp.SHOW -> ruEn("Все плавающие панели показаны", "All floating panels shown")
     }
 
     AutomationFloatingPanelScope.SELECTED -> when (op) {
-        AutomationFloatingPanelVisibilityOp.TOGGLE -> "Видимость плавающей панели изменена"
-        AutomationFloatingPanelVisibilityOp.HIDE -> "Плавающая панель скрыта"
-        AutomationFloatingPanelVisibilityOp.SHOW -> "Плавающая панель показана"
+        AutomationFloatingPanelVisibilityOp.TOGGLE -> ruEn("Видимость плавающей панели изменена", "Floating panel visibility changed")
+        AutomationFloatingPanelVisibilityOp.HIDE -> ruEn("Плавающая панель скрыта", "Floating panel hidden")
+        AutomationFloatingPanelVisibilityOp.SHOW -> ruEn("Плавающая панель показана", "Floating panel shown")
     }
 }
 
@@ -92,14 +94,14 @@ fun floatingPanelEnabledResultMessage(
     op: AutomationFloatingPanelEnabledOp,
 ): String = when (scope) {
     AutomationFloatingPanelScope.ALL -> when (op) {
-        AutomationFloatingPanelEnabledOp.TOGGLE -> "Состояние всех плавающих панелей изменено"
-        AutomationFloatingPanelEnabledOp.ENABLE -> "Все плавающие панели включены"
-        AutomationFloatingPanelEnabledOp.DISABLE -> "Все плавающие панели выключены"
+        AutomationFloatingPanelEnabledOp.TOGGLE -> ruEn("Состояние всех плавающих панелей изменено", "State of all floating panels changed")
+        AutomationFloatingPanelEnabledOp.ENABLE -> ruEn("Все плавающие панели включены", "All floating panels on")
+        AutomationFloatingPanelEnabledOp.DISABLE -> ruEn("Все плавающие панели выключены", "All floating panels off")
     }
 
     AutomationFloatingPanelScope.SELECTED -> when (op) {
-        AutomationFloatingPanelEnabledOp.TOGGLE -> "Состояние плавающей панели изменено"
-        AutomationFloatingPanelEnabledOp.ENABLE -> "Плавающая панель включена"
-        AutomationFloatingPanelEnabledOp.DISABLE -> "Плавающая панель выключена"
+        AutomationFloatingPanelEnabledOp.TOGGLE -> ruEn("Состояние плавающей панели изменено", "Floating panel state changed")
+        AutomationFloatingPanelEnabledOp.ENABLE -> ruEn("Плавающая панель включена", "Floating panel on")
+        AutomationFloatingPanelEnabledOp.DISABLE -> ruEn("Плавающая панель выключена", "Floating panel off")
     }
 }

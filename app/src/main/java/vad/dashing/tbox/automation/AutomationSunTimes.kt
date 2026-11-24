@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.PI
@@ -284,7 +286,7 @@ object AutomationSolarHints {
         wall: AutomationWallTime,
     ): String {
         if (!latitude.isFinite() || !longitude.isFinite() || latitude == 0.0 && longitude == 0.0) {
-            return "Сегодняшнее время появится, когда будет геопозиция."
+            return ruEn("Сегодняшнее время появится, когда будет геопозиция.", "Today’s time will appear once there is a location.")
         }
         val date = wall.calendarDate()
         val base = AutomationSunTimes.eventMinutesOfDay(
@@ -293,15 +295,15 @@ object AutomationSolarHints {
             latitude,
             longitude,
             wall.utcOffsetMinutes,
-        ) ?: return "Сегодня нет этого восхода или заката."
+        ) ?: return ruEn("Сегодня нет этого восхода или заката.", "There is no such sunrise or sunset today.")
         val eventLabel = when (instant.event) {
-            AutomationSolarEvent.SUNRISE -> "восход"
-            AutomationSolarEvent.SUNSET -> "закат"
+            AutomationSolarEvent.SUNRISE -> ruEn("восход", "sunrise")
+            AutomationSolarEvent.SUNSET -> ruEn("закат", "sunset")
         }
         val offsetLabel = formatUtcOffsetLabel(wall.utcOffsetMinutes)
         val baseLabel = formatMinutesOfDay(base)
         if (instant.offsetMinutes == 0) {
-            return "Сегодня $eventLabel $baseLabel по часам ГУ ($offsetLabel)."
+            return ruEn("Сегодня $eventLabel $baseLabel по часам ГУ ($offsetLabel).", "Today $eventLabel $baseLabel by the HU clock ($offsetLabel).")
         }
         val occurrence = AutomationSunTimes.occurrence(
             instant,
@@ -309,14 +311,14 @@ object AutomationSolarHints {
             latitude,
             longitude,
             wall.utcOffsetMinutes,
-        ) ?: return "Сегодня нет этого восхода или заката."
+        ) ?: return ruEn("Сегодня нет этого восхода или заката.", "There is no such sunrise or sunset today.")
         val fireLabel = formatMinutesOfDay(occurrence.minutesOfDay)
         val dayNote = if (wall.sameDate(occurrence.date)) {
-            "сработает в $fireLabel"
+            ruEn("сработает в $fireLabel", "fires at $fireLabel")
         } else {
-            "сработает в $fireLabel (другие сутки)"
+            ruEn("сработает в $fireLabel (другие сутки)", "fires at $fireLabel (another day)")
         }
-        return "Сегодня $eventLabel $baseLabel, $dayNote по часам ГУ ($offsetLabel)."
+        return ruEn("Сегодня $eventLabel $baseLabel, $dayNote по часам ГУ ($offsetLabel).", "Today $eventLabel $baseLabel, $dayNote by the HU clock ($offsetLabel).")
     }
 
     fun formatUtcOffsetLabel(utcOffsetMinutes: Int): String {

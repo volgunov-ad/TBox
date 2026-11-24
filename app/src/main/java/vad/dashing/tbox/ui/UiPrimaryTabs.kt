@@ -81,6 +81,9 @@ import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.wifimodem.WifiModemModel
+import vad.dashing.tbox.wifimodem.netStatusLabel
+import vad.dashing.tbox.wifimodem.regStatusLabel
+import vad.dashing.tbox.wifimodem.simStatusLabel
 import vad.dashing.tbox.wifimodem.ModemSource
 import vad.dashing.tbox.wifimodem.ModemThroughputFormat
 import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
@@ -280,9 +283,24 @@ fun ModemTabContent(
                             )
                         }
                     }
-                    item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
-                    item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
-                    item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_registration),
+                            regStatusLabel(netState.regStatus),
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_sim),
+                            simStatusLabel(netState.simStatus),
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_network),
+                            netStatusLabel(netState.netStatus),
+                        )
+                    }
                     item {
                         StatusRow(
                             stringResource(R.string.status_apn),

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ruEn
+
 import android.graphics.Rect
 import android.view.ViewTreeObserver
 import android.view.WindowManager
@@ -276,7 +278,7 @@ internal fun <T> AutomationSearchablePickerDialog(
                     onValueChange = { query = it },
                     placeholder = {
                         Text(
-                            text = "Поиск…",
+                            text = ruEn("Поиск…", "Searching…"),
                             style = MaterialTheme.typography.tboxBody,
                         )
                     },
@@ -296,7 +298,7 @@ internal fun <T> AutomationSearchablePickerDialog(
                 )
                 if (filtered.isEmpty()) {
                     Text(
-                        text = "Ничего не найдено",
+                        text = ruEn("Ничего не найдено", "Nothing found"),
                         style = MaterialTheme.typography.tboxBody,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier

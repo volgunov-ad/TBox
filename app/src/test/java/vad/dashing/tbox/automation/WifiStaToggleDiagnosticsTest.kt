@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,7 +14,7 @@ class WifiStaToggleDiagnosticsTest {
                 airplane = true,
                 softApEnabled = true,
                 sdkInt = 29,
-            ).contains("полёта"),
+            ).contains(ruEn("полёта", "airplane")),
         )
         assertTrue(
             WifiStaToggleDiagnostics.failureMessage(
@@ -29,7 +31,7 @@ class WifiStaToggleDiagnosticsTest {
             ).contains("API 29"),
         )
         assertEquals(
-            "Не удалось переключить Wi-Fi",
+            ruEn("Не удалось переключить Wi-Fi", "Could not toggle Wi-Fi"),
             WifiStaToggleDiagnostics.failureMessage(
                 airplane = false,
                 softApEnabled = false,

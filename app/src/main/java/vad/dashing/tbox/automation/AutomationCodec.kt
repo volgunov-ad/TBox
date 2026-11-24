@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.AppLauncherLaunchMode
@@ -33,7 +35,7 @@ object AutomationCodec {
      */
     fun decodeImport(raw: String): Result<List<AutomationDefinition>> = runCatching {
         val trimmed = raw.trim()
-        require(trimmed.isNotEmpty()) { "Пустой JSON" }
+        require(trimmed.isNotEmpty()) { ruEn("Пустой JSON", "Empty JSON") }
         val definitions = when {
             trimmed.startsWith("[") ->
                 JSONArray(trimmed).mapObjects(::decodeDefinition)
@@ -46,7 +48,7 @@ object AutomationCodec {
                 }
             }
         }
-        require(definitions.isNotEmpty()) { "В файле нет автоматизаций" }
+        require(definitions.isNotEmpty()) { ruEn("В файле нет автоматизаций", "The file has no automations") }
         definitions
     }
 

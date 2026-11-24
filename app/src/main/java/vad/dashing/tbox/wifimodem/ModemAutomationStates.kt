@@ -4,7 +4,8 @@ import vad.dashing.tbox.NetState
 
 /**
  * Stable English automation state keys for modem tab / Wi‑Fi modem sinks.
- * UI [NetState] strings stay Russian; automations never match those literals.
+ * [NetState] stores [ModemStatusCodes]; labels are applied only on display.
+ * Parsers still accept the previous Russian literals.
  */
 object ModemAutomationStates {
     const val LINK_IDLE = "idle"
@@ -64,6 +65,13 @@ object ModemAutomationStates {
     fun simStatusKey(simStatus: String?): String {
         val raw = simStatus?.trim().orEmpty()
         if (raw.isEmpty() || raw == "-") return SIM_UNKNOWN
+        when (raw.lowercase()) {
+            "none", "absent", "no_sim" -> return SIM_NONE
+            "ready" -> return SIM_READY
+            "pin" -> return SIM_PIN
+            "error" -> return SIM_ERROR
+            "unknown" -> return SIM_UNKNOWN
+        }
         return when {
             raw.contains("нет", ignoreCase = true) -> SIM_NONE
             raw.contains("PIN", ignoreCase = true) ||
@@ -77,13 +85,11 @@ object ModemAutomationStates {
     }
 
     /**
-     * Home / roaming registration from Russian UI [NetState.regStatus]
+     * Home / roaming registration from [NetState.regStatus]
      * (same gate as APN poll in BackgroundService).
      */
-    fun registeredKey(regStatus: String?): String {
-        val raw = regStatus?.trim().orEmpty()
-        return if (raw == "домашняя сеть" || raw == "роуминг") "on" else "off"
-    }
+    fun registeredKey(regStatus: String?): String =
+        if (ModemStatusCodes.isRegistered(regStatus)) "on" else "off"
 
     fun modemSourceKey(source: ModemSource): String =
         when (source) {

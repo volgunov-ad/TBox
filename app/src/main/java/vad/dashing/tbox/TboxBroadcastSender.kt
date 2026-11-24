@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.*
 import java.util.Date
 import java.util.concurrent.CopyOnWriteArraySet
 import kotlin.collections.lastOrNull
+import vad.dashing.tbox.wifimodem.netStatusLabel
+import vad.dashing.tbox.wifimodem.regStatusLabel
+import vad.dashing.tbox.wifimodem.simStatusLabel
 
 class TboxBroadcastSender(
     private val context: Context,
@@ -409,9 +412,25 @@ class TboxBroadcastSender(
         try {
             when (subscriber[2]) {
                 SIGNAL_LEVEL -> sendResponse(subscriber[0], TboxBroadcastReceiver.GET_STATE, subscriber[2], netState.signalLevel)
-                NET_STATUS -> sendResponse(subscriber[0], TboxBroadcastReceiver.GET_STATE, subscriber[2], netState.netStatus)
-                REG_STATUS -> sendResponse(subscriber[0], TboxBroadcastReceiver.GET_STATE, subscriber[2], netState.regStatus)
-                SIM_STATUS -> sendResponse(subscriber[0], TboxBroadcastReceiver.GET_STATE, subscriber[2], netState.simStatus)
+                // Localized display text (ru flavor keeps the previous Russian wording).
+                NET_STATUS -> sendResponse(
+                    subscriber[0],
+                    TboxBroadcastReceiver.GET_STATE,
+                    subscriber[2],
+                    netStatusLabel(netState.netStatus),
+                )
+                REG_STATUS -> sendResponse(
+                    subscriber[0],
+                    TboxBroadcastReceiver.GET_STATE,
+                    subscriber[2],
+                    regStatusLabel(netState.regStatus),
+                )
+                SIM_STATUS -> sendResponse(
+                    subscriber[0],
+                    TboxBroadcastReceiver.GET_STATE,
+                    subscriber[2],
+                    simStatusLabel(netState.simStatus),
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send NetState response", e)

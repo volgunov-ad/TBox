@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.wifimodem.netStatusLabel
 import vad.dashing.tbox.TboxViewModel
 
 @Composable
@@ -198,7 +199,7 @@ fun DashboardNetWidgetItem(
                     contentDescription = stringResource(
                         R.string.dashboard_net_content_desc,
                         netState.signalLevel,
-                        netState.netStatus
+                        netStatusLabel(netState.netStatus)
                     ),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier

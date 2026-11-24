@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import java.util.Calendar
 import java.util.Locale
 
@@ -140,11 +142,11 @@ object AutomationTimeLogic {
 }
 
 fun automationWeekdayShortLabel(day: AutomationWeekday): String = when (day) {
-    AutomationWeekday.MONDAY -> "Пн"
-    AutomationWeekday.TUESDAY -> "Вт"
-    AutomationWeekday.WEDNESDAY -> "Ср"
-    AutomationWeekday.THURSDAY -> "Чт"
-    AutomationWeekday.FRIDAY -> "Пт"
-    AutomationWeekday.SATURDAY -> "Сб"
-    AutomationWeekday.SUNDAY -> "Вс"
+    AutomationWeekday.MONDAY -> ruEn("Пн", "Mon")
+    AutomationWeekday.TUESDAY -> ruEn("Вт", "Tue")
+    AutomationWeekday.WEDNESDAY -> ruEn("Ср", "Wed")
+    AutomationWeekday.THURSDAY -> ruEn("Чт", "Thu")
+    AutomationWeekday.FRIDAY -> ruEn("Пт", "Fri")
+    AutomationWeekday.SATURDAY -> ruEn("Сб", "Sat")
+    AutomationWeekday.SUNDAY -> ruEn("Вс", "Sun")
 }

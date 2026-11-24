@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
@@ -191,7 +193,7 @@ private fun AutomationCloseableMessageCard(
                         )
                     }
                     Button(onClick = onClose) {
-                        AppAlertDialogButtonLabel("Закрыть")
+                        AppAlertDialogButtonLabel(ruEn("Закрыть", "Close"))
                     }
                 }
             }
@@ -221,8 +223,8 @@ private fun remainingAutoCloseMillis(autoCloseMillis: Long): Long {
 internal fun formatAutoCloseCountdown(remainingMillis: Long): String {
     val seconds = (remainingMillis.coerceAtLeast(0L) + 999L) / 1000L
     return if (seconds <= 0L) {
-        "Закроется автоматически"
+        ruEn("Закроется автоматически", "Closes automatically")
     } else {
-        "Автозакрытие через $seconds с"
+        ruEn("Автозакрытие через $seconds с", "Auto-close in $seconds s")
     }
 }

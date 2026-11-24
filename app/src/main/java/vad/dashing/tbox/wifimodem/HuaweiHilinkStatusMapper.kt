@@ -69,22 +69,23 @@ object HuaweiHilinkStatusMapper {
         val reportedGeneration = radioGeneration(signal["mode"].orEmpty())
         val netStatus = reportedGeneration
             ?: prevNet?.netStatus?.takeIf { (heldConnection || apnUp) && it.isRadioGeneration() }
-            ?: if (apnUp) "4G" else "нет сети"
+            ?: if (apnUp) "4G" else ModemStatusCodes.NET_NONE
         val simRaw = firstNonBlank(monitoring["SimStatus"], monitoring["simstatus"])
         val simStatus = when (simRaw) {
-            "1" -> "SIM готова"
-            "0" -> "нет SIM"
+            "1" -> ModemStatusCodes.SIM_READY
+            "0" -> ModemStatusCodes.SIM_NONE
             else -> simRaw.ifBlank {
                 prevNet?.simStatus?.takeIf { heldConnection && it.isNotBlank() && it != "-" } ?: "-"
             }
         }
         val regStatus = when {
-            firstNonBlank(monitoring["RoamingStatus"], monitoring["roamingstatus"]) == "1" -> "роуминг"
+            firstNonBlank(monitoring["RoamingStatus"], monitoring["roamingstatus"]) == "1" ->
+                ModemStatusCodes.REG_ROAMING
             heldConnection -> prevNet?.regStatus?.takeIf {
-                it == "домашняя сеть" || it == "роуминг"
-            } ?: "домашняя сеть"
-            apnUp -> "домашняя сеть"
-            else -> "нет сети"
+                ModemStatusCodes.isRegistered(it)
+            } ?: ModemStatusCodes.REG_HOME
+            apnUp -> ModemStatusCodes.REG_HOME
+            else -> ModemStatusCodes.REG_NO_SERVICE
         }
         val operator = firstNonBlank(
             information["FullName"],

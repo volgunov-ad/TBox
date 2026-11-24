@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import android.content.Context
 import android.os.SystemClock
 import java.util.UUID
@@ -196,7 +198,7 @@ class AutomationEngine(
             TboxRepository.addLog("WARN", LOG_TAG, "Run now ignored: engine not started")
             AutomationRuntimeState.markRejected(
                 automationId,
-                "Фоновая служба ещё не готова",
+                ruEn("Фоновая служба ещё не готова", "The background service is not ready yet"),
                 System.currentTimeMillis(),
             )
             return
@@ -206,7 +208,7 @@ class AutomationEngine(
             TboxRepository.addLog("WARN", LOG_TAG, "Run now dropped: event queue full")
             AutomationRuntimeState.markRejected(
                 automationId,
-                "Очередь запусков переполнена",
+                ruEn("Очередь запусков переполнена", "The run queue is full"),
                 System.currentTimeMillis(),
             )
         }
@@ -528,14 +530,14 @@ class AutomationEngine(
             TboxRepository.addLog("ERROR", LOG_TAG, "Global loop guard blocked ${def.name}")
             AutomationRuntimeState.markRejected(
                 automationId,
-                "Слишком много запусков, подождите",
+                ruEn("Слишком много запусков, подождите", "Too many runs, please wait"),
                 System.currentTimeMillis(),
             )
             return
         }
         val nowElapsed = SystemClock.elapsedRealtime()
         if (!dispatchGuard.tryAcquire(def.id, nowElapsed)) {
-            val message = "Подождите ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS / 1000} с после предыдущего запуска"
+            val message = ruEn("Подождите ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS / 1000} с после предыдущего запуска", "Wait ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS / 1000} s after the previous run")
             TboxRepository.addLog("WARN", LOG_TAG, "${def.name}: $message")
             AutomationRuntimeState.markRejected(automationId, message, System.currentTimeMillis())
             return
@@ -582,7 +584,7 @@ class AutomationEngine(
             TboxRepository.addLog(
                 "WARN",
                 LOG_TAG,
-                "${definition.name}: skipped, cooldown ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS} мс",
+                ruEn("${definition.name}: skipped, cooldown ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS} мс", "${definition.name}: skipped, cooldown ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS} ms"),
             )
             return
         }
@@ -622,7 +624,7 @@ class AutomationEngine(
                         LOG_TAG,
                         "${definition.name}: condition wait timed out trigger=${context.triggerId}",
                     )
-                    result = AutomationActionResult.ok("Условие не выполнилось за время ожидания")
+                    result = AutomationActionResult.ok(ruEn("Условие не выполнилось за время ожидания", "The condition was not met within the wait time"))
                 } else {
                     result = actionExecutor.execute(
                         actions = definition.actions,
@@ -661,8 +663,8 @@ class AutomationEngine(
                 }
                 val message = when {
                     shouldDisable ->
-                        "Отключена после ${AUTOMATION_MAX_CONSECUTIVE_FAILURES} ошибок подряд"
-                    cancelled -> result?.message ?: "Выполнение отменено"
+                        ruEn("Отключена после ${AUTOMATION_MAX_CONSECUTIVE_FAILURES} ошибок подряд", "Turned off after ${AUTOMATION_MAX_CONSECUTIVE_FAILURES} errors in a row")
+                    cancelled -> result?.message ?: ruEn("Выполнение отменено", "Run cancelled")
                     else -> result?.message.orEmpty()
                 }
                 AutomationRuntimeState.markFinished(

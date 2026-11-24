@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -89,19 +91,19 @@ class AutomationCanCatalogTest {
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
         )
         assertNotNull(front)
-        assertEquals("Выкл.", front!!.valueLabel(1))
-        assertEquals("Подогрев 1", front.valueLabel(2))
-        assertEquals("Подогрев 3", front.valueLabel(4))
-        assertEquals("Вентиляция 1", front.valueLabel(5))
-        assertEquals("Вентиляция 3", front.valueLabel(7))
+        assertEquals(ruEn("Выкл.", "Off."), front!!.valueLabel(1))
+        assertEquals(ruEn("Подогрев 1", "Heat 1"), front.valueLabel(2))
+        assertEquals(ruEn("Подогрев 3", "Heat 3"), front.valueLabel(4))
+        assertEquals(ruEn("Вентиляция 1", "Ventilation 1"), front.valueLabel(5))
+        assertEquals(ruEn("Вентиляция 3", "Ventilation 3"), front.valueLabel(7))
 
         val rear = AutomationCanCatalog.get(
             AutomationCanBus.VEHICLE,
             MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
         )
         assertNotNull(rear)
-        assertEquals("Выкл.", rear!!.valueLabel(1))
-        assertEquals("Подогрев 2", rear.valueLabel(3))
+        assertEquals(ruEn("Выкл.", "Off."), rear!!.valueLabel(1))
+        assertEquals(ruEn("Подогрев 2", "Heat 2"), rear.valueLabel(3))
     }
 
     @Test
@@ -124,8 +126,8 @@ class AutomationCanCatalogTest {
             AutomationCanBus.VEHICLE,
             MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
         )
-        assertEquals("Открыть", trunk!!.valueLabel(1))
-        assertEquals("Закрыть", trunk.valueLabel(2))
+        assertEquals(ruEn("Открыть", "Open"), trunk!!.valueLabel(1))
+        assertEquals(ruEn("Закрыть", "Close"), trunk.valueLabel(2))
 
         val temp = AutomationCanCatalog.get(
             AutomationCanBus.VEHICLE,
@@ -152,24 +154,24 @@ class AutomationCanCatalogTest {
         assertNotNull(shade)
         assertNotNull(roof)
         assertNotNull(allWindows)
-        assertEquals("Шторка", shade!!.label)
-        assertEquals("Люк", roof!!.label)
-        assertEquals("Все стёкла", allWindows!!.label)
+        assertEquals(ruEn("Шторка", "Sunshade"), shade!!.label)
+        assertEquals(ruEn("Люк", "Sunroof"), roof!!.label)
+        assertEquals(ruEn("Все стёкла", "All windows"), allWindows!!.label)
         assertTrue(shade.supports(HeadUnitCanMode.Android9MbCan))
         assertTrue(shade.supports(HeadUnitCanMode.Android10Vhal))
         assertTrue(roof.supports(HeadUnitCanMode.Android10Vhal))
         assertTrue(allWindows.supports(HeadUnitCanMode.Android10Vhal))
-        assertEquals("Закрыто (0%)", shade.valueLabel(1))
-        assertEquals("Открыто (100%)", shade.valueLabel(11))
+        assertEquals(ruEn("Закрыто (0%)", "Closed (0%)"), shade.valueLabel(1))
+        assertEquals(ruEn("Открыто (100%)", "Open (100%)"), shade.valueLabel(11))
         assertEquals("50%", shade.valueLabel(6))
-        assertEquals("Закрыто (0%)", roof.valueLabel(1))
-        assertEquals("Открыто (100%)", roof.valueLabel(11))
-        assertEquals("Откинуть", roof.valueLabel(12))
+        assertEquals(ruEn("Закрыто (0%)", "Closed (0%)"), roof.valueLabel(1))
+        assertEquals(ruEn("Открыто (100%)", "Open (100%)"), roof.valueLabel(11))
+        assertEquals(ruEn("Откинуть", "Tilt"), roof.valueLabel(12))
         assertEquals("0 %", allWindows.valueLabel(0, HeadUnitCanMode.Android9MbCan))
         assertEquals("80 %", allWindows.valueLabel(80, HeadUnitCanMode.Android9MbCan))
-        assertEquals("Закрыть", allWindows.valueLabel(1, HeadUnitCanMode.Android10Vhal))
-        assertEquals("Открыть", allWindows.valueLabel(2, HeadUnitCanMode.Android10Vhal))
-        assertEquals("Щель", allWindows.valueLabel(3, HeadUnitCanMode.Android10Vhal))
+        assertEquals(ruEn("Закрыть", "Close"), allWindows.valueLabel(1, HeadUnitCanMode.Android10Vhal))
+        assertEquals(ruEn("Открыть", "Open"), allWindows.valueLabel(2, HeadUnitCanMode.Android10Vhal))
+        assertEquals(ruEn("Щель", "Vent"), allWindows.valueLabel(3, HeadUnitCanMode.Android10Vhal))
         assertEquals(
             BodyComfortWrite.WINDOW_A9_PERCENT_STEPS,
             allWindows.allowedValuesFor(HeadUnitCanMode.Android9MbCan),

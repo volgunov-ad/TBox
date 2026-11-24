@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -39,7 +41,7 @@ class AutomationRunNowTest {
     @Test
     fun rejection_missingDefinition() {
         assertEquals(
-            "Автоматизация не найдена. Сначала сохраните правило.",
+            ruEn("Автоматизация не найдена. Сначала сохраните правило.", "Automation not found. Save the rule first."),
             AutomationRunNow.rejection(null),
         )
     }
@@ -48,7 +50,7 @@ class AutomationRunNowTest {
     fun rejection_invalidDefinition() {
         val reason = AutomationRunNow.rejection(validDefinition().copy(name = ""))
         assertNotNull(reason)
-        assert(requireNotNull(reason).contains("название"))
+        assert(requireNotNull(reason).contains(ruEn("название", "name")))
     }
 
     @Test

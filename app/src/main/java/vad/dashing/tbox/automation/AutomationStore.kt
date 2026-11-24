@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -106,7 +108,7 @@ class AutomationStore(context: Context) {
             incoming = incoming,
             existingIds = current.automations.map { it.id }.toSet(),
         )
-        require(imported.isNotEmpty()) { "В файле нет автоматизаций" }
+        require(imported.isNotEmpty()) { ruEn("В файле нет автоматизаций", "The file has no automations") }
         val (safeImported, _) = AutomationValidator.withInvalidDisabled(
             AutomationDocument(automations = imported),
         )

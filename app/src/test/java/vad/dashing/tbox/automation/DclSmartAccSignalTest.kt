@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -31,10 +33,10 @@ class DclSmartAccSignalTest {
 
         val limit = AutomationSignalCatalog.get(AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT)
         assertEquals(AutomationSignalValueType.NUMBER, limit.id.valueType)
-        assertEquals("км/ч", limit.unit)
+        assertEquals(ruEn("км/ч", "km/h"), limit.unit)
 
         assertEquals(
-            "DCL: Умный ACC",
+            ruEn("DCL: Умный ACC", "DCL: Smart ACC"),
             AutomationParameterLabels.signalLabel(AutomationSignalId.DCL_SMART_ACC_ACTIVE),
         )
     }
