@@ -16,7 +16,6 @@
     <string name="store_status_installed">Installed %1$s (%2$d)</string>
     <string name="store_status_update">Update %1$s (%2$d)</string>
     <string name="store_status_unsupported">Not for this HU</string>
-    <string name="store_badge_third_party">Third-party</string>
     <string name="store_get">Get</string>
     <string name="store_update">Update</string>
     <string name="store_install">Install</string>
@@ -33,9 +32,17 @@
     <string name="store_apps_count">%1$d apps</string>
     <string name="store_version_line">Version %1$s (%2$d)</string>
     <string name="store_section_about">About</string>
-    <string name="store_category_app">App</string>
-    <string name="store_category_tool">Tool</string>
-    <string name="store_category_oneshot">Utility</string>
+    <string name="store_section_all">All</string>
+    <string name="store_section_chip">%1$s · %2$d</string>
+    <string name="store_page_prev">Previous</string>
+    <string name="store_page_next">Next</string>
+    <string name="store_page_indicator">Page %1$d of %2$d</string>
+    <string name="store_files_title">Files to Downloads</string>
+    <string name="store_files_hint">Saved to “Downloads/%1$s” when you download the app</string>
+    <string name="store_downloading_file">File %1$d of %2$d: %3$s — %4$d%%</string>
+    <string name="store_downloading_file_unknown">File %1$d of %2$d: %3$s…</string>
+    <string name="store_files_saved">Files saved to %1$s (%2$d)</string>
+    <string name="store_files_failed">Could not save %1$s: %2$s</string>
     <string name="store_cancel">Cancel</string>
     <string name="store_downloading">Downloading %1$d%%</string>
     <string name="store_downloading_unknown">Downloading…</string>
@@ -50,8 +57,6 @@
     <string name="store_changelog">Changelog</string>
     <string name="store_changelog_loading">Loading changelog…</string>
     <string name="store_back">Back to list</string>
-    <string name="store_sidecar_saved">APK for picking saved to Downloads:\n%1$s</string>
-    <string name="store_sidecar_error">Could not save companion APK to Downloads: %1$s</string>
     <string name="store_phone_only">Phone only</string>
     <string name="store_phone_qr_hint">Scan the QR code on your phone to open the APK download page</string>
     <string name="store_phone_qr_button">QR code</string>
@@ -76,6 +81,8 @@
     <string name="store_error_cert_conflicts_installed">This app is already installed with a different signing key. Uninstall the old version, then install again</string>
     <string name="store_error_apk_missing">APK file not found — download again</string>
     <string name="store_error_downloads_write_failed">Could not write the APK to Downloads</string>
+    <string name="store_error_file_checksum_mismatch">File checksum mismatch — download again</string>
+    <string name="store_error_file_write_failed">Could not write the file to Downloads</string>
     <string name="store_verifying_saving">Verifying and saving…</string>
     <string name="store_ready_to_install">APK downloaded and verified</string>
     <string name="store_retry">Retry</string>

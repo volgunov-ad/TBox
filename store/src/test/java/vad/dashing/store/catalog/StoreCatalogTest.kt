@@ -2,6 +2,7 @@ package vad.dashing.store.catalog
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,7 +16,7 @@ import vad.dashing.store.disk.UpdateChannel
 class StoreCatalogTest {
 
     @Test
-    fun parse_skipsUnverifiedAndKeepsThirdParty() {
+    fun parse_ignoresRemovedLegacyFields() {
         val json = """
             {
               "schemaVersion": 1,
@@ -31,6 +32,8 @@ class StoreCatalogTest {
                   "hu": ["a9", "a10"],
                   "category": "app",
                   "verified": true,
+                  "reviewNotes": "n/a",
+                  "copyApkToDownloadsAppId": "other",
                   "manifest": "yandex-disk:/apps/mqtt/version.json"
                 },
                 {
@@ -63,22 +66,24 @@ class StoreCatalogTest {
         val catalog = StoreCatalog.parse(json)
         assertEquals(1, catalog.schemaVersion)
         assertEquals("2026-11-21T12:00:00Z", catalog.publishedAt)
-        assertEquals(3, catalog.apps.size)
+        // verified:false is no longer skipped
+        assertEquals(4, catalog.apps.size)
 
         val mqtt = catalog.apps.first { it.id == "mqtt" }
-        assertEquals(StoreAppOrigin.FIRST_PARTY, mqtt.origin)
         assertEquals("/apps/mqtt/version.json", mqtt.resolveManifestLogicalPath())
         assertTrue(mqtt.supportsHu("a10"))
+        assertNull(mqtt.downloads)
+        assertTrue(mqtt.sections.isEmpty())
 
         val camd = catalog.apps.first { it.id == "camd" }
         assertTrue(camd.supportsHu("a9"))
         assertFalse(camd.supportsHu("a10"))
-        assertEquals("/apps/camd/version.json", camd.resolveManifestLogicalPath())
 
         val nav = catalog.apps.first { it.id == "nav" }
-        assertEquals(StoreAppOrigin.THIRD_PARTY, nav.origin)
         assertEquals(listOf("abcdef"), nav.signingCertSha256)
         assertEquals("Vendor", nav.publisher)
+
+        assertTrue(catalog.apps.any { it.id == "sketchy" })
     }
 
     @Test
@@ -116,6 +121,10 @@ class StoreCatalogTest {
             YandexDiskPath.appApkPath(UpdateChannel.RELEASE, "mqtt", "app.apk"),
         )
         assertEquals(
+            "/release/apps/mqtt/files/readme.txt",
+            YandexDiskPath.appFilePath(UpdateChannel.RELEASE, "mqtt", "readme.txt"),
+        )
+        assertEquals(
             "/release/apps/mqtt/version.json",
             YandexDiskPath.physicalPath(
                 UpdateChannel.RELEASE,
@@ -146,13 +155,14 @@ class StoreCatalogTest {
             .readText()
         val catalog = StoreCatalog.parse(json)
         assertEquals(7, catalog.apps.size)
+        assertEquals(listOf("app", "tool"), catalog.sections.map { it.id })
         assertTrue(catalog.apps.any { it.id == "tbox-store" && it.packageName == "vad.dashing.store" })
-        assertTrue(catalog.apps.any { it.id == "dcl-launcher" && it.origin == StoreAppOrigin.THIRD_PARTY })
         assertTrue(catalog.apps.first { it.id == "camd" }.supportsHu("a9"))
         assertFalse(catalog.apps.first { it.id == "camd" }.supportsHu("a10"))
         val dclInstall = catalog.apps.first { it.id == "dclinstall" }
-        assertEquals("dcl-launcher", dclInstall.copyApkToDownloadsAppId)
-        assertEquals(StoreAppCategory.TOOL, dclInstall.category)
+        assertEquals(listOf("tool"), dclInstall.sections)
+        assertTrue(dclInstall.hasDownloadFiles)
+        assertEquals("DCL Launcher", dclInstall.downloads?.folder)
         val phone = catalog.apps.first { it.id == "phone" }
         assertEquals(StoreInstallMode.PHONE, phone.installMode)
         assertTrue(phone.isPhoneDistribution)
@@ -180,23 +190,79 @@ class StoreCatalogTest {
     }
 
     @Test
-    fun parse_copyApkToDownloadsAppId() {
+    fun parse_sections() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "sections": [
+                {"id": "nav", "title": "Навигация", "titleEn": "Navigation"},
+                {"id": "BAD", "title": "Bad id"},
+                {"id": "empty", "title": ""},
+                {"id": "nav", "title": "Duplicate"},
+                {"id": "tools", "title": "Инструменты"}
+              ],
+              "apps": [
+                {
+                  "id": "maps",
+                  "packageName": "com.example.maps",
+                  "title": "Maps",
+                  "sections": ["nav", "missing", "tools"]
+                }
+              ]
+            }
+        """.trimIndent()
+        val catalog = StoreCatalog.parse(json)
+        assertEquals(listOf("nav", "tools"), catalog.sections.map { it.id })
+        assertEquals("Navigation", catalog.sections[0].displayTitle("en"))
+        assertEquals("Навигация", catalog.sections[0].displayTitle("ru"))
+        assertEquals(listOf("nav", "tools"), catalog.apps.single().sections)
+    }
+
+    @Test
+    fun parse_downloads() {
+        val goodSha = "a".repeat(64)
         val json = """
             {
               "schemaVersion": 1,
               "apps": [
                 {
-                  "id": "dclinstall",
-                  "packageName": "vad.dashing.dclinstall",
-                  "title": "DCL Install",
-                  "verified": true,
-                  "copyApkToDownloadsAppId": "dcl-launcher"
+                  "id": "demo",
+                  "packageName": "vad.dashing.demo",
+                  "title": "Demo",
+                  "downloads": {
+                    "folder": " My Folder ",
+                    "files": [
+                      {"name": "ok.txt", "sha256": "$goodSha", "sizeBytes": 10},
+                      {"name": "../x", "sha256": "$goodSha", "sizeBytes": 1},
+                      {"name": "a/b", "sha256": "$goodSha", "sizeBytes": 1},
+                      {"name": "", "sha256": "$goodSha", "sizeBytes": 1},
+                      {"name": ".hidden", "sha256": "$goodSha", "sizeBytes": 1},
+                      {"name": "x.part", "sha256": "$goodSha", "sizeBytes": 1},
+                      {"name": "short", "sha256": "abcd", "sizeBytes": 1},
+                      {"name": "OK.TXT", "sha256": "$goodSha", "sizeBytes": 2}
+                    ]
+                  }
+                },
+                {
+                  "id": "blank-folder",
+                  "packageName": "vad.dashing.blank",
+                  "title": "Blank",
+                  "downloads": {
+                    "folder": "   ",
+                    "files": [
+                      {"name": "a.bin", "sha256": "$goodSha", "sizeBytes": 1}
+                    ]
+                  }
                 }
               ]
             }
         """.trimIndent()
-        val entry = StoreCatalog.parse(json).apps.single()
-        assertEquals("dcl-launcher", entry.copyApkToDownloadsAppId)
+        val catalog = StoreCatalog.parse(json)
+        val demo = catalog.apps.first { it.id == "demo" }
+        assertEquals("My Folder", demo.downloads?.folder)
+        assertEquals(listOf("ok.txt"), demo.downloads?.files?.map { it.name })
+        val blank = catalog.apps.first { it.id == "blank-folder" }
+        assertEquals("blank-folder", blank.downloads?.folder)
     }
 
     @Test

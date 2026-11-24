@@ -42,6 +42,12 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedAppId = MutableStateFlow<String?>(null)
     val selectedAppId: StateFlow<String?> = _selectedAppId.asStateFlow()
 
+    private val _selectedSectionId = MutableStateFlow<String?>(null)
+    val selectedSectionId: StateFlow<String?> = _selectedSectionId.asStateFlow()
+
+    private val _page = MutableStateFlow(0)
+    val page: StateFlow<Int> = _page.asStateFlow()
+
     private val _icons = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
     val icons: StateFlow<Map<String, Bitmap>> = _icons.asStateFlow()
 
@@ -52,6 +58,24 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private var compileJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            listState.collect { state ->
+                val ready = state as? StoreListState.Ready ?: return@collect
+                val view = buildCatalogView(
+                    rows = ready.rows,
+                    sections = ready.sections,
+                    selectedSectionId = _selectedSectionId.value,
+                    page = _page.value,
+                    lang = repository.storeUiLang(),
+                )
+                if (view.selectedSectionId != _selectedSectionId.value) {
+                    _selectedSectionId.value = view.selectedSectionId
+                }
+                if (view.page != _page.value) {
+                    _page.value = view.page
+                }
+            }
+        }
         refresh()
     }
 
@@ -65,10 +89,21 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectSection(id: String?) {
+        _selectedSectionId.value = id
+        _page.value = 0
+    }
+
+    fun setPage(page: Int) {
+        _page.value = page.coerceAtLeast(0)
+    }
+
     fun setChannel(channel: UpdateChannel) {
         if (channel == this.channel.value) return
         cancelDownload()
         repository.setChannel(channel)
+        _selectedSectionId.value = null
+        _page.value = 0
         resetIcons()
         refresh()
     }
@@ -77,6 +112,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         if (source == cloudSource.value) return
         cancelDownload()
         repository.setCloudSource(source)
+        _selectedSectionId.value = null
+        _page.value = 0
         resetIcons()
         refresh()
     }
@@ -94,7 +131,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         repository.dismissActionResult()
     }
 
-    /** Called by the detail screen while its changelog is still [AppChangelogState.Idle]. */
+    /** Called by the detail screen while its changelog is still [vad.dashing.store.disk.AppChangelogState.Idle]. */
     fun loadChangelog(appId: String) {
         if (changelogJobs[appId]?.isActive == true) return
         changelogJobs[appId] = viewModelScope.launch {

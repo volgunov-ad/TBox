@@ -100,8 +100,8 @@ class YandexDiskClient(
         if (publicKey.isBlank()) {
             throw IOException("Update source URL is not configured")
         }
-        val encodedKey = URLEncoder.encode(publicKey, Charsets.UTF_8.name())
-        val encodedPath = URLEncoder.encode(path, Charsets.UTF_8.name())
+        val encodedKey = encodeQueryValue(publicKey)
+        val encodedPath = encodeQueryValue(path)
         val apiUrl =
             "https://cloud-api.yandex.net/v1/disk/public/resources" +
                 "?public_key=$encodedKey&path=$encodedPath"
@@ -122,8 +122,8 @@ class YandexDiskClient(
         if (publicKey.isBlank()) {
             throw IOException("Update source URL is not configured")
         }
-        val encodedKey = URLEncoder.encode(publicKey, Charsets.UTF_8.name())
-        val encodedPath = URLEncoder.encode(path, Charsets.UTF_8.name())
+        val encodedKey = encodeQueryValue(publicKey)
+        val encodedPath = encodeQueryValue(path)
         val apiUrl =
             "https://cloud-api.yandex.net/v1/disk/public/resources/download" +
                 "?public_key=$encodedKey&path=$encodedPath"
@@ -139,5 +139,11 @@ class YandexDiskClient(
             }
             return href
         }
+    }
+
+    companion object {
+        /** Space → `%20` (not `+`); Cyrillic and other non-ASCII are percent-encoded. */
+        fun encodeQueryValue(value: String): String =
+            URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
     }
 }
