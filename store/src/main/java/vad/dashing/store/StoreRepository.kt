@@ -32,6 +32,7 @@ import vad.dashing.store.disk.StoreCloudFacade
 import vad.dashing.store.disk.UpdateChannel
 import vad.dashing.store.disk.isReleaseNewer
 import vad.dashing.store.install.ApkInstaller
+import vad.dashing.store.install.ApkSigner
 import vad.dashing.store.install.ApkUninstaller
 import vad.dashing.store.install.ApkVerifier
 import vad.dashing.store.install.DownloadsApkSaver
@@ -115,6 +116,8 @@ sealed interface StoreActionState {
         val apkFile: File,
         val release: AppReleaseInfo,
         val entry: StoreCatalogEntry,
+        /** Signer of [apkFile] read while verifying; null when it was not needed or unreadable. */
+        val apkSigner: ApkSigner? = null,
         /** Public Downloads path of a companion APK (e.g. DCL launcher for DCLInstall). */
         val downloadsSidecarPath: String? = null,
         /** Soft failure while saving the companion APK; main APK is still ready. */
@@ -145,6 +148,13 @@ object StoreErrors {
     const val PHONE_APK_NOT_FOR_HU = "phone_apk_not_for_hu"
     const val DOWNLOADS_PERMISSION = "downloads_permission_denied"
     const val NO_ACTIVITY = "no_activity"
+    const val CHECKSUM_MISMATCH = "checksum_mismatch"
+    const val PACKAGE_MISMATCH = "package_mismatch"
+    const val CERT_MISMATCH = "cert_mismatch"
+    const val CERT_UNREADABLE = "cert_unreadable"
+    const val CERT_CONFLICTS_INSTALLED = "cert_conflicts_installed"
+    const val APK_MISSING = "apk_missing"
+    const val DOWNLOADS_WRITE_FAILED = "downloads_write_failed"
 }
 
 class StoreRepository(
@@ -348,8 +358,13 @@ class StoreRepository(
                 )
             }
             _actionState.value = StoreActionState.Verifying(appId, effectiveTarget)
-            withContext(Dispatchers.IO) {
-                verifyDownloadedApk(destination, row.entry, release)
+            val apkSigner = withContext(Dispatchers.IO) {
+                verifyDownloadedApk(
+                    destination,
+                    row.entry,
+                    release,
+                    checkInstalledSigner = effectiveTarget == DownloadTarget.INSTALL,
+                )
             }
             val withSize = release.copy(
                 apkSizeBytes = release.apkSizeBytes
@@ -378,6 +393,7 @@ class StoreRepository(
                     apkFile = destination,
                     release = withSize,
                     entry = row.entry,
+                    apkSigner = apkSigner,
                     downloadsSidecarPath = sidecar.path,
                     downloadsSidecarError = sidecar.error,
                 )
@@ -425,7 +441,14 @@ class StoreRepository(
             return
         }
         if (!state.apkFile.isFile) {
-            _actionState.value = StoreActionState.Error(state.appId, "APK file is missing, download again")
+            _actionState.value = StoreActionState.Error(state.appId, StoreErrors.APK_MISSING)
+            return
+        }
+        // Main thread: reuse the signer read during verification (reading it verifies the whole APK).
+        // The installed package may have changed since then.
+        val installed = ApkVerifier.installedSigner(context, state.entry.packageName)
+        if (installed != null && state.apkSigner?.sharesLineageWith(installed) == false) {
+            _actionState.value = StoreActionState.Error(state.appId, StoreErrors.CERT_CONFLICTS_INSTALLED)
             return
         }
         try {
@@ -589,7 +612,7 @@ class StoreRepository(
             append(".apk")
         }
 
-    private fun saveApkToDownloads(
+    private suspend fun saveApkToDownloads(
         entry: StoreCatalogEntry,
         release: AppReleaseInfo,
         cacheFile: File,
@@ -637,29 +660,47 @@ class StoreRepository(
         }
     }
 
+    /**
+     * Size, SHA-256, package name and the catalog certificate pin. With [checkInstalledSigner]
+     * (APK for this device) also refuses a key the system installer would reject as an update
+     * of the installed package. Returns the APK signer when it had to be read.
+     */
     private fun verifyDownloadedApk(
         file: File,
         entry: StoreCatalogEntry,
         release: AppReleaseInfo,
-    ) {
+        checkInstalledSigner: Boolean = false,
+    ): ApkSigner? {
         if (!file.exists() || file.length() <= 0L) {
-            throw IOException("Downloaded APK is missing")
+            throw IOException(StoreErrors.APK_MISSING)
         }
         if (!ApkVerifier.verifySha256(file, release.sha256)) {
-            file.delete()
-            throw IOException("APK checksum mismatch")
+            rejectApk(file, StoreErrors.CHECKSUM_MISMATCH)
         }
         if (!ApkVerifier.verifyPackageName(context, file, entry.packageName)) {
-            file.delete()
-            throw IOException("APK package name mismatch")
+            rejectApk(file, StoreErrors.PACKAGE_MISMATCH)
         }
-        if (entry.signingCertSha256.isNotEmpty()) {
-            val actual = ApkVerifier.signingCertSha256(context, file)?.lowercase()
-            if (actual == null || entry.signingCertSha256.none { it.equals(actual, true) }) {
-                file.delete()
-                throw IOException("APK signing certificate mismatch")
-            }
+        val pinned = entry.signingCertSha256.isNotEmpty()
+        val installed = if (checkInstalledSigner) {
+            ApkVerifier.installedSigner(context, entry.packageName)
+        } else {
+            null
         }
+        if (!pinned && installed == null) return null
+        val signer = ApkVerifier.apkSigner(context, file)
+            ?: rejectApk(file, StoreErrors.CERT_UNREADABLE)
+        if (pinned && entry.signingCertSha256.none { it.equals(signer.current, ignoreCase = true) }) {
+            rejectApk(file, StoreErrors.CERT_MISMATCH)
+        }
+        if (installed != null && !signer.sharesLineageWith(installed)) {
+            rejectApk(file, StoreErrors.CERT_CONFLICTS_INSTALLED)
+        }
+        return signer
+    }
+
+    private fun rejectApk(file: File, error: String): Nothing {
+        file.delete()
+        throw IOException(error)
     }
 
     private fun apkCacheRoot(): File = File(context.cacheDir, "store/apk")

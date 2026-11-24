@@ -78,8 +78,11 @@ class StoreAppCompiler(context: Context) {
         var enabledTcp = false
         try {
             val result = withContext(Dispatchers.IO) {
-                enabledTcp = StoreAdbShell.enableTcpIfNeeded()
                 try {
+                    if (!StoreAdbShell.isPortOpen()) {
+                        enabledTcp = true
+                        StoreAdbShell.enableTcp()
+                    }
                     openShell().use { it.execute(DexoptCodec.compileCommand(packageName)) }
                 } catch (error: IOException) {
                     throw AdbConnectException(error)
