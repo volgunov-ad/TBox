@@ -280,9 +280,16 @@ class CamdPresetStoreTest {
     fun builtinDefaultsCoverAllCamerasAndMergeOverrides() {
         val prefs = FakePrefs()
         val all = CamdPresetStore.all(prefs)
-        assertEquals(21, all.size)
+        assertEquals(25, all.size)
         assertTrue(all.all { it.builtin })
-        assertTrue(all.all { it.defaultCorrection })
+        val dclNames = setOf(
+            "dcl_left_blind_zone",
+            "dcl_left_side",
+            "dcl_right_blind_zone",
+            "dcl_right_side",
+        )
+        assertTrue(all.filter { it.name !in dclNames }.all { it.defaultCorrection })
+        assertTrue(all.filter { it.name in dclNames }.all { !it.defaultCorrection })
         assertEquals(CamdCrop(0f, 0f, 0.5f, 1f), CamdPresetStore.byName(prefs, "front_left")!!.crop)
         assertTrue(
             CamdPresetStore.saveBuiltinOverride(
@@ -420,7 +427,7 @@ class CamdBackupTest {
         val summary = CamdBackup.importJson(fresh, json)!!
         assertEquals(7, summary.corrections)
         assertEquals(1, summary.userPresets)
-        assertEquals(21, summary.builtinPresets)
+        assertEquals(25, summary.builtinPresets)
         assertTrue(summary.keepAvm)
         assertEquals(CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f), CamdLensCorrectionStore.load(fresh, 8))
         assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
@@ -548,7 +555,7 @@ class CamdPresetsBackupTest {
         val fresh = FakePrefs()
         val summary = CamdBackup.importPresetsJson(fresh, json)!!
         assertEquals(1, summary.userPresets)
-        assertEquals(21, summary.builtinPresets)
+        assertEquals(25, summary.builtinPresets)
         assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
         assertEquals(180, CamdPresetStore.byName(fresh, "front_left")!!.rotation)
     }
@@ -585,7 +592,7 @@ class CamdPresetsBackupTest {
         val fresh = FakePrefs()
         val summary = CamdBackup.importPresetsJson(fresh, fullBackup)!!
         assertEquals(1, summary.userPresets)
-        assertEquals(21, summary.builtinPresets)
+        assertEquals(25, summary.builtinPresets)
         assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
         // Corrections and flags are not applied by the presets-only import.
         assertEquals(CamdLensCorrection.IDENTITY, CamdLensCorrectionStore.load(fresh, 8))
