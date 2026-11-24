@@ -1589,7 +1589,6 @@
     <string name="widget_esp_ble_relay_channel_desc">Канал 1 — бит 0 маски. Текущие платы замыкают только его. Каналы 2–8 сохраняются для следующих прошивок</string>
     <string name="widget_esp_ble_relay_choose">Выберите плату</string>
     <string name="widget_esp_ble_relay_missing_choice">%1$s (нет в списке)</string>
-    <string name="esp_ble_relay_missing">Реле не найдено</string>
     <string name="widget_desc_esp_gpio">Состояние входа GPIO компаньона</string>
     <string name="widget_desc_esp_connected">USB-подключение к компаньону ESP32 (да/нет)</string>
     <string name="widget_esp_relay_mode_title">Режим работы</string>
