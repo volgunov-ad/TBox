@@ -20,9 +20,12 @@ data class NetState(
      * Null for TBox MDC path or when the modem did not report a value.
      */
     val signalDbm: Int? = null,
-    val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
-    val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
-    val simStatus: String = "", // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
+    /** `2G` / `3G` / `4G` / [vad.dashing.tbox.wifimodem.ModemStatusCodes.NET_NONE] / `-`. */
+    val netStatus: String = "",
+    /** See [vad.dashing.tbox.wifimodem.ModemStatusCodes] (`home`, `roaming`, `none`, …). */
+    val regStatus: String = "",
+    /** See [vad.dashing.tbox.wifimodem.ModemStatusCodes] (`ready`, `pin`, `none`, …). */
+    val simStatus: String = "",
     val connectionChangeTime: Date? = null,
     /** Downlink throughput in bytes/s when known (Wi‑Fi modem HTTP). */
     val downloadSpeedBps: Long? = null,

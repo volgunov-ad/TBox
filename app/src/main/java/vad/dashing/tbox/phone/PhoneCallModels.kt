@@ -1,5 +1,7 @@
 package vad.dashing.tbox.phone
 
+import vad.dashing.tbox.ruEn
+
 /**
  * Normalized HFP / Telecom call state for automations and External API
  * (`phone_call_state`, source=app).
@@ -64,14 +66,18 @@ sealed class PhoneCallControlResult {
 }
 
 /** Immediate hangup failure when the observed state is clearly idle (do not try the stack). */
-internal const val HANGUP_NO_ACTIVE_CALL_MESSAGE = "Нет активного звонка"
+internal val HANGUP_NO_ACTIVE_CALL_MESSAGE =
+    ruEn("Нет активного звонка", "No active call")
 
 /**
  * After a best-effort hangup attempt while [PhoneCallState.UNKNOWN]: clearer than
  * [HANGUP_NO_ACTIVE_CALL_MESSAGE] because we do not know whether a call exists.
  */
-internal const val HANGUP_STATE_UNKNOWN_MESSAGE =
-    "Состояние звонка неизвестно; сброс не подтверждён"
+internal val HANGUP_STATE_UNKNOWN_MESSAGE =
+    ruEn(
+        "Состояние звонка неизвестно; сброс не подтверждён",
+        "Call state is unknown; hangup was not confirmed",
+    )
 
 /**
  * Pre-attempt hangup gate: only [PhoneCallState.IDLE] fails immediately.

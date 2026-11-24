@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -90,10 +92,10 @@ class AutomationSunTimesTest {
             nnLon,
             wall,
         )
-        assertTrue(zero.contains("закат"))
+        assertTrue(zero.contains(ruEn("закат", "sunset")))
         assertTrue(zero.contains(String.format("%02d:%02d", sunset / 60, sunset % 60)))
         assertTrue(zero.contains("UTC+3"))
-        assertFalse(zero.contains("сработает"))
+        assertFalse(zero.contains(ruEn("сработает", "fires")))
 
         val afterHour = AutomationSolarHints.todayCaption(
             AutomationSolarInstant(
@@ -106,9 +108,9 @@ class AutomationSunTimesTest {
             wall,
         )
         val fire = sunset + 60
-        assertTrue(afterHour.contains("закат"))
+        assertTrue(afterHour.contains(ruEn("закат", "sunset")))
         assertTrue(afterHour.contains(String.format("%02d:%02d", sunset / 60, sunset % 60)))
-        assertTrue(afterHour.contains("сработает"))
+        assertTrue(afterHour.contains(ruEn("сработает", "fires")))
         assertTrue(afterHour.contains(String.format("%02d:%02d", fire / 60, fire % 60)))
         assertTrue(afterHour.contains("UTC+3"))
     }

@@ -87,7 +87,7 @@ class HuaweiHilinkStatusMapperTest {
             previous = previous,
         )
         assertTrue(snap.apnStatus)
-        assertEquals("домашняя сеть", snap.netState.regStatus)
+        assertEquals("home", snap.netState.regStatus)
         assertEquals("4G", snap.netState.netStatus)
         assertEquals(4, snap.netState.signalLevel)
         assertEquals(-70, snap.netState.signalDbm)
@@ -105,7 +105,7 @@ class HuaweiHilinkStatusMapperTest {
             previous = null,
         )
         assertEquals(false, snap.apnStatus)
-        assertEquals("нет сети", snap.netState.regStatus)
+        assertEquals("no_service", snap.netState.regStatus)
     }
 
     @Test
@@ -117,8 +117,8 @@ class HuaweiHilinkStatusMapperTest {
             previous = onlineLte(),
         )
         assertEquals(false, snap.apnStatus)
-        assertEquals("нет сети", snap.netState.regStatus)
-        assertEquals("нет сети", snap.netState.netStatus)
+        assertEquals("no_service", snap.netState.regStatus)
+        assertEquals("none", snap.netState.netStatus)
     }
 
     @Test

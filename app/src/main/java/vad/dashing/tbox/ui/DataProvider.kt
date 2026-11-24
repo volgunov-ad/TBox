@@ -25,6 +25,9 @@ import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.wifimodem.netStatusLabel
+import vad.dashing.tbox.wifimodem.regStatusLabel
+import vad.dashing.tbox.wifimodem.simStatusLabel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.fuelLitersForDisplay
 import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
@@ -386,9 +389,9 @@ class TboxDataProvider(
             "frontRightSeatMode" -> canViewModel.frontRightSeatMode.mapState { seatModeToString(context, it) }
             "frontLeftSeatMode" -> canViewModel.frontLeftSeatMode.mapState { seatModeToString(context, it) }
             "signalLevel" -> viewModel.netState.mapState { valueToString(it.signalLevel, eff(1)) }
-            "netStatus" -> viewModel.netState.mapState { it.netStatus }
-            "regStatus" -> viewModel.netState.mapState { it.regStatus }
-            "simStatus" -> viewModel.netState.mapState { it.simStatus }
+            "netStatus" -> viewModel.netState.mapState { netStatusLabel(it.netStatus) }
+            "regStatus" -> viewModel.netState.mapState { regStatusLabel(it.regStatus) }
+            "simStatus" -> viewModel.netState.mapState { simStatusLabel(it.simStatus) }
             "locateStatus" -> viewModel.locValues.mapState {
                 valueToString(it.locateStatus, booleanTrue = yesLabel, booleanFalse = noLabel)
             }

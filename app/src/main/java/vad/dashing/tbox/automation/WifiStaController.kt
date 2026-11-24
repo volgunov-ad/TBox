@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -73,9 +75,9 @@ object WifiStaController {
     suspend fun setRadioEnabled(context: Context, enabled: Boolean): AutomationActionResult {
         val app = context.applicationContext
         val wifi = wifiManager(app)
-            ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
+            ?: return AutomationActionResult.failure(ruEn("Wi-Fi недоступен на этом устройстве", "Wi-Fi is unavailable on this device"))
         if (isRadioEnabled(wifi) == enabled) {
-            return AutomationActionResult.ok(if (enabled) "Wi-Fi уже включён" else "Wi-Fi уже выключен")
+            return AutomationActionResult.ok(if (enabled) ruEn("Wi-Fi уже включён", "Wi-Fi is already on") else ruEn("Wi-Fi уже выключен", "Wi-Fi is already off"))
         }
 
         var softApStopped = false
@@ -109,55 +111,55 @@ object WifiStaController {
 
         val ok = waitUntil(RADIO_WAIT_MS) { isRadioEnabled(wifi) == enabled }
         return if (ok) {
-            val base = if (enabled) "Wi-Fi включён" else "Wi-Fi выключен"
-            val suffix = if (softApStopped) " (точка доступа ГУ выключена)" else ""
+            val base = if (enabled) ruEn("Wi-Fi включён", "Wi-Fi on") else ruEn("Wi-Fi выключен", "Wi-Fi off")
+            val suffix = if (softApStopped) ruEn(" (точка доступа ГУ выключена)", " (HU hotspot is off)") else ""
             AutomationActionResult.ok(base + suffix)
         } else {
             AutomationActionResult.failure(
-                "Таймаут переключения Wi-Fi" +
-                    if (isAirplaneModeOn(app)) " (режим полёта)" else "",
+                ruEn("Таймаут переключения Wi-Fi", "Wi-Fi toggle timed out") +
+                    if (isAirplaneModeOn(app)) ruEn(" (режим полёта)", " (airplane mode)") else "",
             )
         }
     }
 
     suspend fun connectToSaved(context: Context, ssid: String): AutomationActionResult {
         val wanted = WifiStaSsid.normalize(ssid)
-            ?: return AutomationActionResult.failure("Выберите сохранённую сеть")
+            ?: return AutomationActionResult.failure(ruEn("Выберите сохранённую сеть", "Choose a saved network"))
         val wifi = wifiManager(context)
-            ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
+            ?: return AutomationActionResult.failure(ruEn("Wi-Fi недоступен на этом устройстве", "Wi-Fi is unavailable on this device"))
         if (!isRadioEnabled(wifi)) {
             val enabled = setRadioEnabled(context, true)
             if (!enabled.success) return enabled
         }
         val already = readSnapshot(wifi)
         if (already.associated && WifiStaSsid.matches(already.ssid, wanted)) {
-            return AutomationActionResult.ok("Уже подключено к $wanted")
+            return AutomationActionResult.ok(ruEn("Уже подключено к $wanted", "Already connected to $wanted"))
         }
         val netId = WifiStaSsid.findSavedNetworkId(configuredNetworks(context), wanted)
-            ?: return AutomationActionResult.failure("Сеть «$wanted» не сохранена на ГУ")
+            ?: return AutomationActionResult.failure(ruEn("Сеть «$wanted» не сохранена на ГУ", "Network “$wanted” is not saved on the HU"))
         if (!enableNetworkCompat(wifi, netId) || !reconnectCompat(wifi)) {
-            return AutomationActionResult.failure("Не удалось запросить подключение к $wanted")
+            return AutomationActionResult.failure(ruEn("Не удалось запросить подключение к $wanted", "Could not request a connection to $wanted"))
         }
         val ok = waitUntil(ASSOCIATE_WAIT_MS) {
             val snap = readSnapshot(wifi)
             snap.associated && WifiStaSsid.matches(snap.ssid, wanted)
         }
         return if (ok) {
-            AutomationActionResult.ok("Подключено к $wanted")
+            AutomationActionResult.ok(ruEn("Подключено к $wanted", "Connected to $wanted"))
         } else {
-            AutomationActionResult.failure("Таймаут подключения к $wanted")
+            AutomationActionResult.failure(ruEn("Таймаут подключения к $wanted", "Connection to $wanted timed out"))
         }
     }
 
     fun disconnectCurrent(context: Context): AutomationActionResult {
         val wifi = wifiManager(context)
-            ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
+            ?: return AutomationActionResult.failure(ruEn("Wi-Fi недоступен на этом устройстве", "Wi-Fi is unavailable on this device"))
         if (!isRadioEnabled(wifi)) {
-            return AutomationActionResult.ok("Wi-Fi выключен")
+            return AutomationActionResult.ok(ruEn("Wi-Fi выключен", "Wi-Fi off"))
         }
         val snap = readSnapshot(wifi)
         if (!snap.associated) {
-            return AutomationActionResult.ok("Уже нет подключения к точке доступа")
+            return AutomationActionResult.ok(ruEn("Уже нет подключения к точке доступа", "Already disconnected from the hotspot"))
         }
         val netId = currentNetworkId(wifi)
         // disconnect() alone lets the stack immediately rejoin the same saved network.
@@ -165,7 +167,7 @@ object WifiStaController {
             disableNetworkCompat(wifi, netId)
         }
         disconnectCompat(wifi)
-        return AutomationActionResult.ok("Отключено от точки доступа")
+        return AutomationActionResult.ok(ruEn("Отключено от точки доступа", "Disconnected from the hotspot"))
     }
 
     private fun radioOffSnapshot(): WifiStaSnapshot =

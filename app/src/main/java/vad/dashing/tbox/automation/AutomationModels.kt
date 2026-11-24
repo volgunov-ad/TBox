@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import java.util.UUID
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
@@ -1084,8 +1086,8 @@ data class AutomationDefinition(
 }
 
 internal fun duplicatedAutomationName(name: String): String {
-    val base = name.trim().ifEmpty { "Автоматизация" }
-    return "$base (копия)"
+    val base = name.trim().ifEmpty { ruEn("Автоматизация", "Automation") }
+    return ruEn("$base (копия)", "$base (copy)")
 }
 
 data class AutomationDocument(

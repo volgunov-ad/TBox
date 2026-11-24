@@ -58,8 +58,8 @@ goformId=LOGIN&password=<Base64(plaintext)>
 | `network_provider` | оператор | → `NetValues.operator` |
 | `imei`, `sim_imsi`, `ziccid` | идентификаторы | → `NetValues` |
 | `ppp_status` | `ppp_connected` / … | → `apnStatus` |
-| `modem_main_state` | готовность | → `simStatus` |
-| `simcard_roam` | `Home` / `Roaming` | → `regStatus` |
+| `modem_main_state` | готовность | → `simStatus`: `ready` / `none` / `pin` / `error` |
+| `simcard_roam` | `Home` / `Roaming` | → `regStatus`: `home` / `roaming` |
 | `realtime_rx_thrpt`, `realtime_tx_thrpt` | скорость ↓/↑, байт/с | → `downloadSpeedBps` / `uploadSpeedBps` |
 | `wan_ipaddr` | WAN IP | → `APNState.apnIP` |
 | `cr_version`, `hw_version` | прошивка | → `WifiModemSnapshot.firmware` |

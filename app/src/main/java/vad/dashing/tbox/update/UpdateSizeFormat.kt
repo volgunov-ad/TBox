@@ -2,6 +2,7 @@ package vad.dashing.tbox.update
 
 import java.util.Locale
 import kotlin.math.roundToInt
+import vad.dashing.tbox.ruEn
 
 fun formatApkSizeMegabytes(bytes: Long): String {
     if (bytes <= 0L) return "0"
@@ -14,16 +15,18 @@ fun formatApkSizeMegabytes(bytes: Long): String {
 }
 
 fun formatDownloadSpeed(bytesPerSecond: Long): String {
-    if (bytesPerSecond <= 0L) return "0 КБ/с"
+    val kb = ruEn("КБ/с", "KB/s")
+    val mb = ruEn("МБ/с", "MB/s")
+    if (bytesPerSecond <= 0L) return "0 $kb"
     val kibibytes = bytesPerSecond / 1024.0
     if (kibibytes < 1024.0) {
-        return "${kibibytes.roundToInt().coerceAtLeast(1)} КБ/с"
+        return "${kibibytes.roundToInt().coerceAtLeast(1)} $kb"
     }
     val mebibytes = kibibytes / 1024.0
     return if (mebibytes >= 10.0) {
-        "${mebibytes.roundToInt()} МБ/с"
+        "${mebibytes.roundToInt()} $mb"
     } else {
-        String.format(Locale.US, "%.1f МБ/с", mebibytes)
+        String.format(Locale.US, "%.1f %s", mebibytes, mb)
     }
 }
 

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.adb
 
+import vad.dashing.tbox.ruEn
+
 import android.content.Context
 import java.io.File
 import kotlinx.coroutines.delay
@@ -28,14 +30,14 @@ object AdbAutomationActions {
             return AutomationActionResult.failure(error)
         }
         return AutomationActionResult.ok(
-            if (enabled) "ADB TCP включён (:5555)" else "ADB TCP выключен",
+            if (enabled) ruEn("ADB TCP включён (:5555)", "ADB TCP on (:5555)") else ruEn("ADB TCP выключен", "ADB TCP off"),
         )
     }
 
     suspend fun forceStopPackage(context: Context, packageName: String): AutomationActionResult {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) {
-            return AutomationActionResult.failure("Выберите приложение")
+            return AutomationActionResult.failure(ruEn("Выберите приложение", "Select an app"))
         }
         return runShellCommand(context, PackageAdbActions.buildForceStopCommand(pkg))
     }
@@ -63,11 +65,11 @@ object AdbAutomationActions {
     ): AutomationActionResult {
         val trimmed = command.trim()
         if (trimmed.isEmpty()) {
-            return AutomationActionResult.failure("Команда пуста")
+            return AutomationActionResult.failure(ruEn("Команда пуста", "Command is empty"))
         }
         if (trimmed.length > MAX_SHELL_COMMAND_CHARS) {
             return AutomationActionResult.failure(
-                "Команда длиннее $MAX_SHELL_COMMAND_CHARS символов",
+                ruEn("Команда длиннее $MAX_SHELL_COMMAND_CHARS символов", "Command is longer than $MAX_SHELL_COMMAND_CHARS characters"),
             )
         }
         // Tests inject delayMs — single attempt keeps FakeGateway deterministic.
@@ -157,9 +159,9 @@ object AdbAutomationActions {
                 ShellAttempt(
                     AutomationActionResult.ok(
                         if (output.isBlank()) {
-                            "Команда выполнена"
+                            ruEn("Команда выполнена", "Command done")
                         } else {
-                            "Команда выполнена: $output"
+                            ruEn("Команда выполнена: $output", "Command done: $output")
                         },
                     ),
                 )

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ruEn
+
 import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -72,7 +74,7 @@ internal fun AutomationTriggerEditor(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Триггер ${index + 1}",
+                    text = ruEn("Триггер ${index + 1}", "Trigger ${index + 1}"),
                     style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -90,11 +92,11 @@ internal fun AutomationTriggerEditor(
                     AutomationButtonLabel("↓")
                 }
                 OutlinedButton(onClick = rememberWrappedOnClick(onDelete)) {
-                    AutomationButtonLabel("Удалить")
+                    AutomationButtonLabel(ruEn("Удалить", "Delete"))
                 }
             }
             AutomationDropdown(
-                label = "Тип триггера",
+                label = ruEn("Тип триггера", "Trigger type"),
                 value = triggerUiKind(trigger),
                 options = TriggerUiKind.entries.sortedByAutomationLabel { it.label() },
                 optionLabel = TriggerUiKind::label,
@@ -103,7 +105,7 @@ internal fun AutomationTriggerEditor(
             AutomationTextField(
                 value = trigger.id,
                 onValueChange = { id -> onChange(trigger.withId(id)) },
-                label = "ID триггера",
+                label = ruEn("ID триггера", "Trigger ID"),
                 modifier = Modifier.fillMaxWidth(),
             )
             when (trigger) {
@@ -128,14 +130,14 @@ private fun SystemEventFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     AutomationDropdown(
-        label = "Событие",
+        label = ruEn("Событие", "Event"),
         value = trigger.event,
         options = AutomationSystemEvent.entries.sortedByAutomationLabel(::systemEventLabel),
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
     )
     AutomationSecondsField(
-        label = "В течение, с",
+        label = ruEn("В течение, с", "For, s"),
         valueMillis = trigger.holdMillis,
         onValueChange = { onChange(trigger.copy(holdMillis = it)) },
         modifier = Modifier.fillMaxWidth(),
@@ -215,14 +217,14 @@ private fun HardKeyTriggerFields(
         if (trigger.keyCode in pickerCodes) pickerCodes else pickerCodes + trigger.keyCode
     }
     AutomationDropdown(
-        label = "Кнопка",
+        label = ruEn("Кнопка", "Button"),
         value = trigger.keyCode,
         options = options,
         optionLabel = { hardKeyCodeLabel(resources, it) },
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
     )
     AutomationIntField(
-        label = "Код кнопки вручную",
+        label = ruEn("Код кнопки вручную", "Button code, manual"),
         value = trigger.keyCode,
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
         modifier = Modifier.fillMaxWidth(),
@@ -233,7 +235,7 @@ private fun HardKeyTriggerFields(
     val doubleLabel = stringResource(R.string.automation_hard_key_status_double)
     val longLabel = stringResource(R.string.automation_hard_key_status_long)
     AutomationDropdown(
-        label = "Событие кнопки",
+        label = ruEn("Событие кнопки", "Button event"),
         value = trigger.keyStatus,
         options = AutomationHardKeyStatus.entries,
         optionLabel = { status ->
@@ -266,36 +268,36 @@ private fun EspBleBtnTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     AutomationEspBleDevicePicker(
-        label = "Устройство",
+        label = ruEn("Устройство", "Device"),
         mac = trigger.mac,
         onValueChange = { onChange(trigger.copy(mac = it)) },
     )
     AutomationDropdown(
-        label = "Кнопка пульта",
+        label = ruEn("Кнопка пульта", "Remote button"),
         value = trigger.btn,
         options = (AUTOMATION_ESP_BLE_BTN_MIN..AUTOMATION_ESP_BLE_BTN_MAX).toList(),
-        optionLabel = { "Кнопка $it" },
+        optionLabel = { ruEn("Кнопка $it", "Button $it") },
         onValueChange = { onChange(trigger.copy(btn = it)) },
     )
     AutomationDropdown(
-        label = "Действие",
+        label = ruEn("Действие", "Action"),
         value = trigger.act,
         options = AutomationEspBleBtnAction.entries,
         optionLabel = { act ->
             when (act) {
-                AutomationEspBleBtnAction.PRESS -> "Нажатие"
-                AutomationEspBleBtnAction.DOUBLE -> "Двойное"
-                AutomationEspBleBtnAction.TRIPLE -> "Тройное"
-                AutomationEspBleBtnAction.LONG -> "Долгое"
-                AutomationEspBleBtnAction.HOLD -> "Удержание"
+                AutomationEspBleBtnAction.PRESS -> ruEn("Нажатие", "Press")
+                AutomationEspBleBtnAction.DOUBLE -> ruEn("Двойное", "Double")
+                AutomationEspBleBtnAction.TRIPLE -> ruEn("Тройное", "Triple")
+                AutomationEspBleBtnAction.LONG -> ruEn("Долгое", "Long")
+                AutomationEspBleBtnAction.HOLD -> ruEn("Удержание", "Hold")
             }
         },
         onValueChange = { onChange(trigger.copy(act = it)) },
     )
     Text(
-        text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
-            "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4. " +
-            "MAC обязателен; забытый пульт остаётся в правиле, пока не выберете другой.",
+        text = ruEn("Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 ", "Shelly Blu Button 1 / RC Button 4 via the ESP32 companion ") +
+            ruEn("(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4. ", "(Companion tab: BLE → Learn). Button 1 = button 1; RC4 = buttons 1…4. ") +
+            ruEn("MAC обязателен; забытый пульт остаётся в правиле, пока не выберете другой.", "MAC is required; a forgotten remote stays in the rule until you choose another."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -308,10 +310,10 @@ private fun EspGpioBtnTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     AutomationDropdown(
-        label = "ESP-вход",
+        label = ruEn("ESP-вход", "ESP input"),
         value = trigger.channel,
         options = (0..3).toList(),
-        optionLabel = { "Вход $it" },
+        optionLabel = { ruEn("Вход $it", "Input $it") },
         onValueChange = { onChange(trigger.copy(channel = it)) },
     )
     val pressedLabel = stringResource(R.string.automation_hard_key_status_pressed)
@@ -320,7 +322,7 @@ private fun EspGpioBtnTriggerFields(
     val doubleLabel = stringResource(R.string.automation_hard_key_status_double)
     val longLabel = stringResource(R.string.automation_hard_key_status_long)
     AutomationDropdown(
-        label = "Событие",
+        label = ruEn("Событие", "Event"),
         value = trigger.status,
         options = AutomationHardKeyStatus.entries,
         optionLabel = { status ->
@@ -335,10 +337,10 @@ private fun EspGpioBtnTriggerFields(
         onValueChange = { onChange(trigger.copy(status = it)) },
     )
     Text(
-        text = "Входы компаньона ESP32 (активный уровень — замкнуто/нажато). " +
-            "«Нажал» / «Отпустил» — сырые фронты. «Одиночное» / «Двойное» / «Долгое» — " +
-            "как у кнопок руля (двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, " +
-            "долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс).",
+        text = ruEn("Входы компаньона ESP32 (активный уровень — замкнуто/нажато). ", "ESP32 companion inputs (active level — closed/pressed). ") +
+            ruEn("«Нажал» / «Отпустил» — сырые фронты. «Одиночное» / «Двойное» / «Долгое» — ", "“Pressed” / “Released” — raw edges. “Single” / “Double” / “Long” — ") +
+            ruEn("как у кнопок руля (двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, ", "like the steering-wheel buttons (double-tap window ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} ms, ") +
+            ruEn("долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс).", "long ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} ms)."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -358,7 +360,7 @@ private fun IntervalTriggerFields(
         .toInt()
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationIntField(
-            label = "Каждые",
+            label = ruEn("Каждые", "Every"),
             value = value,
             onValueChange = { raw ->
                 onChange(trigger.copy(intervalMillis = raw.toLong() * unit.millis))
@@ -366,7 +368,7 @@ private fun IntervalTriggerFields(
             modifier = Modifier.weight(1f),
         )
         AutomationDropdown(
-            label = "Единицы",
+            label = ruEn("Единицы", "Units"),
             value = unit,
             options = AutomationIntervalUnit.entries,
             optionLabel = AutomationIntervalUnit::label,
@@ -380,20 +382,20 @@ private fun IntervalTriggerFields(
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IntervalPresetButton("30 с", 30_000L, AutomationIntervalUnit.SECONDS, trigger, onChange) {
+        IntervalPresetButton(ruEn("30 с", "30 s"), 30_000L, AutomationIntervalUnit.SECONDS, trigger, onChange) {
             unit = it
         }
-        IntervalPresetButton("1 мин", 60_000L, AutomationIntervalUnit.MINUTES, trigger, onChange) {
+        IntervalPresetButton(ruEn("1 мин", "1 min"), 60_000L, AutomationIntervalUnit.MINUTES, trigger, onChange) {
             unit = it
         }
-        IntervalPresetButton("1 ч", 3_600_000L, AutomationIntervalUnit.HOURS, trigger, onChange) {
+        IntervalPresetButton(ruEn("1 ч", "1 h"), 3_600_000L, AutomationIntervalUnit.HOURS, trigger, onChange) {
             unit = it
         }
     }
     Text(
-        text = "Отсчёт начинается после полного запуска фоновой службы. Первый запуск — через " +
-            "полный период. После перезапуска отсчёт начинается заново; пропущенные периоды " +
-            "не выполняются пачкой.",
+        text = ruEn("Отсчёт начинается после полного запуска фоновой службы. Первый запуск — через ", "The countdown starts after the background service is fully started. The first run is after ") +
+            ruEn("полный период. После перезапуска отсчёт начинается заново; пропущенные периоды ", "a full period. After a restart the countdown starts over; missed periods ") +
+            ruEn("не выполняются пачкой.", "are not run as a batch."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -427,7 +429,7 @@ private fun NumericTriggerFields(
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
     val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
     AutomationSearchablePickerField(
-        label = "Сигнал",
+        label = ruEn("Сигнал", "Signal"),
         value = trigger.signal,
         options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
@@ -450,14 +452,14 @@ private fun NumericTriggerFields(
     AutomationSignalValueHint(trigger.signal)
     if (trigger.signal == AutomationSignalId.ESP_BLE_BATTERY) {
         AutomationEspBleDevicePicker(
-            label = "Устройство",
+            label = ruEn("Устройство", "Device"),
             mac = trigger.mac,
             onValueChange = { onChange(trigger.copy(mac = it)) },
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Источник",
+            label = ruEn("Источник", "Source"),
             value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
             options = AutomationSignalCatalog.sourcesForUi(trigger.signal),
             optionLabel = ::automationSourceLabel,
@@ -465,13 +467,13 @@ private fun NumericTriggerFields(
             modifier = Modifier.weight(1f),
         )
         AutomationDropdown(
-            label = "Направление",
+            label = ruEn("Направление", "Direction"),
             value = trigger.direction,
             options = AutomationThresholdDirection.entries,
             optionLabel = {
                 when (it) {
-                    AutomationThresholdDirection.ABOVE -> "Стало больше"
-                    AutomationThresholdDirection.BELOW -> "Стало меньше"
+                    AutomationThresholdDirection.ABOVE -> ruEn("Стало больше", "Became greater")
+                    AutomationThresholdDirection.BELOW -> ruEn("Стало меньше", "Became less")
                 }
             },
             onValueChange = { direction ->
@@ -490,13 +492,13 @@ private fun NumericTriggerFields(
         onCheckedChange = { enabled ->
             onChange(trigger.copy(rearmEnabled = enabled))
         },
-        text = "Порог повторного взведения",
+        text = ruEn("Порог повторного взведения", "Rearm threshold"),
         description = "",
         enabled = true,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDoubleField(
-            label = "Порог",
+            label = ruEn("Порог", "Threshold"),
             value = trigger.threshold,
             onValueChange = { threshold ->
                 val reset = trigger.resetThreshold ?: threshold
@@ -506,14 +508,14 @@ private fun NumericTriggerFields(
         )
         if (trigger.rearmEnabled) {
             AutomationDoubleField(
-                label = "Порог повторного взведения",
+                label = ruEn("Порог повторного взведения", "Rearm threshold"),
                 value = trigger.resetThreshold ?: trigger.threshold,
                 onValueChange = { onChange(trigger.copy(resetThreshold = it)) },
                 modifier = Modifier.weight(1f),
             )
         }
         AutomationSecondsField(
-            label = "В течение, с",
+            label = ruEn("В течение, с", "For, s"),
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),
@@ -521,13 +523,13 @@ private fun NumericTriggerFields(
     }
     Text(
         text = if (trigger.rearmEnabled) {
-            "«В течение»: после пересечения порога значение должно оставаться выполненным N секунд (0 — сразу). " +
-                "Повторное взведение: сигнал должен дойти до порога взведения или уйти за него, не обязательно попасть точно в число."
+            ruEn("«В течение»: после пересечения порога значение должно оставаться выполненным N секунд (0 — сразу). ", "“For”: after the threshold is crossed, the value must stay satisfied for N seconds (0 — immediately). ") +
+                ruEn("Повторное взведение: сигнал должен дойти до порога взведения или уйти за него, не обязательно попасть точно в число.", "Rearm: the signal must reach the rearm threshold or go past it; it does not have to land exactly on the number.")
         } else {
-            "Без порога повторного взведения автоматизация запускается на каждое новое значение сигнала, " +
-                "пока условие порога выполняется. Повтор той же цифры с датчика не считается событием. " +
-                "Мелкая дрожь (9.1 → 9.0 → 9.1) даст много запусков. Для температуры и CAN " +
-                "обычно лучше оставить порог взведения включённым."
+            ruEn("Без порога повторного взведения автоматизация запускается на каждое новое значение сигнала, ", "Without a rearm threshold the automation runs on every new signal value, ") +
+                ruEn("пока условие порога выполняется. Повтор той же цифры с датчика не считается событием. ", "while the threshold condition holds. The same number from the sensor again is not an event. ") +
+                ruEn("Мелкая дрожь (9.1 → 9.0 → 9.1) даст много запусков. Для температуры и CAN ", "Small jitter (9.1 → 9.0 → 9.1) causes many runs. For temperature and CAN ") +
+                ruEn("обычно лучше оставить порог взведения включённым.", "it is usually better to leave the rearm threshold on.")
         },
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -547,7 +549,7 @@ private fun StateTriggerFields(
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
     val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
     AutomationSearchablePickerField(
-        label = "Сигнал",
+        label = ruEn("Сигнал", "Signal"),
         value = trigger.signal,
         options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
@@ -578,7 +580,7 @@ private fun StateTriggerFields(
     val isWifiSsid = trigger.signal == AutomationSignalId.WIFI_SSID
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Источник",
+            label = ruEn("Источник", "Source"),
             value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
             options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
@@ -588,7 +590,7 @@ private fun StateTriggerFields(
         if (!isForegroundApp && !isWifiSsid) {
             if (descriptor.stateOptions.isNotEmpty()) {
                 AutomationDropdown(
-                    label = "Состояние",
+                    label = ruEn("Состояние", "State"),
                     value = trigger.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
                     optionLabel = { automationTriggerStateLabel(trigger.signal, it) },
@@ -599,13 +601,13 @@ private fun StateTriggerFields(
                 AutomationTextField(
                     value = trigger.expectedState,
                     onValueChange = { onChange(trigger.copy(expectedState = it)) },
-                    label = "Состояние",
+                    label = ruEn("Состояние", "State"),
                     modifier = Modifier.weight(1f),
                 )
             }
         }
         AutomationSecondsField(
-            label = "В течение, с",
+            label = ruEn("В течение, с", "For, s"),
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),
@@ -613,7 +615,7 @@ private fun StateTriggerFields(
     }
     if (isForegroundApp) {
         AutomationPackagePicker(
-            label = "Приложение",
+            label = ruEn("Приложение", "App"),
             packageName = trigger.expectedState,
             apps = apps,
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
@@ -621,7 +623,7 @@ private fun StateTriggerFields(
     }
     if (isWifiSsid) {
         AutomationWifiSsidPicker(
-            label = "Точка доступа",
+            label = ruEn("Точка доступа", "Hotspot"),
             ssid = trigger.expectedState,
             includeNone = true,
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
@@ -654,7 +656,7 @@ private fun GeofenceTriggerFields(
                 ),
             )
         },
-        label = "Координаты или ссылка на точку",
+        label = ruEn("Координаты или ссылка на точку", "Coordinates or a link to a point"),
         singleLine = false,
         minLines = 2,
         modifier = Modifier.fillMaxWidth(),
@@ -662,10 +664,10 @@ private fun GeofenceTriggerFields(
     Text(
         text = when {
             parsed != null ->
-                "Распознано: ${formatGeofenceCoord(parsed.lat)}, ${formatGeofenceCoord(parsed.lon)}"
+                ruEn("Распознано: ${formatGeofenceCoord(parsed.lat)}, ${formatGeofenceCoord(parsed.lon)}", "Recognized: ${formatGeofenceCoord(parsed.lat)}, ${formatGeofenceCoord(parsed.lon)}")
             trigger.queryText.isBlank() ->
-                "Вставьте координаты или ссылку (Яндекс, Google, 2GIS, geo:, градусы)."
-            else -> "Строка не распознана"
+                ruEn("Вставьте координаты или ссылку (Яндекс, Google, 2GIS, geo:, градусы).", "Paste coordinates or a link (Yandex, Google, 2GIS, geo:, degrees).")
+            else -> ruEn("Строка не распознана", "The line was not recognized")
         },
         style = MaterialTheme.typography.tboxCaption,
         color = if (parsed != null || trigger.queryText.isBlank()) {
@@ -676,13 +678,13 @@ private fun GeofenceTriggerFields(
         modifier = Modifier.fillMaxWidth(),
     )
     AutomationDropdown(
-        label = "Направление",
+        label = ruEn("Направление", "Direction"),
         value = trigger.direction,
         options = AutomationGeofenceDirection.entries,
         optionLabel = {
             when (it) {
-                AutomationGeofenceDirection.ENTER -> "Вошёл в зону"
-                AutomationGeofenceDirection.EXIT -> "Выехал из зоны"
+                AutomationGeofenceDirection.ENTER -> ruEn("Вошёл в зону", "Entered the zone")
+                AutomationGeofenceDirection.EXIT -> ruEn("Выехал из зоны", "Left the zone")
             }
         },
         onValueChange = { direction ->
@@ -700,7 +702,7 @@ private fun GeofenceTriggerFields(
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDoubleField(
-            label = "Радиус зоны, м",
+            label = ruEn("Радиус зоны, м", "Zone radius, m"),
             value = trigger.zoneRadiusMeters,
             onValueChange = { zone ->
                 onChange(
@@ -717,13 +719,13 @@ private fun GeofenceTriggerFields(
             modifier = Modifier.weight(1f),
         )
         AutomationDoubleField(
-            label = "Радиус повторного взведения, м",
+            label = ruEn("Радиус повторного взведения, м", "Rearm radius, m"),
             value = trigger.rearmRadiusMeters,
             onValueChange = { onChange(trigger.copy(rearmRadiusMeters = it)) },
             modifier = Modifier.weight(1f),
         )
         AutomationSecondsField(
-            label = "В течение, с",
+            label = ruEn("В течение, с", "For, s"),
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),
@@ -732,9 +734,9 @@ private fun GeofenceTriggerFields(
     Text(
         text = when (trigger.direction) {
             AutomationGeofenceDirection.ENTER ->
-                "Срабатывает при входе в радиус зоны. Повторно взводится после выхода за больший радиус взведения."
+                ruEn("Срабатывает при входе в радиус зоны. Повторно взводится после выхода за больший радиус взведения.", "Fires on entering the zone radius. Rearms after leaving the larger rearm radius.")
             AutomationGeofenceDirection.EXIT ->
-                "Срабатывает при выходе за радиус зоны. Повторно взводится после входа в меньший радиус взведения."
+                ruEn("Срабатывает при выходе за радиус зоны. Повторно взводится после входа в меньший радиус взведения.", "Fires on leaving the zone radius. Rearms after entering the smaller rearm radius.")
         },
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -751,15 +753,15 @@ private fun TimeTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     AutomationTimeOfDayPicker(
-        label = "В",
+        label = ruEn("В", "V"),
         value = trigger.at,
         onValueChange = { onChange(trigger.copy(at = it)) },
     )
     AutomationWeekdayPicker(
         selected = trigger.weekdays,
         onChange = { onChange(trigger.copy(weekdays = it)) },
-        caption = "Ничего не отмечено — каждый день. Сработает один раз в эту минуту по часам ГУ. " +
-            "Если служба в эту минуту не работала, запуск пропускается, кроме «Запустить автоматизацию».",
+        caption = ruEn("Ничего не отмечено — каждый день. Сработает один раз в эту минуту по часам ГУ. ", "Nothing selected — every day. It fires once during that minute by the HU clock. ") +
+            ruEn("Если служба в эту минуту не работала, запуск пропускается, кроме «Запустить автоматизацию».", "If the service was not running during that minute, the run is skipped, except for “Run automation”."),
     )
     StartupBehaviorField(trigger.startupBehavior) {
         onChange(trigger.copy(startupBehavior = it))
@@ -786,8 +788,8 @@ private fun SolarTriggerFields(
     AutomationWeekdayPicker(
         selected = trigger.weekdays,
         onChange = { onChange(trigger.copy(weekdays = it)) },
-        caption = "Ничего не отмечено — каждый день. Момент считается по текущей или последней " +
-            "геопозиции и часам ГУ. Нет точки или нет восхода/заката в этот день — не сработает.",
+        caption = ruEn("Ничего не отмечено — каждый день. Момент считается по текущей или последней ", "Nothing selected — every day. The moment is taken from the current or last ") +
+            ruEn("геопозиции и часам ГУ. Нет точки или нет восхода/заката в этот день — не сработает.", "location and the HU clock. No point, or no sunrise/sunset that day — it will not fire."),
     )
     StartupBehaviorField(trigger.startupBehavior) {
         onChange(trigger.copy(startupBehavior = it))
@@ -800,13 +802,13 @@ private fun StartupBehaviorField(
     onChange: (AutomationStartupBehavior) -> Unit,
 ) {
     AutomationDropdown(
-        label = "Если условие выполнено после перезапуска службы",
+        label = ruEn("Если условие выполнено после перезапуска службы", "If the condition is met after the service restarts"),
         value = behavior,
         options = AutomationStartupBehavior.entries,
         optionLabel = {
             when (it) {
-                AutomationStartupBehavior.INITIALIZE_ONLY -> "Запомнить начальное состояние"
-                AutomationStartupBehavior.FIRE_IF_MATCHING -> "Запустить автоматизацию"
+                AutomationStartupBehavior.INITIALIZE_ONLY -> ruEn("Запомнить начальное состояние", "Remember the initial state")
+                AutomationStartupBehavior.FIRE_IF_MATCHING -> ruEn("Запустить автоматизацию", "Run automation")
             }
         },
         onValueChange = onChange,
@@ -814,14 +816,14 @@ private fun StartupBehaviorField(
     Text(
         text = when (behavior) {
             AutomationStartupBehavior.INITIALIZE_ONLY ->
-                "После перезапуска фоновой службы, если условие уже выполнено, правило не запускается — " +
-                    "текущее значение запоминается как база. Сработает только после повторного взведения " +
-                    "и нового выполнения условия. Включение и правка правила всегда только запоминают базу, " +
-                    "без запуска."
+                ruEn("После перезапуска фоновой службы, если условие уже выполнено, правило не запускается — ", "After the background service restarts, if the condition is already met, the rule does not run — ") +
+                    ruEn("текущее значение запоминается как база. Сработает только после повторного взведения ", "the current value is stored as the baseline. It fires only after rearming ") +
+                    ruEn("и нового выполнения условия. Включение и правка правила всегда только запоминают базу, ", "and the condition is met again. Turning a rule on and editing it only store the baseline, ") +
+                    ruEn("без запуска.", "without a run.")
             AutomationStartupBehavior.FIRE_IF_MATCHING ->
-                "После перезапуска фоновой службы, если условие уже выполнено, правило запускается " +
-                    "(с учётом выдержки «в течение»). Затем триггер разряжается до повторного взведения. " +
-                    "Включение и правка правила всё равно только запоминают базу, без запуска."
+                ruEn("После перезапуска фоновой службы, если условие уже выполнено, правило запускается ", "After the background service restarts, if the condition is already met, the rule runs ") +
+                    ruEn("(с учётом выдержки «в течение»). Затем триггер разряжается до повторного взведения. ", "(including the “for” hold). The trigger then disarms until it is rearmed. ") +
+                    ruEn("Включение и правка правила всё равно только запоминают базу, без запуска.", "Turning a rule on and editing it still only store the baseline, without a run.")
         },
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -843,17 +845,17 @@ private enum class TriggerUiKind {
     SOLAR;
 
     fun label(): String = when (this) {
-        SYSTEM_EVENT -> "Событие программы"
-        WIDGET_PRESS -> "Нажатие виджета-триггера"
-        HARD_KEY -> "Кнопка на руле / двери"
-        ESP_BLE_BTN -> "Кнопка Shelly Blu (компаньон)"
-        ESP_GPIO_BTN -> "ESP-вход (компаньон)"
-        INTERVAL -> "Периодически"
-        NUMERIC_THRESHOLD -> "Числовой порог"
-        STATE -> "Состояние"
-        GEOFENCE -> "Геопозиция"
-        TIME -> "Время"
-        SOLAR -> "Восход / закат"
+        SYSTEM_EVENT -> ruEn("Событие программы", "App event")
+        WIDGET_PRESS -> ruEn("Нажатие виджета-триггера", "Widget-trigger press")
+        HARD_KEY -> ruEn("Кнопка на руле / двери", "Steering-wheel / door button")
+        ESP_BLE_BTN -> ruEn("Кнопка Shelly Blu (компаньон)", "Shelly Blu button (companion)")
+        ESP_GPIO_BTN -> ruEn("ESP-вход (компаньон)", "ESP input (companion)")
+        INTERVAL -> ruEn("Периодически", "Periodically")
+        NUMERIC_THRESHOLD -> ruEn("Числовой порог", "Numeric threshold")
+        STATE -> ruEn("Состояние", "State")
+        GEOFENCE -> ruEn("Геопозиция", "Location")
+        TIME -> ruEn("Время", "Time")
+        SOLAR -> ruEn("Восход / закат", "Sunrise / sunset")
     }
 }
 
@@ -973,9 +975,9 @@ private enum class AutomationIntervalUnit(
     );
 
     fun label(): String = when (this) {
-        SECONDS -> "Секунды"
-        MINUTES -> "Минуты"
-        HOURS -> "Часы"
+        SECONDS -> ruEn("Секунды", "Seconds")
+        MINUTES -> ruEn("Минуты", "Minutes")
+        HOURS -> ruEn("Часы", "Hours")
     }
 }
 
@@ -1000,7 +1002,7 @@ private fun formatGeofenceCoord(value: Double): String =
     String.format(java.util.Locale.US, "%.6f", value)
 
 internal fun systemEventLabel(event: AutomationSystemEvent): String = when (event) {
-    AutomationSystemEvent.BACKGROUND_SERVICE_STARTED -> "Фоновая служба полностью запущена"
-    AutomationSystemEvent.MAIN_SCREEN_OPENED -> "Открыт главный экран программы"
-    AutomationSystemEvent.MENU_OPENED -> "Открыто меню программы"
+    AutomationSystemEvent.BACKGROUND_SERVICE_STARTED -> ruEn("Фоновая служба полностью запущена", "Background service fully started")
+    AutomationSystemEvent.MAIN_SCREEN_OPENED -> ruEn("Открыт главный экран программы", "App home screen opened")
+    AutomationSystemEvent.MENU_OPENED -> ruEn("Открыто меню программы", "App menu is open")
 }

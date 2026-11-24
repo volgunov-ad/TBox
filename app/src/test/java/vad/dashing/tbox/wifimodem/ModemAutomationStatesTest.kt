@@ -33,6 +33,7 @@ class ModemAutomationStatesTest {
         assertEquals("3g", ModemAutomationStates.netTypeKey("3G"))
         assertEquals("4g", ModemAutomationStates.netTypeKey("4G"))
         assertEquals("none", ModemAutomationStates.netTypeKey("нет сети"))
+        assertEquals("none", ModemAutomationStates.netTypeKey("none"))
         assertEquals("none", ModemAutomationStates.netTypeKey("-"))
         assertEquals("none", ModemAutomationStates.netTypeKey(null))
         assertEquals("none", ModemAutomationStates.netTypeKey(""))
@@ -47,12 +48,20 @@ class ModemAutomationStatesTest {
         assertEquals("unknown", ModemAutomationStates.simStatusKey(""))
         assertEquals("unknown", ModemAutomationStates.simStatusKey("-"))
         assertEquals("unknown", ModemAutomationStates.simStatusKey(null))
+        assertEquals("none", ModemAutomationStates.simStatusKey("none"))
+        assertEquals("ready", ModemAutomationStates.simStatusKey("ready"))
+        assertEquals("pin", ModemAutomationStates.simStatusKey("pin"))
+        assertEquals("error", ModemAutomationStates.simStatusKey("error"))
     }
 
     @Test
     fun registeredKey_homeAndRoamingAreOn() {
         assertEquals("on", ModemAutomationStates.registeredKey("домашняя сеть"))
         assertEquals("on", ModemAutomationStates.registeredKey("роуминг"))
+        assertEquals("on", ModemAutomationStates.registeredKey("home"))
+        assertEquals("on", ModemAutomationStates.registeredKey("roaming"))
+        assertEquals("off", ModemAutomationStates.registeredKey("none"))
+        assertEquals("off", ModemAutomationStates.registeredKey("no_service"))
         assertEquals("off", ModemAutomationStates.registeredKey("нет"))
         assertEquals("off", ModemAutomationStates.registeredKey("поиск сети"))
         assertEquals("off", ModemAutomationStates.registeredKey("-"))

@@ -1,6 +1,7 @@
 package vad.dashing.tbox.fuel
 
 import java.io.IOException
+import vad.dashing.tbox.ruEn
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import okhttp3.MediaType.Companion.toMediaType
@@ -48,6 +49,25 @@ object FuelTypes {
 
     fun optionFor(id: Int): FuelTypeOption =
         options.firstOrNull { it.id == id } ?: options.first { it.id == DEFAULT_FUEL_ID }
+
+    /**
+     * Picker and export text. [FuelTypeOption.label] stays the Russian canonical name
+     * stored in refuel records and matched against the price API.
+     */
+    fun displayName(label: String): String = when (label.trim()) {
+        "Аи-92" -> ruEn("Аи-92", "RON 92")
+        "Аи-92+" -> ruEn("Аи-92+", "RON 92+")
+        "Аи-95" -> ruEn("Аи-95", "RON 95")
+        "Аи-95+" -> ruEn("Аи-95+", "RON 95+")
+        "Аи-98" -> ruEn("Аи-98", "RON 98")
+        "Аи-98+" -> ruEn("Аи-98+", "RON 98+")
+        "Аи-100" -> ruEn("Аи-100", "RON 100")
+        "ДТ" -> ruEn("ДТ", "Diesel")
+        "ДТ+" -> ruEn("ДТ+", "Diesel+")
+        "Метан/КПГ" -> ruEn("Метан/КПГ", "CNG")
+        "Газ (LPG)" -> ruEn("Газ (LPG)", "LPG")
+        else -> label
+    }
 
     fun baseId(id: Int): Int = when (id) {
         4 -> 3
@@ -152,6 +172,12 @@ data class FuelPriceData(
 ) {
     val azsList = listJson.optJSONObject("data")?.optJSONArray("list")
     val avgPricesMap = avgJson.optJSONObject("data")?.optJSONObject("avgprice")
+}
+
+fun fuelPriceSourceDisplay(stored: String): String = when (stored.trim()) {
+    FuelPriceResolver.AVERAGE_PRICE_SOURCE_NAME -> ruEn("средняя цена", "average price")
+    "АЗС" -> ruEn("АЗС", "Fuel station")
+    else -> stored
 }
 
 object FuelPriceResolver {

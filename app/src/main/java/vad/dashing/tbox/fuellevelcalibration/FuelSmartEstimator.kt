@@ -1,6 +1,7 @@
 package vad.dashing.tbox.fuellevelcalibration
 
 import kotlin.math.min
+import vad.dashing.tbox.ruEn
 
 /**
  * Оценка остатка топлива и обучение по заправкам (логика ветки tochBak; сохранение — через колбэк в DataStore).
@@ -31,7 +32,9 @@ class FuelSmartEstimator(
     fun train(entry: FuelEntry): String {
         val stdLiters = physics.toStandard(entry.litersByCheck, entry.ambientTemp)
         val sensorDelta = entry.sensorAfter - entry.sensorBefore
-        if (sensorDelta <= 0) return "Ошибка: нет изменения уровня"
+        if (sensorDelta <= 0) {
+            return ruEn("Ошибка: нет изменения уровня", "Error: no level change")
+        }
 
         val affectedZones = mutableListOf<Int>()
 
@@ -51,9 +54,16 @@ class FuelSmartEstimator(
 
         onCalibrationPersist(store.snapshot())
 
-        return "Заправка: с ${entry.sensorBefore}л до ${entry.sensorAfter}л " +
-            "(Итого: ${"%.1f".format(stdLiters)}л станд.). " +
-            "Затронуты зоны: ${affectedZones.joinToString(", ")}"
+        val zones = affectedZones.joinToString(", ")
+        val std = "%.1f".format(stdLiters)
+        return ruEn(
+            "Заправка: с ${entry.sensorBefore}л до ${entry.sensorAfter}л " +
+                "(Итого: ${std}л станд.). " +
+                "Затронуты зоны: $zones",
+            "Refuel: ${entry.sensorBefore} L → ${entry.sensorAfter} L " +
+                "(total: $std L standard). " +
+                "Zones: $zones",
+        )
     }
 
     /**
@@ -126,7 +136,12 @@ class FuelSmartEstimator(
         (0 until store.zoneCount).map { i ->
             val zoneStart = (i * store.zoneSize).toInt()
             val zoneEnd = ((i + 1) * store.zoneSize).toInt()
-            "Зона $zoneStart-$zoneEnd л: K=${"%.3f".format(store.getZoneK(i))} | Уверенность: ${(store.getConfidence(i) * 100).toInt()}%"
+            ruEn(
+                "Зона $zoneStart-$zoneEnd л: K=${"%.3f".format(store.getZoneK(i))} | " +
+                    "Уверенность: ${(store.getConfidence(i) * 100).toInt()}%",
+                "Zone $zoneStart–$zoneEnd L: K=${"%.3f".format(store.getZoneK(i))} | " +
+                    "Confidence: ${(store.getConfidence(i) * 100).toInt()}%",
+            )
         }
 
     fun snapshotCalibration(): CalibrationData = store.snapshot()

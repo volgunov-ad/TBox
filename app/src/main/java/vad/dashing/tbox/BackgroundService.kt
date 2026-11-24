@@ -54,6 +54,7 @@ import vad.dashing.tbox.phoneble.PhoneDirectServer
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.wifimodem.ModemConnectionCheck
+import vad.dashing.tbox.wifimodem.ModemStatusCodes
 import vad.dashing.tbox.wifimodem.ModemSource
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.WifiModemPoller
@@ -1085,7 +1086,7 @@ class BackgroundService : Service() {
             runAutomationNowCallback = { automationId ->
                 val engine = automationEngine
                 if (engine == null) {
-                    "Фоновая служба ещё не готова"
+                    ruEn("Фоновая служба ещё не готова", "Background service is not ready yet")
                 } else {
                     engine.requestRunNow(automationId)
                     null
@@ -1485,7 +1486,7 @@ class BackgroundService : Service() {
                 if (refuelId.isNotEmpty()) {
                     runFuelCalibrationTrain(refuelId)
                 } else {
-                    TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
+                    TboxRepository.addLog("WARN", "Fuel calibration", ruEn("train: пустой refuel id", "train: empty refuel id"))
                 }
             }
             ACTION_REFRESH_REFUEL_PRICES -> {
@@ -1493,7 +1494,7 @@ class BackgroundService : Service() {
                 if (refuelId.isNotEmpty()) {
                     refreshRefuelPrice(refuelId)
                 } else {
-                    TboxRepository.addLog("WARN", "Fuel price", "refresh: пустой refuel id")
+                    TboxRepository.addLog("WARN", "Fuel price", ruEn("refresh: пустой refuel id", "refresh: empty refuel id"))
                 }
             }
             ACTION_STOP -> performServiceStopIfRunning()
@@ -1582,7 +1583,7 @@ class BackgroundService : Service() {
                         TboxRepository.addLog("WARN", "Automation", "run now: engine not ready")
                         AutomationRuntimeState.markRejected(
                             automationId,
-                            "Фоновая служба ещё не готова",
+                            ruEn("Фоновая служба ещё не готова", "Background service is not ready yet"),
                             System.currentTimeMillis(),
                         )
                     } else {
@@ -2145,25 +2146,25 @@ class BackgroundService : Service() {
     private fun automationServiceActions(): AutomationServiceActions =
         object : AutomationServiceActions {
             override suspend fun finishAndStartTrip(): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 finishActiveTripAndStartNew()
-                return AutomationActionResult.ok("Поездка завершена, новая начата")
+                return AutomationActionResult.ok(ruEn("Поездка завершена, новая начата", "Trip finished, a new one started"))
             }
 
             override suspend fun restartTbox(): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 crtRebootTbox()
-                return AutomationActionResult.ok("Команда перезапуска TBox отправлена")
+                return AutomationActionResult.ok(ruEn("Команда перезапуска TBox отправлена", "TBox restart command sent"))
             }
 
             override suspend fun applyFloatingPanelVisibility(
                 action: AutomationAction.Builtin,
             ): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 val scope = action.floatingPanelScope()
                 val panelId = action.floatingPanelId()
                 if (scope == AutomationFloatingPanelScope.SELECTED && panelId == null) {
-                    return AutomationActionResult.failure("Выберите плавающую панель")
+                    return AutomationActionResult.failure(ruEn("Выберите плавающую панель", "Select a floating panel"))
                 }
                 val panelIds = panelId?.let(::setOf).orEmpty()
                 val op = action.floatingPanelVisibilityOp()
@@ -2197,18 +2198,18 @@ class BackgroundService : Service() {
             override suspend fun applyFloatingPanelEnabled(
                 action: AutomationAction.Builtin,
             ): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 val scope = action.floatingPanelScope()
                 val panelId = action.floatingPanelId()
                 if (scope == AutomationFloatingPanelScope.SELECTED && panelId == null) {
-                    return AutomationActionResult.failure("Выберите плавающую панель")
+                    return AutomationActionResult.failure(ruEn("Выберите плавающую панель", "Select a floating panel"))
                 }
                 val current = settingsManager.floatingDashboardsFlow.first()
                 if (
                     scope == AutomationFloatingPanelScope.SELECTED &&
                     current.none { it.id == panelId }
                 ) {
-                    return AutomationActionResult.failure("Плавающая панель не найдена")
+                    return AutomationActionResult.failure(ruEn("Плавающая панель не найдена", "Floating panel not found"))
                 }
                 val op = action.floatingPanelEnabledOp()
                 val updated = when (scope) {
@@ -2255,18 +2256,18 @@ class BackgroundService : Service() {
             ): AutomationActionResult {
                 val id = automationId.trim()
                 if (id.isEmpty()) {
-                    return AutomationActionResult.failure("ID автоматизации пуст")
+                    return AutomationActionResult.failure(ruEn("ID автоматизации пуст", "Automation id is empty"))
                 }
                 val store = AutomationStore(this@BackgroundService)
                 val snapshot = store.snapshots.first()
                 val target = snapshot.document.automations.firstOrNull { it.id == id }
-                    ?: return AutomationActionResult.failure("Автоматизация не найдена")
+                    ?: return AutomationActionResult.failure(ruEn("Автоматизация не найдена", "Automation not found"))
                 if (target.enabled == enabled) {
                     return AutomationActionResult.ok(
                         if (enabled) {
-                            "Автоматизация уже включена"
+                            ruEn("Автоматизация уже включена", "Automation is already on")
                         } else {
-                            "Автоматизация уже выключена"
+                            ruEn("Автоматизация уже выключена", "Automation is already off")
                         },
                     )
                 }
@@ -2274,15 +2275,15 @@ class BackgroundService : Service() {
                     onSuccess = {
                         AutomationActionResult.ok(
                             if (enabled) {
-                                "Автоматизация включена"
+                                ruEn("Автоматизация включена", "Automation turned on")
                             } else {
-                                "Автоматизация выключена"
+                                ruEn("Автоматизация выключена", "Automation turned off")
                             },
                         )
                     },
                     onFailure = { error ->
                         AutomationActionResult.failure(
-                            error.message ?: "Не удалось изменить включение автоматизации",
+                            error.message ?: ruEn("Не удалось изменить включение автоматизации", "Couldn't change whether the automation is on"),
                         )
                     },
                 )
@@ -2293,22 +2294,22 @@ class BackgroundService : Service() {
                 on: Boolean,
             ): AutomationActionResult {
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
                 manager.setBleRelayState(id, on)
                 return AutomationActionResult.ok(
-                    if (on) "BLE-реле замкнуто" else "BLE-реле разомкнуто",
+                    if (on) ruEn("BLE-реле замкнуто", "BLE relay closed") else ruEn("BLE-реле разомкнуто", "BLE relay open"),
                 )
             }
 
             override suspend fun toggleEspBleRelay(index: Int): AutomationActionResult {
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
                 manager.toggleBleRelay(id)
-                return AutomationActionResult.ok("BLE-реле переключено")
+                return AutomationActionResult.ok(ruEn("BLE-реле переключено", "BLE relay toggled"))
             }
 
             override suspend fun pulseEspBleRelay(
@@ -2316,31 +2317,31 @@ class BackgroundService : Service() {
                 durationMillis: Long?,
             ): AutomationActionResult {
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
                 manager.pulseBleRelay(
                     id,
                     durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
                 )
-                return AutomationActionResult.ok("Импульс BLE-реле запущен")
+                return AutomationActionResult.ok(ruEn("Импульс BLE-реле запущен", "BLE relay pulse started"))
             }
 
             override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 manager.setRelayMask(mask)
-                return AutomationActionResult.ok("Маска ESP-реле установлена")
+                return AutomationActionResult.ok(ruEn("Маска ESP-реле установлена", "ESP relay mask set"))
             }
 
             override suspend fun toggleEspRelay(channel: Int): AutomationActionResult {
                 if (channel !in 0..7) {
-                    return AutomationActionResult.failure("Канал ESP-реле должен быть 0–7")
+                    return AutomationActionResult.failure(ruEn("Канал ESP-реле должен быть 0–7", "ESP relay channel must be 0–7"))
                 }
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 manager.toggleRelay(channel)
-                return AutomationActionResult.ok("ESP-реле переключено")
+                return AutomationActionResult.ok(ruEn("ESP-реле переключено", "ESP relay toggled"))
             }
 
             override suspend fun pulseEspRelay(
@@ -2348,20 +2349,20 @@ class BackgroundService : Service() {
                 durationMillis: Long?,
             ): AutomationActionResult {
                 if (channel !in 0..7) {
-                    return AutomationActionResult.failure("Канал ESP-реле должен быть 0–7")
+                    return AutomationActionResult.failure(ruEn("Канал ESP-реле должен быть 0–7", "ESP relay channel must be 0–7"))
                 }
                 val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
                 manager.pulseRelay(
                     channel = channel,
                     durationMs = durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
                 )
-                return AutomationActionResult.ok("Импульс ESP-реле запущен")
+                return AutomationActionResult.ok(ruEn("Импульс ESP-реле запущен", "ESP relay pulse started"))
             }
 
             override suspend fun rebootGnssModule(): AutomationActionResult {
                 runGnssModuleSoftReboot()
-                return AutomationActionResult.ok("Команда перезапуска GNSS отправлена")
+                return AutomationActionResult.ok(ruEn("Команда перезапуска GNSS отправлена", "GNSS restart command sent"))
             }
 
             override suspend fun setSimulatedLocationSourceLoss(
@@ -2373,44 +2374,44 @@ class BackgroundService : Service() {
                     TboxRepository.updateIsLocValuesTrue(false)
                 }
                 return AutomationActionResult.ok(
-                    if (enabled) "Потеря геоисточника включена" else "Потеря геоисточника выключена",
+                    if (enabled) ruEn("Потеря геоисточника включена", "Location-source loss turned on") else ruEn("Потеря геоисточника выключена", "Location-source loss turned off"),
                 )
             }
 
             override suspend fun setWifiModemMobileDataEnabled(
                 enabled: Boolean,
             ): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
                 if (source != ModemSource.WIFI_HTTP) {
                     return AutomationActionResult.failure(
-                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                        ruEn("Источник модема не Wi‑Fi HTTP — действие недоступно", "Modem source is not Wi‑Fi HTTP — action unavailable"),
                     )
                 }
                 val poller = wifiModemPoller
-                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                    ?: return AutomationActionResult.failure(ruEn("Wi‑Fi модем не запущен", "Wi‑Fi modem is not running"))
                 poller.setMobileDataEnabled(enabled)
                 return AutomationActionResult.ok(
                     if (enabled) {
-                        "Команда включения данных Wi‑Fi модема отправлена"
+                        ruEn("Команда включения данных Wi‑Fi модема отправлена", "Wi‑Fi modem data-on command sent")
                     } else {
-                        "Команда выключения данных Wi‑Fi модема отправлена"
+                        ruEn("Команда выключения данных Wi‑Fi модема отправлена", "Wi‑Fi modem data-off command sent")
                     },
                 )
             }
 
             override suspend fun rebootWifiModem(): AutomationActionResult {
-                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                if (!isRunning) return AutomationActionResult.failure(ruEn("Служба остановлена", "Service stopped"))
                 val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
                 if (source != ModemSource.WIFI_HTTP) {
                     return AutomationActionResult.failure(
-                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                        ruEn("Источник модема не Wi‑Fi HTTP — действие недоступно", "Modem source is not Wi‑Fi HTTP — action unavailable"),
                     )
                 }
                 val poller = wifiModemPoller
-                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                    ?: return AutomationActionResult.failure(ruEn("Wi‑Fi модем не запущен", "Wi‑Fi modem is not running"))
                 poller.rebootModem()
-                return AutomationActionResult.ok("Команда перезагрузки Wi‑Fi модема отправлена")
+                return AutomationActionResult.ok(ruEn("Команда перезагрузки Wi‑Fi модема отправлена", "Wi‑Fi modem reboot command sent"))
             }
         }
 
@@ -4448,7 +4449,10 @@ class BackgroundService : Service() {
             TboxRepository.addLog(
                 "WARN",
                 "Fuel calibration",
-                "Отклонено фильтром: отклонение ${"%.0f".format(filter.calculateDeviation(entry) * 100)}%",
+                ruEn(
+                    "Отклонено фильтром: отклонение ${"%.0f".format(filter.calculateDeviation(entry) * 100)}%",
+                    "Rejected by filter: deviation ${"%.0f".format(filter.calculateDeviation(entry) * 100)}%",
+                ),
             )
             showRefuelToast(getString(R.string.toast_fuel_calibration_filter_reject))
             return
@@ -4498,7 +4502,7 @@ class BackgroundService : Service() {
                     try {
                         settingsManager.saveFuelCalibrationJson(FuelCalibrationJson.encode(data))
                     } catch (e: Exception) {
-                        Log.e("Fuel calibration", "Ошибка сохранения калибровки", e)
+                        Log.e("Fuel calibration", ruEn("Ошибка сохранения калибровки", "Couldn't save calibration"), e)
                     }
                 }
             },
@@ -8006,15 +8010,15 @@ class BackgroundService : Service() {
         var netStatus = "-"
         if (data.size >= 8) {
             regStatus = if (data[4].toInt() == 0) {
-                "нет"
+                ModemStatusCodes.REG_NONE
             } else if (data[4].toInt() == 1) {
-                "домашняя сеть"
+                ModemStatusCodes.REG_HOME
             } else if (data[4].toInt() == 2) {
-                "поиск сети"
+                ModemStatusCodes.REG_SEARCHING
             } else if (data[4].toInt() == 3) {
-                "регистрация отклонена"
+                ModemStatusCodes.REG_DENIED
             } else if (data[4].toInt() == 5) {
-                "роуминг"
+                ModemStatusCodes.REG_ROAMING
             } else {
                 "${data[4]}"
             }
@@ -8027,13 +8031,13 @@ class BackgroundService : Service() {
             signalLevel = getSignalLevel(csq)
 
             simStatus = if (data[6].toInt() == 0) {
-                "нет SIM"
+                ModemStatusCodes.SIM_NONE
             } else if (data[6].toInt() == 1) {
-                "SIM готова"
+                ModemStatusCodes.SIM_READY
             } else if (data[6].toInt() == 2) {
-                "требуется PIN"
+                ModemStatusCodes.SIM_PIN
             } else if (data[6].toInt() == 3) {
-                "ошибка SIM"
+                ModemStatusCodes.SIM_ERROR
             } else {
                 "${data[6]}"
             }
@@ -8047,7 +8051,7 @@ class BackgroundService : Service() {
             } else if (data[7].toInt() == 4) {
                 "4G"
             } else if (data[7].toInt() == 7) {
-                "нет сети"
+                ModemStatusCodes.NET_NONE
             } else {
                 "${data[7]}"
             }
@@ -8075,7 +8079,7 @@ class BackgroundService : Service() {
         }
 
         netUpdateCount = 0
-        if (TboxRepository.netState.value.regStatus !in listOf("домашняя сеть", "роуминг")) {
+        if (!ModemStatusCodes.isRegistered(TboxRepository.netState.value.regStatus)) {
             TboxRepository.updateAPNState(APNState())
             TboxRepository.updateAPN2State(APNState())
             TboxRepository.updateAPNStatus(false)

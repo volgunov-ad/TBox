@@ -29,12 +29,12 @@
 |--------------|------------|---------|
 | `signalbar` | 0–5 полосок | → `NetState.signalLevel` 0–4 |
 | `rssi` | dBm | → CSQ ≈ `(rssi+113)/2` |
-| `network_type` | `LTE` / `WCDMA` / `GSM` / `LIMITED_SERVICE_GSM`… | → `4G`/`3G`/`2G`/`нет сети` |
+| `network_type` | `LTE` / `WCDMA` / `GSM` / `LIMITED_SERVICE_GSM`… | → `4G`/`3G`/`2G`/`none` |
 | `network_provider` | оператор | → `NetValues.operator` |
 | `imei`, `imsi` / `sim_imsi`, `iccid` | идентификаторы | → `NetValues` |
 | `ppp_status` | `ppp_connected` / `ppp_disconnected` | → `apnStatus` |
-| `modem_main_state` | `modem_init_complete` / `modem_sim_undetected`… | → `simStatus` |
-| `simcard_roam` | `Home` / `Roaming` | → `regStatus` |
+| `modem_main_state` | `modem_init_complete` / `modem_sim_undetected`… | → `simStatus`: `ready` / `none` / `pin` / `error` |
+| `simcard_roam` | `Home` / `Roaming` | → `regStatus`: `home` / `roaming` (`none` / `searching`, если сети нет) |
 | `wan_ipaddr` | WAN IP | → `APNState.apnIP` |
 | `wa_inner_version`, `hardware_version` | прошивка | → `WifiModemSnapshot.firmware` |
 | `lte_rsrp`, `lte_rsrq`, `lte_snr`, `lte_band`, `cell_id` | радиометрика | snapshot (для UI позже) |

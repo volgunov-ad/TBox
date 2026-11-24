@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
@@ -112,7 +114,7 @@ object AutomationCruiseActions {
             action.intValue != 1 &&
             action.intValue != -1
         ) {
-            return AutomationActionResult.failure("Круиз: шаг уставки +1 или −1")
+            return AutomationActionResult.failure(ruEn("Круиз: шаг уставки +1 или −1", "Cruise: setpoint step +1 or −1"))
         }
         if (!awaitCanBackendReadyForAction(
                 isAvailable = {
@@ -155,7 +157,7 @@ object AutomationCruiseActions {
                     AutomationBuiltinActionType.CRUISE_NUDGE ->
                         AccCruiseController.nudgeCruise(action.intValue, mode)
                     else ->
-                        MbCanCommandResult(false, "Не действие круиза")
+                        MbCanCommandResult(false, ruEn("Не действие круиза", "Not a cruise action"))
                 }
             },
             nowElapsedMillis = { SystemClock.elapsedRealtime() },

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -52,7 +54,7 @@ class AutomationValidatorTest {
         val source = validDefinition().copy(id = "auto-a", name = "Климат", enabled = true)
         val copy = source.duplicated()
         assertNotEquals(source.id, copy.id)
-        assertEquals("Климат (копия)", copy.name)
+        assertEquals(ruEn("Климат (копия)", "Климат (copy)"), copy.name)
         assertFalse(copy.enabled)
         assertEquals(source.triggers, copy.triggers)
         assertEquals(source.actions, copy.actions)
@@ -305,7 +307,7 @@ class AutomationValidatorTest {
         )
         assertTrue(
             AutomationValidator.validate(definition)
-                .any { it.message.contains("безопасном каталоге") },
+                .any { it.message.contains(ruEn("безопасном каталоге", "safe catalog")) },
         )
     }
 

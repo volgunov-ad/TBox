@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.ruEn
+
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -8,22 +10,22 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
  * Pure Kotlin — no Android imports, unit-testable on JVM.
  */
 enum class AutomationActionGroup(val label: String) {
-    PROGRAM("Программа и поездка"),
-    SCREEN("Экран и тема"),
-    MEDIA_SOUND("Медиа и звук"),
-    PHONE("Телефон"),
-    NETWORK("Wi-Fi и сеть"),
-    AUTOMATIONS("Автоматизации"),
-    ESP("ESP-компаньон"),
+    PROGRAM(ruEn("Программа и поездка", "App and trip")),
+    SCREEN(ruEn("Экран и тема", "Screen and theme")),
+    MEDIA_SOUND(ruEn("Медиа и звук", "Media and sound")),
+    PHONE(ruEn("Телефон", "Phone")),
+    NETWORK(ruEn("Wi-Fi и сеть", "Wi-Fi and network")),
+    AUTOMATIONS(ruEn("Автоматизации", "Automations")),
+    ESP(ruEn("ESP-компаньон", "ESP companion")),
     DCL("DCL"),
-    CAMERAS("Камеры"),
-    CAN_CLIMATE("Автомобиль (CAN): климат"),
-    CAN_LIGHTS_LOCKS("Автомобиль (CAN): свет и замки"),
-    CAN_SEATS("Автомобиль (CAN): сиденья и комфорт"),
-    CAN_BODY("Автомобиль (CAN): кузов"),
-    CAN_ADAS("Автомобиль (CAN): ADAS и круиз"),
-    CAN_PANELS("Автомобиль (CAN): панели и приборы"),
-    CAN_AUDIO("Автомобиль (CAN): аудио"),
+    CAMERAS(ruEn("Камеры", "Cameras")),
+    CAN_CLIMATE(ruEn("Автомобиль (CAN): климат", "Vehicle (CAN): climate")),
+    CAN_LIGHTS_LOCKS(ruEn("Автомобиль (CAN): свет и замки", "Vehicle (CAN): lights and locks")),
+    CAN_SEATS(ruEn("Автомобиль (CAN): сиденья и комфорт", "Vehicle (CAN): seats and comfort")),
+    CAN_BODY(ruEn("Автомобиль (CAN): кузов", "Vehicle (CAN): body")),
+    CAN_ADAS(ruEn("Автомобиль (CAN): ADAS и круиз", "Vehicle (CAN): ADAS and cruise")),
+    CAN_PANELS(ruEn("Автомобиль (CAN): панели и приборы", "Vehicle (CAN): panels and gauges")),
+    CAN_AUDIO(ruEn("Автомобиль (CAN): аудио", "Vehicle (CAN): audio")),
 }
 
 /**

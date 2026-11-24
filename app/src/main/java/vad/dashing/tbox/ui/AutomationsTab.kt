@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ruEn
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -222,7 +224,7 @@ fun AutomationsTab(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { pendingExport = null }) {
-                    AppAlertDialogButtonLabel("Отмена")
+                    AppAlertDialogButtonLabel(ruEn("Отмена", "Cancel"))
                 }
             },
         )
@@ -231,7 +233,7 @@ fun AutomationsTab(
     pendingDelete?.let { definition ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { AppAlertDialogTitle("Удалить автоматизацию?") },
+            title = { AppAlertDialogTitle(ruEn("Удалить автоматизацию?", "Delete automation?")) },
             text = { AppAlertDialogText(definition.name) },
             confirmButton = {
                 Button(
@@ -240,12 +242,12 @@ fun AutomationsTab(
                         pendingDelete = null
                     },
                 ) {
-                    AppAlertDialogButtonLabel("Удалить")
+                    AppAlertDialogButtonLabel(ruEn("Удалить", "Delete"))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { pendingDelete = null }) {
-                    AppAlertDialogButtonLabel("Отмена")
+                    AppAlertDialogButtonLabel(ruEn("Отмена", "Cancel"))
                 }
             },
         )
@@ -254,10 +256,10 @@ fun AutomationsTab(
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
-            title = { AppAlertDialogTitle("Сбросить повреждённую конфигурацию?") },
+            title = { AppAlertDialogTitle(ruEn("Сбросить повреждённую конфигурацию?", "Reset corrupted configuration?")) },
             text = {
                 AppAlertDialogText(
-                    "Сохранённый JSON будет удалён. Восстановить его можно только из backup.",
+                    ruEn("Сохранённый JSON будет удалён. Восстановить его можно только из backup.", "The saved JSON will be deleted. It can be restored only from a backup."),
                 )
             },
             confirmButton = {
@@ -267,12 +269,12 @@ fun AutomationsTab(
                         confirmReset = false
                     },
                 ) {
-                    AppAlertDialogButtonLabel("Сбросить")
+                    AppAlertDialogButtonLabel(ruEn("Сбросить", "Reset"))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { confirmReset = false }) {
-                    AppAlertDialogButtonLabel("Отмена")
+                    AppAlertDialogButtonLabel(ruEn("Отмена", "Cancel"))
                 }
             },
         )
@@ -316,7 +318,7 @@ private fun AutomationsList(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Автоматизации",
+                text = ruEn("Автоматизации", "Automations"),
                 style = MaterialTheme.typography.tboxHeadline,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -325,11 +327,11 @@ private fun AutomationsList(
                 AutomationButtonLabel(stringResource(R.string.automations_import))
             }
             Button(onClick = rememberWrappedOnClick(onAdd)) {
-                AutomationButtonLabel("Добавить")
+                AutomationButtonLabel(ruEn("Добавить", "Add"))
             }
         }
         Text(
-            text = "Автоматизации выполняются фоновой службой, даже когда этот пункт меню скрыт. " +
+            text = ruEn("Автоматизации выполняются фоновой службой, даже когда этот пункт меню скрыт. ", "Automations run in the background service, even when this menu item is hidden. ") +
                 AUTOMATION_LIMITS_HINT,
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -344,13 +346,13 @@ private fun AutomationsList(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "Автоматизаций пока нет",
+                    text = ruEn("Автоматизаций пока нет", "No automations yet"),
                     style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Нажмите «Добавить» или «Импорт».",
+                    text = ruEn("Нажмите «Добавить» или «Импорт».", "Tap “Add” or “Import”."),
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -389,12 +391,12 @@ private fun InvalidAutomationConfiguration(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Конфигурация автоматизаций повреждена",
+            text = ruEn("Конфигурация автоматизаций повреждена", "Automation configuration is damaged"),
             style = MaterialTheme.typography.tboxHeadline,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Правила не выполняются, а редактирование заблокировано, чтобы не потерять исходный JSON.",
+            text = ruEn("Правила не выполняются, а редактирование заблокировано, чтобы не потерять исходный JSON.", "Rules do not run, and editing is locked so the original JSON is not lost."),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -404,7 +406,7 @@ private fun InvalidAutomationConfiguration(
             color = MaterialTheme.colorScheme.error,
         )
         OutlinedButton(onClick = rememberWrappedOnClick(onReset)) {
-            AutomationButtonLabel("Сбросить конфигурацию")
+            AutomationButtonLabel(ruEn("Сбросить конфигурацию", "Reset configuration"))
         }
     }
 }
@@ -466,7 +468,7 @@ private fun AutomationListCard(
         SettingSwitch(
             isChecked = definition.enabled,
             onCheckedChange = onEnabledChange,
-            text = "Включена",
+            text = ruEn("Включена", "On"),
             description = "",
             enabled = true,
         )
@@ -475,7 +477,7 @@ private fun AutomationListCard(
             modifier = Modifier.fillMaxWidth(),
             enabled = issues.isEmpty(),
         ) {
-            AutomationButtonLabel("Выполнить сейчас")
+            AutomationButtonLabel(ruEn("Выполнить сейчас", "Run now"))
         }
         OutlinedButton(
             onClick = rememberWrappedOnClick(onExport),
@@ -491,19 +493,19 @@ private fun AutomationListCard(
                 onClick = rememberWrappedOnClick(onEdit),
                 modifier = Modifier.weight(1f),
             ) {
-                AutomationButtonLabel("Изменить")
+                AutomationButtonLabel(ruEn("Изменить", "Edit"))
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick(onDuplicate),
                 modifier = Modifier.weight(1f),
             ) {
-                AutomationButtonLabel("Дублировать")
+                AutomationButtonLabel(ruEn("Дублировать", "Duplicate"))
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick(onDelete),
                 modifier = Modifier.weight(1f),
             ) {
-                AutomationButtonLabel("Удалить")
+                AutomationButtonLabel(ruEn("Удалить", "Delete"))
             }
         }
     }
@@ -536,7 +538,7 @@ private fun AutomationDefinitionEditor(
         ) {
             Text(
                 text = if (definition.name.isBlank()) {
-                    "Новая автоматизация"
+                    ruEn("Новая автоматизация", "New automation")
                 } else {
                     definition.name
                 },
@@ -547,19 +549,19 @@ private fun AutomationDefinitionEditor(
                 overflow = TextOverflow.Ellipsis,
             )
             OutlinedButton(onClick = rememberWrappedOnClick(onCancel)) {
-                AutomationButtonLabel("Отмена")
+                AutomationButtonLabel(ruEn("Отмена", "Cancel"))
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick { onRunNow(definition) },
                 enabled = isSaved && issues.isEmpty(),
             ) {
-                AutomationButtonLabel("Выполнить сейчас")
+                AutomationButtonLabel(ruEn("Выполнить сейчас", "Run now"))
             }
             Button(
                 onClick = rememberWrappedOnClick { onSave(definition) },
                 enabled = issues.isEmpty(),
             ) {
-                AutomationButtonLabel("Сохранить")
+                AutomationButtonLabel(ruEn("Сохранить", "Save"))
             }
         }
         LazyColumn(
@@ -581,32 +583,32 @@ private fun AutomationDefinitionEditor(
                 AutomationTextField(
                     value = definition.name,
                     onValueChange = { onChange(definition.copy(name = it)) },
-                    label = "Название",
+                    label = ruEn("Название", "Name"),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 AutomationTextField(
                     value = definition.description,
                     onValueChange = { onChange(definition.copy(description = it)) },
-                    label = "Описание",
+                    label = ruEn("Описание", "Description"),
                     singleLine = false,
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                SettingsTitle("Режим выполнения")
+                SettingsTitle(ruEn("Режим выполнения", "Run mode"))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AutomationDropdown(
-                        label = "Повторный запуск",
+                        label = ruEn("Повторный запуск", "Re-trigger"),
                         value = definition.runMode,
                         options = AutomationRunMode.entries,
                         optionLabel = {
                             when (it) {
-                                AutomationRunMode.SINGLE -> "Игнорировать новый"
-                                AutomationRunMode.RESTART -> "Перезапустить сценарий"
-                                AutomationRunMode.QUEUED -> "Поставить в очередь"
-                                AutomationRunMode.PARALLEL -> "Запустить параллельно"
+                                AutomationRunMode.SINGLE -> ruEn("Игнорировать новый", "Ignore new")
+                                AutomationRunMode.RESTART -> ruEn("Перезапустить сценарий", "Restart")
+                                AutomationRunMode.QUEUED -> ruEn("Поставить в очередь", "Queue")
+                                AutomationRunMode.PARALLEL -> ruEn("Запустить параллельно", "Run in parallel")
                             }
                         },
                         onValueChange = { mode ->
@@ -623,7 +625,7 @@ private fun AutomationDefinitionEditor(
                     )
                     if (definition.runMode != AutomationRunMode.SINGLE) {
                         AutomationIntField(
-                            label = "Максимум запусков",
+                            label = ruEn("Максимум запусков", "Maximum runs"),
                             value = definition.maxRuns,
                             onValueChange = { onChange(definition.copy(maxRuns = it)) },
                             modifier = Modifier.weight(1f),
@@ -633,16 +635,16 @@ private fun AutomationDefinitionEditor(
                 SettingSwitch(
                     isChecked = definition.enabled,
                     onCheckedChange = { onChange(definition.copy(enabled = it)) },
-                    text = "Включена",
+                    text = ruEn("Включена", "On"),
                     description = "",
                     enabled = true,
                 )
             }
         }
         item {
-            SettingsTitle("Когда")
+            SettingsTitle(ruEn("Когда", "When"))
             Text(
-                text = "Несколько триггеров объединяются через ИЛИ. При одновременном совпадении используется первый по порядку.",
+                text = ruEn("Несколько триггеров объединяются через ИЛИ. При одновременном совпадении используется первый по порядку.", "Several triggers are combined with OR. If several match at once, the first one in order is used."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -692,19 +694,19 @@ private fun AutomationDefinitionEditor(
                     )
                 },
             ) {
-                AutomationButtonLabel("Добавить триггер")
+                AutomationButtonLabel(ruEn("Добавить триггер", "Add trigger"))
             }
         }
         item {
-            SettingsTitle("При условиях")
+            SettingsTitle(ruEn("При условиях", "Under conditions"))
             Text(
-                text = "Условия этого раздела объединяются через И. " +
-                    "Одно время ожидания на всю группу: 0 — сразу пропустить, если не выполнено.",
+                text = ruEn("Условия этого раздела объединяются через И. ", "Conditions in this section are combined with AND. ") +
+                    ruEn("Одно время ожидания на всю группу: 0 — сразу пропустить, если не выполнено.", "One wait time for the whole group: 0 — skip immediately if it is not met."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             AutomationSecondsField(
-                label = "Ждать условие, с",
+                label = ruEn("Ждать условие, с", "Wait for condition, s"),
                 valueMillis = definition.conditionWaitMillis,
                 onValueChange = { onChange(definition.copy(conditionWaitMillis = it)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -739,7 +741,7 @@ private fun AutomationDefinitionEditor(
                         )
                     },
                 ) {
-                    AutomationButtonLabel("Удалить условие")
+                    AutomationButtonLabel(ruEn("Удалить условие", "Delete condition"))
                 }
             }
         }
@@ -749,11 +751,11 @@ private fun AutomationDefinitionEditor(
                     onChange(definition.copy(conditions = definition.conditions + defaultNumericCondition()))
                 },
             ) {
-                AutomationButtonLabel("Добавить условие")
+                AutomationButtonLabel(ruEn("Добавить условие", "Add condition"))
             }
         }
         item {
-            SettingsTitle("Выполнить")
+            SettingsTitle(ruEn("Выполнить", "Run"))
         }
         item {
             AutomationActionListEditor(
@@ -782,7 +784,7 @@ private fun AutomationDefinitionEditor(
 }
 
 private fun automationSummary(definition: AutomationDefinition): String =
-    "${definition.triggers.size} триггер(а) → ${definition.actions.size} действие(я)"
+    ruEn("${definition.triggers.size} триггер(а) → ${definition.actions.size} действие(я)", "${definition.triggers.size} trigger(s) → ${definition.actions.size} action(s)")
 
 /** Document rules plus the draft under edit (so self / new rules appear in pickers). */
 private fun peerAutomationsForEditor(
@@ -799,25 +801,25 @@ private fun runtimeStatusText(status: AutomationRuntimeStatus?): String {
     return when (status?.state) {
         null,
         AutomationExecutionState.IDLE,
-        -> "Ещё не запускалась"
+        -> ruEn("Ещё не запускалась", "Has not run yet")
 
         AutomationExecutionState.RUNNING ->
-            if (time != null) "Выполняется с $time" else "Выполняется"
+            if (time != null) ruEn("Выполняется с $time", "Running since $time") else ruEn("Выполняется", "Running")
 
         AutomationExecutionState.SUCCESS ->
-            if (time != null) "Последний запуск выполнен $time" else "Последний запуск выполнен"
+            if (time != null) ruEn("Последний запуск выполнен $time", "Last run succeeded $time") else ruEn("Последний запуск выполнен", "Last run succeeded")
 
         AutomationExecutionState.ERROR -> {
-            val prefix = if (time != null) "Ошибка $time" else "Ошибка"
+            val prefix = if (time != null) ruEn("Ошибка $time", "Error $time") else ruEn("Ошибка", "Error")
             val message = status.lastMessage
             if (message.isBlank()) prefix else "$prefix: $message"
         }
     }
 }
 
-private const val AUTOMATION_LIMITS_HINT =
-    "Одно правило не стартует чаще чем раз в 2 с. После 5 ошибок подряд оно выключается до ручного включения. " +
-        "«Выполнить сейчас» сразу запускает сохранённые действия, без триггера и общих условий."
+private val AUTOMATION_LIMITS_HINT =
+    ruEn("Одно правило не стартует чаще чем раз в 2 с. После 5 ошибок подряд оно выключается до ручного включения. ", "One rule does not start more often than once every 2 s. After 5 errors in a row it turns off until it is turned on manually. ") +
+        ruEn("«Выполнить сейчас» сразу запускает сохранённые действия, без триггера и общих условий.", "“Run now” runs the saved actions immediately, without a trigger or shared conditions.")
 
 private fun formatAutomationRunTime(status: AutomationRuntimeStatus?): String? {
     if (status == null) return null

@@ -267,8 +267,9 @@ A9: `Settings.System screen_brightness` / `Settings.Global auto_bright`; A10: Ad
 | **Интернет ГУ** (`hu_internet_status`) | `online` / `offline` / `unknown` (/ `checking`) — HTTP(S) probe URL с вкладки «Модем». `online` сразу после удачной проверки; `offline` только после **двух** подряд неудачных |
 | **Wi‑Fi модем: связь** (`wifi_modem_link_status`) | `idle` / `ok` / `auth_failed` / `unreachable` / `error` — HTTP к админке при источнике «Wi‑Fi HTTP»; `idle` для TBox / без поллера |
 | **Модем: передача данных** (`modem_mobile_data`) | `on` / `off` — `apnStatus` (TBox MDC или Wi‑Fi модем) |
-| **Модем: тип сети** (`modem_net_type`) | `2g` / `3g` / `4g` / `none` — из `netStatus` вкладки «Модем» |
-| **Модем: SIM** (`modem_sim_status`) | `none` / `ready` / `pin` / `error` / `unknown` — из `simStatus` |
+| **Модем: тип сети** (`modem_net_type`) | `2g` / `3g` / `4g` / `none` — из кода `netStatus` (`2G`/`3G`/`4G`/`none`) |
+| **Модем: SIM** (`modem_sim_status`) | `none` / `ready` / `pin` / `error` / `unknown` — из кода `simStatus` |
+| **Модем: регистрация** (`modem_registered`) | `on` для `home` / `roaming`, иначе `off` |
 
 SSID выбирается из **сохранённых** сетей ГУ.
 Отдельного триггера «отвалились именно от X» нет: для отключения от любой сети —

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.adb
 
+import vad.dashing.tbox.ruEn
+
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -24,7 +26,7 @@ class AdbAutomationActionsTest {
             command = "  ",
         )
         assertFalse(result.success)
-        assertTrue(result.message.contains("пуста"))
+        assertTrue(result.message.contains(ruEn("пуста", "empty")))
         assertTrue(gateway.setTcpCalls.isEmpty())
     }
 

@@ -85,6 +85,8 @@ import kotlin.math.abs
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.fuel.FuelTypeOption
+import vad.dashing.tbox.fuel.fuelPriceSourceDisplay
+import vad.dashing.tbox.fuel.FuelTypes.displayName as fuelTypeDisplayName
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.fuel.RefuelRecord
@@ -627,7 +629,7 @@ private fun RefuelTableRow(
             onCommit = onPriceCommit,
         )
         RefuelEditableCell(
-            value = sourceDraft,
+            value = fuelPriceSourceDisplay(sourceDraft),
             widthDp = 330,
             showCommitButton = !refuelSourceDraftMatchesSaved(sourceDraft, refuel.priceSourceName),
             onValueChange = onSourceDraftChange,
@@ -715,7 +717,7 @@ private fun RefuelFuelTypeCell(
     ) {
         Box {
             OutlinedTextField(
-                value = selected.label,
+                value = fuelTypeDisplayName(selected.label),
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier
@@ -758,7 +760,7 @@ private fun RefuelFuelTypeCell(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = option.label,
+                                text = fuelTypeDisplayName(option.label),
                                 style = MaterialTheme.typography.tboxTitle,
                                 color = if (option.id == selected.id) {
                                     MaterialTheme.colorScheme.primary
@@ -1188,9 +1190,9 @@ internal fun buildRefuelExportLines(
                 valueToString(refuel.ambientTempAtRefuel ?: REFUEL_AMBIENT_TEMP_DEFAULT_C, 1),
                 valueToString(refuel.estimatedLiters, 1),
                 valueToString(refuel.actualLiters, 1),
-                refuel.fuelName,
+                fuelTypeDisplayName(refuel.fuelName),
                 refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: noData,
-                refuel.priceSourceName ?: noData,
+                refuel.priceSourceName?.let(::fuelPriceSourceDisplay) ?: noData,
                 refuel.costRub?.let { valueToString(it, 2) } ?: noData,
             ).joinToString("\t")
         )

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ruEn
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -170,7 +172,7 @@ private fun AutomationActionEditor(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Действие ${index + 1}: ${actionTitle(action)}",
+                    text = ruEn("Действие ${index + 1}: ${actionTitle(action)}", "Action ${index + 1}: ${actionTitle(action)}"),
                     style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -188,12 +190,12 @@ private fun AutomationActionEditor(
                     AutomationButtonLabel("↓")
                 }
                 OutlinedButton(onClick = rememberWrappedOnClick(onDelete)) {
-                    AutomationButtonLabel("Удалить")
+                    AutomationButtonLabel(ruEn("Удалить", "Delete"))
                 }
             }
             when (action) {
                 is AutomationAction.Delay -> AutomationSecondsField(
-                    label = "Задержка, с",
+                    label = ruEn("Задержка, с", "Delay, s"),
                     valueMillis = action.durationMillis,
                     onValueChange = { onChange(action.copy(durationMillis = it)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -251,7 +253,7 @@ private fun IfThenElseFields(
     depth: Int,
 ) {
     Text(
-        text = "Если",
+        text = ruEn("Если", "If"),
         style = MaterialTheme.typography.tboxTitle,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -264,7 +266,7 @@ private fun IfThenElseFields(
         modifier = Modifier.padding(start = 12.dp),
     )
     Text(
-        text = "То",
+        text = ruEn("То", "Then"),
         style = MaterialTheme.typography.tboxTitle,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -281,7 +283,7 @@ private fun IfThenElseFields(
         depth = depth + 1,
     )
     Text(
-        text = "Иначе",
+        text = ruEn("Иначе", "Else"),
         style = MaterialTheme.typography.tboxTitle,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -311,7 +313,7 @@ private fun CanCommandFields(
         .sortedByAutomationLabel { it.label }
     if (entry == null) {
         Text(
-            text = "CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.",
+            text = ruEn("CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.", "CAN command is not in the safe catalog. Choose another action."),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.tboxCaption,
         )
@@ -319,7 +321,7 @@ private fun CanCommandFields(
     val selectedEntry = entry ?: catalogEntries.firstOrNull()
     if (selectedEntry == null) {
         Text(
-            text = "Для текущего CAN-режима нет доступных команд.",
+            text = ruEn("Для текущего CAN-режима нет доступных команд.", "No commands are available for the current CAN mode."),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.tboxCaption,
         )
@@ -338,7 +340,7 @@ private fun CanCommandFields(
     }
         .sortedGroupedConsecutive()
     AutomationSearchablePickerField(
-        label = "Действие",
+        label = ruEn("Действие", "Action"),
         value = selectedEntry,
         options = canOptions,
         optionLabel = { it.label },
@@ -368,14 +370,14 @@ private fun CanCommandFields(
             listOf(action.operation) + entry.allowedOperations
         }
         AutomationDropdown(
-            label = "Операция",
+            label = ruEn("Операция", "Operation"),
             value = action.operation,
             options = operations,
             optionLabel = {
                 when (it) {
-                    AutomationCanOperation.SET -> "Установить"
-                    AutomationCanOperation.TOGGLE -> "Переключить"
-                    AutomationCanOperation.TRUNK_PULSE -> "Импульс открыть/закрыть"
+                    AutomationCanOperation.SET -> ruEn("Установить", "Set")
+                    AutomationCanOperation.TOGGLE -> ruEn("Переключить", "Toggle")
+                    AutomationCanOperation.TRUNK_PULSE -> ruEn("Импульс открыть/закрыть", "Open/close pulse")
                 }
             },
             onValueChange = {
@@ -398,7 +400,7 @@ private fun CanCommandFields(
                     ?: action.value
                 val options = if (currentValue in values) values else listOf(currentValue) + values
                 AutomationDropdown(
-                    label = "Значение",
+                    label = ruEn("Значение", "Value"),
                     value = currentValue,
                     options = options,
                     optionLabel = { entry.valueLabel(it, canMode) },
@@ -426,7 +428,7 @@ private fun LaunchApplicationFields(
 ) {
     val context = LocalContext.current
     AutomationPackagePicker(
-        label = "Приложение",
+        label = ruEn("Приложение", "App"),
         packageName = action.packageName,
         apps = apps,
         onValueChange = { onChange(action.copy(packageName = it)) },
@@ -444,17 +446,17 @@ private fun LaunchApplicationFields(
         )
     }
     AutomationDropdown(
-        label = "Режим запуска",
+        label = ruEn("Режим запуска", "Launch mode"),
         value = action.launchMode,
         options = launchModeOptions,
         optionLabel = {
             when (it) {
-                AppLauncherLaunchMode.FULLSCREEN -> "Обычный"
-                AppLauncherLaunchMode.DCL_FULL_WIDTH -> "На всю ширину (DCL)"
-                AppLauncherLaunchMode.DCL_FULLSCREEN -> "На весь экран (DCL)"
+                AppLauncherLaunchMode.FULLSCREEN -> ruEn("Обычный", "Normal")
+                AppLauncherLaunchMode.DCL_FULL_WIDTH -> ruEn("На всю ширину (DCL)", "Full width (DCL)")
+                AppLauncherLaunchMode.DCL_FULLSCREEN -> ruEn("На весь экран (DCL)", "Full screen (DCL)")
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
-                AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"
-                AppLauncherLaunchMode.VIRTUAL_DISPLAY -> "В виртуальном дисплее (ADB)"
+                AppLauncherLaunchMode.STOCK_WINDOW -> ruEn("Окно штатного лаунчера", "Stock launcher window")
+                AppLauncherLaunchMode.VIRTUAL_DISPLAY -> ruEn("В виртуальном дисплее (ADB)", "On a virtual display (ADB)")
             }
         },
         onValueChange = { onChange(action.copy(launchMode = it)) },
@@ -472,22 +474,22 @@ private fun LaunchApplicationFields(
     if (action.launchMode == AppLauncherLaunchMode.FREEFORM) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AutomationDropdown(
-                label = "Сторона",
+                label = ruEn("Сторона", "Side"),
                 value = action.freeformSide,
                 options = FreeformLaunchSide.entries,
                 optionLabel = {
                     when (it) {
-                        FreeformLaunchSide.LEFT -> "Слева"
-                        FreeformLaunchSide.RIGHT -> "Справа"
-                        FreeformLaunchSide.TOP -> "Сверху"
-                        FreeformLaunchSide.BOTTOM -> "Снизу"
+                        FreeformLaunchSide.LEFT -> ruEn("Слева", "Left")
+                        FreeformLaunchSide.RIGHT -> ruEn("Справа", "Right")
+                        FreeformLaunchSide.TOP -> ruEn("Сверху", "Top")
+                        FreeformLaunchSide.BOTTOM -> ruEn("Снизу", "Bottom")
                     }
                 },
                 onValueChange = { onChange(action.copy(freeformSide = it)) },
                 modifier = Modifier.weight(1f),
             )
             AutomationDropdown(
-                label = "Размер, %",
+                label = ruEn("Размер, %", "Size, %"),
                 value = FreeformLaunchBounds.normalizePercent(action.freeformPercent),
                 options = FreeformLaunchBounds.percentOptions(),
                 optionLabel = { "$it%" },
@@ -497,10 +499,10 @@ private fun LaunchApplicationFields(
             val pages = (0..pageCount).toList()
             val selectedPage = action.freeformOverlayPage?.coerceIn(1, pageCount) ?: 0
             AutomationDropdown(
-                label = "Страница рядом",
+                label = ruEn("Страница рядом", "Page beside"),
                 value = selectedPage,
                 options = pages,
-                optionLabel = { if (it == 0) "Не менять" else it.toString() },
+                optionLabel = { if (it == 0) ruEn("Не менять", "Do not change") else it.toString() },
                 onValueChange = {
                     onChange(action.copy(freeformOverlayPage = it.takeIf { page -> page > 0 }))
                 },
@@ -508,10 +510,10 @@ private fun LaunchApplicationFields(
             )
         }
         AutomationDropdown(
-            label = "Главный экран рядом",
+            label = ruEn("Главный экран рядом", "Home screen beside"),
             value = action.freeformOverlayCrop,
             options = listOf(false, true),
-            optionLabel = { if (it) "Обрезать по окну" else "Уместить целиком" },
+            optionLabel = { if (it) ruEn("Обрезать по окну", "Crop to the window") else ruEn("Уместить целиком", "Fit entirely") },
             onValueChange = { onChange(action.copy(freeformOverlayCrop = it)) },
         )
     } else if (action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
@@ -530,7 +532,7 @@ private fun LaunchApplicationFields(
             action.virtualDisplayHeightPx,
         ) {
             buildList {
-                add(AutomationVirtualDisplayOption(null, null, null, "— не выбран —"))
+                add(AutomationVirtualDisplayOption(null, null, null, ruEn("— не выбран —", "— not selected —")))
                 val ids = pickerDisplays.map { it.displayId }.toSet()
                 pickerDisplays.forEach { info ->
                     add(
@@ -552,7 +554,7 @@ private fun LaunchApplicationFields(
                             selected,
                             w,
                             h,
-                            "Дисплей $selected (нет в кэше)$sizeSuffix",
+                            ruEn("Дисплей $selected (нет в кэше)$sizeSuffix", "Display $selected (not in cache)$sizeSuffix"),
                         ),
                     )
                 }
@@ -587,7 +589,7 @@ private fun LaunchApplicationFields(
             }
         }
         AutomationDropdown(
-            label = "Виртуальный дисплей",
+            label = ruEn("Виртуальный дисплей", "Virtual display"),
             value = selectedOption,
             options = options,
             optionLabel = { it.label },
@@ -609,16 +611,22 @@ private fun LaunchApplicationFields(
                             val count = vad.dashing.tbox.adb.VirtualDisplayTargetResolver
                                 .forPicker(outcome.displays)
                                 .size
-                            "Найдено дисплеев: $count"
+                            ruEn("Найдено дисплеев: $count", "Displays found: $count")
                         }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
-                            "Не удалось обновить список (${
+                            ruEn("Не удалось обновить список (${
                                 vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
                                     context,
                                     outcome.reason,
                                     outcome.detail,
                                 )
-                            })"
+                            })", "Could not refresh the list (${
+                                vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                    context,
+                                    outcome.reason,
+                                    outcome.detail,
+                                )
+                            })")
                     }
                     android.widget.Toast.makeText(
                         context,
@@ -631,11 +639,11 @@ private fun LaunchApplicationFields(
             modifier = Modifier.fillMaxWidth(),
         ) {
             AutomationButtonLabel(
-                if (refreshing) "Обновление…" else "Обновить список дисплеев",
+                if (refreshing) ruEn("Обновление…", "Refreshing…") else ruEn("Обновить список дисплеев", "Refresh the display list"),
             )
         }
         Text(
-            text = "Список общий с ярлыками (без дисплея 0). Id сверяется по размеру после рестарта лаунчера. Refresh возвращает TCP; запуск оставляет TCP включённым.",
+            text = ruEn("Список общий с ярлыками (без дисплея 0). Id сверяется по размеру после рестарта лаунчера. Refresh возвращает TCP; запуск оставляет TCP включённым.", "The list is shared with shortcuts (display 0 excluded). The id is matched by size after the launcher restarts. Refresh turns TCP back on; a launch leaves TCP on."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -650,13 +658,13 @@ private fun OpenMainScreenFields(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Куда открыть",
+            label = ruEn("Куда открыть", "Where to open"),
             value = action.target,
             options = AutomationMainScreenTarget.entries,
             optionLabel = {
                 when (it) {
-                    AutomationMainScreenTarget.FULLSCREEN -> "TBox Monitor полноэкранно"
-                    AutomationMainScreenTarget.CURRENT_WINDOW -> "Текущий freeform-overlay"
+                    AutomationMainScreenTarget.FULLSCREEN -> ruEn("TBox Monitor полноэкранно", "TBox Monitor fullscreen")
+                    AutomationMainScreenTarget.CURRENT_WINDOW -> ruEn("Текущий freeform-overlay", "Current freeform overlay")
                 }
             },
             onValueChange = { onChange(action.copy(target = it)) },
@@ -664,7 +672,7 @@ private fun OpenMainScreenFields(
         )
         val pages = (1..pageCount.coerceAtLeast(1)).toList()
         AutomationDropdown(
-            label = "Страница",
+            label = ruEn("Страница", "Page"),
             value = action.page.coerceIn(1, pages.last()),
             options = pages,
             optionLabel = Int::toString,
@@ -680,16 +688,16 @@ private fun HttpRequestFields(
     onChange: (AutomationAction) -> Unit,
 ) {
     AutomationDropdown(
-        label = "HTTP-действие",
+        label = ruEn("HTTP-действие", "HTTP action"),
         value = action.openBrowser,
         options = listOf(false, true),
-        optionLabel = { if (it) "Открыть URL в браузере" else "Выполнить запрос" },
+        optionLabel = { if (it) ruEn("Открыть URL в браузере", "Open a URL in the browser") else ruEn("Выполнить запрос", "Run request") },
         onValueChange = { onChange(action.copy(openBrowser = it)) },
     )
     AutomationTextField(
         value = action.yaml,
         onValueChange = { onChange(action.copy(yaml = it)) },
-        label = "YAML запроса",
+        label = ruEn("YAML запроса", "Request YAML"),
         singleLine = false,
         minLines = 3,
         modifier = Modifier.fillMaxWidth(),
@@ -776,7 +784,7 @@ private fun BuiltinActionFields(
         .sortedGroupedConsecutive()
     }
     AutomationSearchablePickerField(
-        label = "Действие",
+        label = ruEn("Действие", "Action"),
         value = action.type,
         options = builtinOptions,
         optionLabel = ::builtinActionLabel,
@@ -786,7 +794,7 @@ private fun BuiltinActionFields(
     )
     when (action.type) {
         AutomationBuiltinActionType.ESP_RELAY_SET -> Text(
-            text = "Действие больше не поддерживается. Выберите «Переключить ESP-реле» или «Импульс ESP-реле».",
+            text = ruEn("Действие больше не поддерживается. Выберите «Переключить ESP-реле» или «Импульс ESP-реле».", "This action is no longer supported. Choose “Toggle ESP relay” or “Pulse ESP relay”."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.fillMaxWidth(),
@@ -799,7 +807,7 @@ private fun BuiltinActionFields(
             FloatingPanelEnabledActionFields(action, floatingPanels, onChange)
 
         AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> AutomationIntField(
-            label = "Канал реле",
+            label = ruEn("Канал реле", "Relay channel"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
@@ -809,7 +817,7 @@ private fun BuiltinActionFields(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationIntField(
-                label = "Канал реле",
+                label = ruEn("Канал реле", "Relay channel"),
                 value = action.intValue,
                 onValueChange = { onChange(action.copy(intValue = it)) },
                 modifier = Modifier.weight(1f),
@@ -817,21 +825,21 @@ private fun BuiltinActionFields(
             AutomationTextField(
                 value = action.stringValue,
                 onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = "Длительность, мс (пусто = стандарт)",
+                label = ruEn("Длительность, мс (пусто = стандарт)", "Duration, ms (empty = default)"),
                 modifier = Modifier.weight(1f),
             )
         }
 
         AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> AutomationDropdown(
-            label = "Канал BLE-реле",
+            label = ruEn("Канал BLE-реле", "BLE relay channel"),
             value = action.boolValue,
             options = listOf(true, false),
-            optionLabel = { if (it) "Замкнуть" else "Разомкнуть" },
+            optionLabel = { if (it) ruEn("Замкнуть", "Energize") else ruEn("Разомкнуть", "De-energize") },
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
         AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> AutomationIntField(
-            label = "Реле (0 или 1)",
+            label = ruEn("Реле (0 или 1)", "Relay (0 or 1)"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
@@ -841,7 +849,7 @@ private fun BuiltinActionFields(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationIntField(
-                label = "Реле (0 или 1)",
+                label = ruEn("Реле (0 или 1)", "Relay (0 or 1)"),
                 value = action.intValue,
                 onValueChange = { onChange(action.copy(intValue = it)) },
                 modifier = Modifier.weight(1f),
@@ -849,7 +857,7 @@ private fun BuiltinActionFields(
             AutomationTextField(
                 value = action.stringValue,
                 onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = "Длительность, мс (пусто = стандарт)",
+                label = ruEn("Длительность, мс (пусто = стандарт)", "Duration, ms (empty = default)"),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -860,43 +868,43 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.MEDIA_NEXT,
         AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
         -> AutomationPackagePicker(
-            label = "Медиаплеер",
+            label = ruEn("Медиаплеер", "Media player"),
             packageName = action.stringValue,
             apps = apps,
             onValueChange = { onChange(action.copy(stringValue = it)) },
-            blankLabel = "Активный плеер",
+            blankLabel = ruEn("Активный плеер", "Active player"),
         )
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> AutomationIntField(
-            label = "Громкость медиа (0–31)",
+            label = ruEn("Громкость медиа (0–31)", "Media volume (0–31)"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.SET_PHONE_VOLUME -> AutomationIntField(
-            label = "Громкость телефона (1–31)",
+            label = ruEn("Громкость телефона (1–31)", "Phone volume (1–31)"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.SET_NAVI_VOLUME -> AutomationIntField(
-            label = "Громкость навигатора (0–10)",
+            label = ruEn("Громкость навигатора (0–10)", "Navigation volume (0–10)"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.SET_VOICE_VOLUME -> AutomationIntField(
-            label = "Громкость голоса (2–10)",
+            label = ruEn("Громкость голоса (2–10)", "Voice volume (2–10)"),
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> AutomationDropdown(
-            label = "Динамик подголовника",
+            label = ruEn("Динамик подголовника", "Headrest speaker"),
             value = action.stringValue.trim().lowercase().ifEmpty { "assist" },
             options = listOf("only", "assist", "off"),
             optionLabel = AutomationSignalStateEncoding::stateOptionLabel,
@@ -904,14 +912,14 @@ private fun BuiltinActionFields(
         )
 
         AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> AutomationDropdown(
-            label = "Тема день/ночь ГУ",
+            label = ruEn("Тема день/ночь ГУ", "HU day/night theme"),
             value = action.stringValue.trim().lowercase().ifEmpty { "auto" },
             options = listOf("light", "dark", "auto"),
             optionLabel = { key ->
                 when (key) {
-                    "light" -> "Светлая"
-                    "dark" -> "Тёмная"
-                    else -> "Авто"
+                    "light" -> ruEn("Светлая", "Light")
+                    "dark" -> ruEn("Тёмная", "Dark")
+                    else -> ruEn("Авто", "Auto")
                 }
             },
             onValueChange = { onChange(action.copy(stringValue = it)) },
@@ -923,17 +931,17 @@ private fun BuiltinActionFields(
             label = if (
                 action.type == AutomationBuiltinActionType.SET_GEO_DEBUG_LOG
             ) {
-                "Запись"
+                ruEn("Запись", "Recording")
             } else {
-                "Симуляция потери источника"
+                ruEn("Симуляция потери источника", "Source-loss simulation")
             },
             value = action.boolValue,
             options = listOf(true, false),
             optionLabel = {
                 if (action.type == AutomationBuiltinActionType.SET_GEO_DEBUG_LOG) {
-                    if (it) "Запустить" else "Остановить"
+                    if (it) ruEn("Запустить", "Start") else ruEn("Остановить", "Stop")
                 } else {
-                    if (it) "Включить" else "Выключить"
+                    if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off")
                 }
             },
             onValueChange = { onChange(action.copy(boolValue = it)) },
@@ -943,35 +951,35 @@ private fun BuiltinActionFields(
             label = "Wi-Fi",
             value = action.boolValue,
             options = listOf(true, false),
-            optionLabel = { if (it) "Включить" else "Выключить" },
+            optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
         AutomationBuiltinActionType.WIFI_CONNECT -> AutomationWifiSsidPicker(
-            label = "Сохранённая сеть",
+            label = ruEn("Сохранённая сеть", "Saved network"),
             ssid = action.stringValue,
             includeNone = false,
             onValueChange = { onChange(action.copy(stringValue = it)) },
         )
 
         AutomationBuiltinActionType.WIFI_DISCONNECT -> Text(
-            text = "Снимает ассоциацию с текущей сетью, радио остаётся включённым. " +
-                "Иначе ГУ сразу подключится к той же сети снова.",
+            text = ruEn("Снимает ассоциацию с текущей сетью, радио остаётся включённым. ", "Clears the association with the current network; the radio stays on. ") +
+                ruEn("Иначе ГУ сразу подключится к той же сети снова.", "Otherwise the HU connects to the same network again right away."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> AutomationDropdown(
-            label = "Данные Wi‑Fi модема",
+            label = ruEn("Данные Wi‑Fi модема", "Wi‑Fi modem data"),
             value = action.boolValue,
             options = listOf(true, false),
-            optionLabel = { if (it) "Включить" else "Выключить" },
+            optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
         AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> Text(
-            text = "Перезагружает текущий Wi‑Fi модем (нужен источник «Wi‑Fi HTTP»).",
+            text = ruEn("Перезагружает текущий Wi‑Fi модем (нужен источник «Wi‑Fi HTTP»).", "Reboots the current Wi‑Fi modem (the “Wi‑Fi HTTP” source is required)."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -984,7 +992,7 @@ private fun BuiltinActionFields(
                 label = "ADB TCP (:5555)",
                 value = action.boolValue,
                 options = listOf(true, false),
-                optionLabel = { if (it) "Включить" else "Выключить" },
+                optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
                 onValueChange = { onChange(action.copy(boolValue = it)) },
             )
             Text(
@@ -1040,7 +1048,7 @@ private fun BuiltinActionFields(
         }
 
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> AutomationIntField(
-            label = "Яркость экрана ГУ (1–10)",
+            label = ruEn("Яркость экрана ГУ (1–10)", "HU screen brightness (1–10)"),
             value = action.intValue,
             onValueChange = { raw ->
                 // Skip empty draft; do not clamp here or the field fights typing.
@@ -1050,10 +1058,10 @@ private fun BuiltinActionFields(
         )
 
         AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> AutomationDropdown(
-            label = "Автояркость экрана ГУ",
+            label = ruEn("Автояркость экрана ГУ", "HU screen auto-brightness"),
             value = action.boolValue,
             options = listOf(true, false),
-            optionLabel = { if (it) "Включить" else "Выключить" },
+            optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
@@ -1061,14 +1069,14 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationDropdown(
-                label = "Режим",
+                label = ruEn("Режим", "Mode"),
                 value = builtinActionTriggerWidgetCommand(action),
                 options = AutomationTriggerWidgetCommand.entries.toList(),
                 optionLabel = { command ->
                     when (command) {
-                        AutomationTriggerWidgetCommand.ACTIVATE -> "Активировать"
-                        AutomationTriggerWidgetCommand.DEACTIVATE -> "Деактивировать"
-                        AutomationTriggerWidgetCommand.TOGGLE -> "Переключить"
+                        AutomationTriggerWidgetCommand.ACTIVATE -> ruEn("Активировать", "Activate")
+                        AutomationTriggerWidgetCommand.DEACTIVATE -> ruEn("Деактивировать", "Deactivate")
+                        AutomationTriggerWidgetCommand.TOGGLE -> ruEn("Переключить", "Toggle")
                     }
                 },
                 onValueChange = { command ->
@@ -1089,7 +1097,7 @@ private fun BuiltinActionFields(
                 onValueChange = { raw ->
                     onChange(action.copy(stringValue = raw.take(AUTOMATION_TRIGGER_ID_MAX_CHARS)))
                 },
-                label = "ID триггера виджета",
+                label = ruEn("ID триггера виджета", "Widget trigger ID"),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -1098,21 +1106,21 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationRulePicker(
-                label = "Автоматизация",
+                label = ruEn("Автоматизация", "Automation"),
                 selectedId = action.stringValue,
                 peerAutomations = peerAutomations,
                 onIdChange = { onChange(action.copy(stringValue = it)) },
             )
             AutomationDropdown(
-                label = "Операция",
+                label = ruEn("Операция", "Operation"),
                 value = action.boolValue,
                 options = listOf(true, false),
-                optionLabel = { if (it) "Включить" else "Выключить" },
+                optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
                 onValueChange = { onChange(action.copy(boolValue = it)) },
             )
             Text(
-                text = "Без переключения: если правило уже в нужном состоянии — no-op. " +
-                    "Правило может выключить само себя (текущий прогон отменяется).",
+                text = ruEn("Без переключения: если правило уже в нужном состоянии — no-op. ", "No toggle: if the rule is already in the desired state — no-op. ") +
+                    ruEn("Правило может выключить само себя (текущий прогон отменяется).", "The rule can turn itself off (the current run is cancelled)."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1122,7 +1130,7 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.SHOW_TOAST -> AutomationTextField(
             value = action.stringValue,
             onValueChange = { onChange(action.copy(stringValue = it)) },
-            label = "Текст",
+            label = ruEn("Текст", "Text"),
             singleLine = false,
             minLines = 2,
             modifier = Modifier.fillMaxWidth(),
@@ -1134,13 +1142,13 @@ private fun BuiltinActionFields(
             AutomationTextField(
                 value = action.stringValue,
                 onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = "Текст",
+                label = ruEn("Текст", "Text"),
                 singleLine = false,
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
             AutomationSecondsField(
-                label = "Автозакрытие, с (0 — только «Закрыть»)",
+                label = ruEn("Автозакрытие, с (0 — только «Закрыть»)", "Auto-close, s (0 — “Close” only)"),
                 valueMillis = action.intValue.toLong().coerceAtLeast(0L),
                 onValueChange = { millis ->
                     if (millis >= 0L) {
@@ -1154,7 +1162,7 @@ private fun BuiltinActionFields(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "Нужно разрешение «Поверх других окон»: Настройки → Разрешения. Само по себе не выдаётся.",
+                text = ruEn("Нужно разрешение «Поверх других окон»: Настройки → Разрешения. Само по себе не выдаётся.", "The “Display over other apps” permission is required: Settings → Permissions. It is not granted on its own."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1164,7 +1172,7 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationIntField(
-                label = "Уставка, км/ч (30–150)",
+                label = ruEn("Уставка, км/ч (30–150)", "Setpoint, km/h (30–150)"),
                 value = action.intValue
                     .takeIf { it != 0 }
                     ?: vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT,
@@ -1176,9 +1184,9 @@ private fun BuiltinActionFields(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "Как виджет «Уставка круиз-контроля»: включение и доведение до цели " +
-                    "(интервалы шагов — как у виджета по умолчанию). Уже на уставке → пауза (212). " +
-                    "Действие ждёт окончания converge. Путь ACC/CCS — из Настройки → Автомобиль.",
+                text = ruEn("Как виджет «Уставка круиз-контроля»: включение и доведение до цели ", "Like the “Cruise control setpoint” widget: turn on and bring it to the target ") +
+                    ruEn("(интервалы шагов — как у виджета по умолчанию). Уже на уставке → пауза (212). ", "(step intervals — same as the default widget). Already at the setpoint → pause (212). ") +
+                    ruEn("Действие ждёт окончания converge. Путь ACC/CCS — из Настройки → Автомобиль.", "The action waits until converge finishes. The ACC/CCS path is Settings → Vehicle."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1194,13 +1202,13 @@ private fun BuiltinActionFields(
             Text(
                 text = when (action.type) {
                     AutomationBuiltinActionType.CRUISE_PAUSE ->
-                        "Пауза Active/Override (Cancel 212), как статус-плитка. Путь ACC/CCS — из Настройки → Автомобиль."
+                        ruEn("Пауза Active/Override (Cancel 212), как статус-плитка. Путь ACC/CCS — из Настройки → Автомобиль.", "Pause Active/Override (Cancel 212), like the status tile. The ACC/CCS path is Settings → Vehicle.")
                     AutomationBuiltinActionType.CRUISE_FULL_OFF ->
-                        "Полное выключение (210), как двойное нажатие виджета. Путь ACC/CCS — из Настройки → Автомобиль."
+                        ruEn("Полное выключение (210), как двойное нажатие виджета. Путь ACC/CCS — из Настройки → Автомобиль.", "Full off (210), like a double tap on the widget. The ACC/CCS path is Settings → Vehicle.")
                     AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
-                        "Активация на текущей скорости (SET−), как свайп вниз на статус-плитке в Standby; из Off — enable+SET−. Путь ACC/CCS — из Настройки → Автомобиль."
+                        ruEn("Активация на текущей скорости (SET−), как свайп вниз на статус-плитке в Standby; из Off — enable+SET−. Путь ACC/CCS — из Настройки → Автомобиль.", "Activate at the current speed (SET−), like a swipe down on the status tile in Standby; from Off — enable+SET−. The ACC/CCS path is Settings → Vehicle.")
                     else ->
-                        "Возобновление из Standby (RES+), как свайп вверх на статус-плитке. Путь ACC/CCS — из Настройки → Автомобиль."
+                        ruEn("Возобновление из Standby (RES+), как свайп вверх на статус-плитке. Путь ACC/CCS — из Настройки → Автомобиль.", "Resume from Standby (RES+), like a swipe up on the status tile. The ACC/CCS path is Settings → Vehicle.")
                 },
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1211,14 +1219,14 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationDropdown(
-                label = "Шаг уставки",
+                label = ruEn("Шаг уставки", "Setpoint step"),
                 value = if (action.intValue == -1) -1 else 1,
                 options = listOf(1, -1),
-                optionLabel = { if (it > 0) "+1 км/ч (RES+)" else "−1 км/ч (SET−)" },
+                optionLabel = { if (it > 0) ruEn("+1 км/ч (RES+)", "+1 km/h (RES+)") else ruEn("−1 км/ч (SET−)", "−1 km/h (SET−)") },
                 onValueChange = { onChange(action.copy(intValue = it)) },
             )
             Text(
-                text = "Только в Active/Override; как свайпы статус-плитки. Путь ACC/CCS — из Настройки → Автомобиль.",
+                text = ruEn("Только в Active/Override; как свайпы статус-плитки. Путь ACC/CCS — из Настройки → Автомобиль.", "Only in Active/Override; like swipes on the status tile. The ACC/CCS path is Settings → Vehicle."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1230,12 +1238,12 @@ private fun BuiltinActionFields(
             AutomationTextField(
                 value = action.stringValue,
                 onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = "Номер телефона",
+                label = ruEn("Номер телефона", "Phone number"),
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "Исходящий звонок через Telecom ACTION_CALL → HFP. Нужны разрешение " +
-                    "CALL_PHONE и активный Bluetooth HFP. Без HFP — ошибка, клавиатура не открывается.",
+                text = ruEn("Исходящий звонок через Telecom ACTION_CALL → HFP. Нужны разрешение ", "Outgoing call via Telecom ACTION_CALL → HFP. Requires the ") +
+                    ruEn("CALL_PHONE и активный Bluetooth HFP. Без HFP — ошибка, клавиатура не открывается.", "CALL_PHONE permission and an active Bluetooth HFP. Without HFP — an error, and the dialer does not open."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1248,14 +1256,14 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationDropdown(
-                label = "Умный ACC",
+                label = ruEn("Умный ACC", "Smart ACC"),
                 value = action.boolValue,
                 options = listOf(true, false),
-                optionLabel = { if (it) "Включить" else "Выключить" },
+                optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
                 onValueChange = { onChange(action.copy(boolValue = it)) },
             )
             AutomationDropdown(
-                label = "АСС по ограничению (настройка)",
+                label = ruEn("АСС по ограничению (настройка)", "ACC by speed limit (setting)"),
                 value = action.stringValue.trim().lowercase().let { raw ->
                     when (raw) {
                         "true", "1", "yes", "on" -> true
@@ -1266,9 +1274,9 @@ private fun BuiltinActionFields(
                 options = listOf(null, true, false),
                 optionLabel = {
                     when (it) {
-                        true -> "Включить"
-                        false -> "Выключить"
-                        null -> "Не менять"
+                        true -> ruEn("Включить", "On")
+                        false -> ruEn("Выключить", "Off")
+                        null -> ruEn("Не менять", "Do not change")
                     }
                 },
                 onValueChange = { next ->
@@ -1284,12 +1292,12 @@ private fun BuiltinActionFields(
                 },
             )
             AutomationIntField(
-                label = "Целевая скорость, км/ч (0 = не задавать)",
+                label = ruEn("Целевая скорость, км/ч (0 = не задавать)", "Target speed, km/h (0 = do not set)"),
                 value = action.intValue,
                 onValueChange = { onChange(action.copy(intValue = it.coerceAtLeast(0))) },
             )
             Text(
-                text = "Управляет Smart ACC в DCL Launcher (setSmartAcc). Не меняет CAN-круиз.",
+                text = ruEn("Управляет Smart ACC в DCL Launcher (setSmartAcc). Не меняет CAN-круиз.", "Controls Smart ACC in DCL Launcher (setSmartAcc). It does not change CAN cruise."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1297,7 +1305,7 @@ private fun BuiltinActionFields(
         }
 
         AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> Text(
-            text = "Переключает Умный ACC в DCL (toggleSmartAcc).",
+            text = ruEn("Переключает Умный ACC в DCL (toggleSmartAcc).", "Toggles Smart ACC in DCL (toggleSmartAcc)."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -1307,16 +1315,16 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationDropdown(
-                label = "Держать штатный AVM отключенным",
+                label = ruEn("Держать штатный AVM отключенным", "Keep stock AVM disabled"),
                 value = action.boolValue,
                 options = listOf(true, false),
-                optionLabel = { if (it) "Включить" else "Выключить" },
+                optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
                 onValueChange = { onChange(action.copy(boolValue = it)) },
             )
             Text(
-                text = "Включено — штатный AVM остановлен и не запускается после перезагрузки. " +
-                    "Выключено — сырые окна закрываются и AVM сразу запускается. " +
-                    "Если служба не слушает порт, команда попробует её запустить.",
+                text = ruEn("Включено — штатный AVM остановлен и не запускается после перезагрузки. ", "On — stock AVM is stopped and does not start after a reboot. ") +
+                    ruEn("Выключено — сырые окна закрываются и AVM сразу запускается. ", "Off — the raw windows close and AVM starts immediately. ") +
+                    ruEn("Если служба не слушает порт, команда попробует её запустить.", "If the service is not listening on the port, the command will try to start it."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1327,17 +1335,17 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AutomationDropdown(
-                label = "Регистратор Камеры ГУ",
+                label = ruEn("Регистратор Камеры ГУ", "HU Cameras recorder"),
                 value = action.boolValue,
                 options = listOf(true, false),
-                optionLabel = { if (it) "Включить" else "Выключить" },
+                optionLabel = { if (it) ruEn("Включить", "On") else ruEn("Выключить", "Off") },
                 onValueChange = { onChange(action.copy(boolValue = it)) },
             )
             Text(
-                text = "Мастер-переключатель регистратора (REC ON/OFF). Папка и камеры задаются " +
-                    "в приложении «Камеры ГУ». Это не то же самое, что «запись идёт» " +
-                    "(сигнал camd_recording_active). Если служба не слушает порт, команда " +
-                    "попробует её запустить.",
+                text = ruEn("Мастер-переключатель регистратора (REC ON/OFF). Папка и камеры задаются ", "Recorder master switch (REC ON/OFF). The folder and cameras are set ") +
+                    ruEn("в приложении «Камеры ГУ». Это не то же самое, что «запись идёт» ", "in the “HU Cameras” app. This is not the same as “recording” ") +
+                    ruEn("(сигнал camd_recording_active). Если служба не слушает порт, команда ", "(camd_recording_active signal). If the service is not listening on the port, the command ") +
+                    ruEn("попробует её запустить.", "will try to start it."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1348,8 +1356,8 @@ private fun BuiltinActionFields(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Разовая команда REC SOS (camd 0.8.6+): сохраняет текущий сегмент записи " +
-                    "в папку SOS. Без параметров; регистратор должен быть включен.",
+                text = ruEn("Разовая команда REC SOS (camd 0.8.6+): сохраняет текущий сегмент записи ", "One-shot REC SOS command (camd 0.8.6+): saves the current recording segment ") +
+                    ruEn("в папку SOS. Без параметров; регистратор должен быть включен.", "to the SOS folder. No parameters; the recorder must be on."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1363,8 +1371,8 @@ private fun BuiltinActionFields(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "Best-effort через BluetoothHeadsetClient / Telecom. Успех — стек принял " +
-                    "команду, не подтверждение разговора; отказ стека или нет прав — ошибка.",
+                text = ruEn("Best-effort через BluetoothHeadsetClient / Telecom. Успех — стек принял ", "Best-effort via BluetoothHeadsetClient / Telecom. Success — the stack accepted ") +
+                    ruEn("команду, не подтверждение разговора; отказ стека или нет прав — ошибка.", "the command, not confirmation of the call; a stack rejection or missing permission is an error."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1419,14 +1427,14 @@ private fun CamdWindowActionFields(
     var presetDraft by remember { mutableStateOf(args.presetName ?: "") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
-            label = "Окно",
+            label = ruEn("Окно", "Window"),
             value = args.mode,
             options = listOf(CAMD_ACTION_OPEN, CAMD_ACTION_CLOSE, CAMD_ACTION_CLOSE_ALL),
             optionLabel = { mode ->
                 when (mode) {
-                    CAMD_ACTION_CLOSE -> "Закрыть эту камеру"
-                    CAMD_ACTION_CLOSE_ALL -> "Закрыть все"
-                    else -> "Открыть"
+                    CAMD_ACTION_CLOSE -> ruEn("Закрыть эту камеру", "Close this camera")
+                    CAMD_ACTION_CLOSE_ALL -> ruEn("Закрыть все", "Close all")
+                    else -> ruEn("Открыть", "Open")
                 }
             },
             onValueChange = { mode ->
@@ -1443,7 +1451,7 @@ private fun CamdWindowActionFields(
                 stringResource(camdWindowCameraTitle(id))
             }
             AutomationDropdown(
-                label = "Камера",
+                label = ruEn("Камера", "Camera"),
                 value = camera,
                 options = CAMD_WINDOW_CAMERA_IDS,
                 optionLabel = { id -> cameraLabels[id] ?: id.toString() },
@@ -1452,14 +1460,14 @@ private fun CamdWindowActionFields(
         }
         if (args.mode == CAMD_ACTION_OPEN) {
             AutomationDropdown(
-                label = "Кадр",
+                label = ruEn("Кадр", "Frame"),
                 value = frameMode,
                 options = listOf(CAMD_FRAME_MODE_AS_IS, CAMD_FRAME_MODE_CUSTOM, CAMD_FRAME_MODE_PRESET),
                 optionLabel = { mode ->
                     when (mode) {
-                        CAMD_FRAME_MODE_CUSTOM -> "Свои настройки"
-                        CAMD_FRAME_MODE_PRESET -> "Пресет"
-                        else -> "Как есть"
+                        CAMD_FRAME_MODE_CUSTOM -> ruEn("Свои настройки", "Custom settings")
+                        CAMD_FRAME_MODE_PRESET -> ruEn("Пресет", "Preset")
+                        else -> ruEn("Как есть", "As is")
                     }
                 },
                 onValueChange = { mode ->
@@ -1487,12 +1495,12 @@ private fun CamdWindowActionFields(
                             onChange(action.copy(stringValue = openLine(presetName = name)))
                         }
                     },
-                    label = "Пресет (a-z 0-9 _)",
+                    label = ruEn("Пресет (a-z 0-9 _)", "Preset (a-z 0-9 _)"),
                 )
             }
             if (frameMode == CAMD_FRAME_MODE_CUSTOM) {
                 AutomationDropdown(
-                    label = "Поворот",
+                    label = ruEn("Поворот", "Rotation"),
                     value = args.rotation,
                     options = listOf(0, 90, 180, 270),
                     optionLabel = { "$it°" },
@@ -1501,24 +1509,24 @@ private fun CamdWindowActionFields(
                     },
                 )
                 AutomationDropdown(
-                    label = "Зеркало H",
+                    label = ruEn("Зеркало H", "Mirror H"),
                     value = args.flipH,
                     options = listOf(false, true),
-                    optionLabel = { if (it) "Да" else "Нет" },
+                    optionLabel = { if (it) ruEn("Да", "Yes") else ruEn("Нет", "No") },
                     onValueChange = { onChange(action.copy(stringValue = openLine(flipH = it))) },
                 )
                 AutomationDropdown(
-                    label = "Зеркало V",
+                    label = ruEn("Зеркало V", "Mirror V"),
                     value = args.flipV,
                     options = listOf(false, true),
-                    optionLabel = { if (it) "Да" else "Нет" },
+                    optionLabel = { if (it) ruEn("Да", "Yes") else ruEn("Нет", "No") },
                     onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
                 )
                 AutomationDropdown(
-                    label = "Вырезка",
+                    label = ruEn("Вырезка", "Crop"),
                     value = args.crop != null,
                     options = listOf(false, true),
-                    optionLabel = { if (it) "Да" else "Нет" },
+                    optionLabel = { if (it) ruEn("Да", "Yes") else ruEn("Нет", "No") },
                     onValueChange = { enabled ->
                         onChange(
                             action.copy(
@@ -1532,51 +1540,51 @@ private fun CamdWindowActionFields(
                 if (args.crop != null) {
                     val crop = args.crop
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CamdPercentField("Вырезка: слева, %", crop.x, Modifier.weight(1f)) { next ->
+                        CamdPercentField(ruEn("Вырезка: слева, %", "Crop: left, %"), crop.x, Modifier.weight(1f)) { next ->
                             onChange(action.copy(stringValue = openLine(crop = crop.copy(x = next))))
                         }
-                        CamdPercentField("Вырезка: сверху, %", crop.y, Modifier.weight(1f)) { next ->
+                        CamdPercentField(ruEn("Вырезка: сверху, %", "Crop: top, %"), crop.y, Modifier.weight(1f)) { next ->
                             onChange(action.copy(stringValue = openLine(crop = crop.copy(y = next))))
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CamdPercentField("Вырезка: ширина, %", crop.w, Modifier.weight(1f)) { next ->
+                        CamdPercentField(ruEn("Вырезка: ширина, %", "Crop: width, %"), crop.w, Modifier.weight(1f)) { next ->
                             onChange(action.copy(stringValue = openLine(crop = crop.copy(w = next))))
                         }
-                        CamdPercentField("Вырезка: высота, %", crop.h, Modifier.weight(1f)) { next ->
+                        CamdPercentField(ruEn("Вырезка: высота, %", "Crop: height, %"), crop.h, Modifier.weight(1f)) { next ->
                             onChange(action.copy(stringValue = openLine(crop = crop.copy(h = next))))
                         }
                     }
                 }
             }
             AutomationDropdown(
-                label = "Круг",
+                label = ruEn("Круг", "Circle"),
                 value = args.circle,
                 options = listOf(false, true),
-                optionLabel = { if (it) "Да" else "Нет" },
+                optionLabel = { if (it) ruEn("Да", "Yes") else ruEn("Нет", "No") },
                 onValueChange = { onChange(action.copy(stringValue = openLine(circle = it))) },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
+                CamdPercentField(ruEn("Слева, %", "Left, %"), args.x, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(x = next)))
                 }
-                CamdPercentField("Сверху, %", args.y, Modifier.weight(1f)) { next ->
+                CamdPercentField(ruEn("Сверху, %", "Top, %"), args.y, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(y = next)))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CamdPercentField("Ширина, %", args.w, Modifier.weight(1f)) { next ->
+                CamdPercentField(ruEn("Ширина, %", "Width, %"), args.w, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(w = next)))
                 }
-                CamdPercentField("Высота, %", args.h, Modifier.weight(1f)) { next ->
+                CamdPercentField(ruEn("Высота, %", "Height, %"), args.h, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(h = next)))
                 }
             }
         }
         Text(
-            text = "Нужно приложение «Камеры ГУ». Если служба не слушает порт, команда попробует её запустить. " +
-                "Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM. " +
-                "Настройки пресета задаёт «Камеры ГУ», здесь их поменять нельзя.",
+            text = ruEn("Нужно приложение «Камеры ГУ». Если служба не слушает порт, команда попробует её запустить. ", "The “HU Cameras” app is required. If the service is not listening on the port, the command will try to start it. ") +
+                ruEn("Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM. ", "If AVM hold is off, a window for inputs 4, 5, 8, and 9 stops stock AVM first. ") +
+                ruEn("Настройки пресета задаёт «Камеры ГУ», здесь их поменять нельзя.", "The preset is configured by “HU Cameras”; it cannot be changed here."),
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -1678,7 +1686,7 @@ private fun AddAutomationActionRow(
     if (showActionsPicker) {
         val keyboardController = LocalSoftwareKeyboardController.current
         AutomationSearchablePickerDialog(
-            title = "Действие",
+            title = ruEn("Действие", "Action"),
             options = mergedActionOptions,
             onSelect = { selected ->
                 keyboardController?.hide()
@@ -1727,7 +1735,7 @@ private fun AddAutomationActionRow(
         verticalAlignment = Alignment.Bottom,
     ) {
         AutomationDropdown(
-            label = "Новое действие",
+            label = ruEn("Новое действие", "New action"),
             value = kind,
             options = ActionUiKind.entries.sortedByAutomationLabel { it.label() },
             optionLabel = ActionUiKind::label,
@@ -1743,7 +1751,7 @@ private fun AddAutomationActionRow(
                 }
             },
         ) {
-            AutomationButtonLabel("Добавить")
+            AutomationButtonLabel(ruEn("Добавить", "Add"))
         }
     }
 }
@@ -1759,14 +1767,14 @@ private enum class ActionUiKind {
         IF_THEN_ELSE;
 
     fun label(): String = when (this) {
-        ACTIONS -> "Действия"
-        LAUNCH_APP -> "Запустить приложение"
-        OPEN_MAIN_SCREEN -> "Открыть страницу главного экрана"
+        ACTIONS -> ruEn("Действия", "Actions")
+        LAUNCH_APP -> ruEn("Запустить приложение", "Launch app")
+        OPEN_MAIN_SCREEN -> ruEn("Открыть страницу главного экрана", "Open a home screen page")
         HTTP -> "HTTP"
-        DELAY -> "Задержка"
+        DELAY -> ruEn("Задержка", "Delay")
         SHOW_TOAST -> "Toast"
-        SHOW_ALERT -> "Сообщение на экране"
-        IF_THEN_ELSE -> "Если — То — Иначе"
+        SHOW_ALERT -> ruEn("Сообщение на экране", "On-screen message")
+        IF_THEN_ELSE -> ruEn("Если — То — Иначе", "If — Then — Else")
     }
 }
 
@@ -1793,81 +1801,81 @@ private fun defaultAction(
 }
 
 private fun actionTitle(action: AutomationAction): String = when (action) {
-    is AutomationAction.Delay -> "Задержка"
-    is AutomationAction.IfThenElse -> "Если — То — Иначе"
+    is AutomationAction.Delay -> ruEn("Задержка", "Delay")
+    is AutomationAction.IfThenElse -> ruEn("Если — То — Иначе", "If — Then — Else")
     is AutomationAction.CanCommand ->
         AutomationCanCatalog.get(action.bus, action.propertyId)?.label ?: "CAN"
 
-    is AutomationAction.LaunchApplication -> "Запустить приложение"
-    is AutomationAction.OpenMainScreen -> "Открыть главный экран"
+    is AutomationAction.LaunchApplication -> ruEn("Запустить приложение", "Launch app")
+    is AutomationAction.OpenMainScreen -> ruEn("Открыть главный экран", "Open home screen")
     is AutomationAction.HttpRequest -> "HTTP"
     is AutomationAction.Builtin -> builtinActionLabel(action.type)
 }
 
 internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = when (type) {
-    AutomationBuiltinActionType.OPEN_MENU -> "Открыть меню программы"
-    AutomationBuiltinActionType.FINISH_AND_START_TRIP -> "Завершить поездку и начать новую"
-    AutomationBuiltinActionType.RESET_MOTOR_HOURS -> "Сбросить моточасы"
-    AutomationBuiltinActionType.RESTART_TBOX -> "Перезагрузить TBox"
-    AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> "Переключить день/ночь"
-    AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> "Включить автоматическую тему ГУ"
-    AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "Тема день/ночь ГУ (светлая/тёмная/авто)"
-    AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> "Переключить регулировку зеркал"
-    AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> "Плавающие панели — видимость"
-    AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> "Плавающие панели — включение"
-    AutomationBuiltinActionType.ESP_RELAY_SET -> "Установить маску ESP-реле"
-    AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> "Переключить ESP-реле"
-    AutomationBuiltinActionType.ESP_RELAY_PULSE -> "Импульс ESP-реле"
-    AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> "Замкнуть/разомкнуть BLE-реле"
-    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> "Переключить BLE-реле"
-    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> "Импульс BLE-реле"
-    AutomationBuiltinActionType.MEDIA_PREVIOUS -> "Предыдущий трек"
-    AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> "Воспроизведение/пауза"
-    AutomationBuiltinActionType.MEDIA_PLAY -> "Воспроизведение"
-    AutomationBuiltinActionType.MEDIA_NEXT -> "Следующий трек"
-    AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> "Поставить/снять «Нравится»"
-    AutomationBuiltinActionType.SET_MEDIA_VOLUME -> "Установить громкость медиа"
-    AutomationBuiltinActionType.SET_PHONE_VOLUME -> "Установить громкость телефона"
-    AutomationBuiltinActionType.SET_NAVI_VOLUME -> "Установить громкость навигатора"
-    AutomationBuiltinActionType.SET_VOICE_VOLUME -> "Установить громкость голоса"
-    AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "Динамик подголовника"
-    AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> "Следующий режим подмены геопозиции"
-    AutomationBuiltinActionType.GNSS_MODULE_REBOOT -> "Перезапустить GNSS-модуль"
+    AutomationBuiltinActionType.OPEN_MENU -> ruEn("Открыть меню программы", "Open the app menu")
+    AutomationBuiltinActionType.FINISH_AND_START_TRIP -> ruEn("Завершить поездку и начать новую", "End the trip and start a new one")
+    AutomationBuiltinActionType.RESET_MOTOR_HOURS -> ruEn("Сбросить моточасы", "Reset engine hours")
+    AutomationBuiltinActionType.RESTART_TBOX -> ruEn("Перезагрузить TBox", "Reboot TBox")
+    AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> ruEn("Переключить день/ночь", "Toggle day/night")
+    AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> ruEn("Включить автоматическую тему ГУ", "Turn on HU auto theme")
+    AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> ruEn("Тема день/ночь ГУ (светлая/тёмная/авто)", "HU day/night theme (light/dark/auto)")
+    AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> ruEn("Переключить регулировку зеркал", "Toggle mirror adjustment")
+    AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> ruEn("Плавающие панели — видимость", "Floating panels — visibility")
+    AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> ruEn("Плавающие панели — включение", "Floating panels — on/off")
+    AutomationBuiltinActionType.ESP_RELAY_SET -> ruEn("Установить маску ESP-реле", "Set the ESP relay mask")
+    AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> ruEn("Переключить ESP-реле", "Toggle ESP relay")
+    AutomationBuiltinActionType.ESP_RELAY_PULSE -> ruEn("Импульс ESP-реле", "Pulse ESP relay")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> ruEn("Замкнуть/разомкнуть BLE-реле", "Energize/de-energize BLE relay")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> ruEn("Переключить BLE-реле", "Toggle BLE relay")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> ruEn("Импульс BLE-реле", "Pulse BLE relay")
+    AutomationBuiltinActionType.MEDIA_PREVIOUS -> ruEn("Предыдущий трек", "Previous track")
+    AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> ruEn("Воспроизведение/пауза", "Play/pause")
+    AutomationBuiltinActionType.MEDIA_PLAY -> ruEn("Воспроизведение", "Playback")
+    AutomationBuiltinActionType.MEDIA_NEXT -> ruEn("Следующий трек", "Next track")
+    AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> ruEn("Поставить/снять «Нравится»", "Toggle “Like”")
+    AutomationBuiltinActionType.SET_MEDIA_VOLUME -> ruEn("Установить громкость медиа", "Set media volume")
+    AutomationBuiltinActionType.SET_PHONE_VOLUME -> ruEn("Установить громкость телефона", "Set phone volume")
+    AutomationBuiltinActionType.SET_NAVI_VOLUME -> ruEn("Установить громкость навигатора", "Set navigation volume")
+    AutomationBuiltinActionType.SET_VOICE_VOLUME -> ruEn("Установить громкость голоса", "Set voice volume")
+    AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> ruEn("Динамик подголовника", "Headrest speaker")
+    AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> ruEn("Следующий режим подмены геопозиции", "Next mock-location mode")
+    AutomationBuiltinActionType.GNSS_MODULE_REBOOT -> ruEn("Перезапустить GNSS-модуль", "Restart the GNSS module")
     AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
-        "Симулировать потерю геоисточника"
-    AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> "Запись гео-журнала"
-    AutomationBuiltinActionType.WIFI_SET_ENABLED -> "Wi-Fi: включить / выключить"
-    AutomationBuiltinActionType.WIFI_CONNECT -> "Wi-Fi: подключиться к сети"
-    AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
-    AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> "Wi‑Fi модем: данные вкл/выкл"
-    AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
-    AutomationBuiltinActionType.ADB_SET_TCP -> "ADB TCP: включить / выключить"
-    AutomationBuiltinActionType.ADB_SHELL -> "ADB: выполнить shell-команду"
-    AutomationBuiltinActionType.ADB_FORCE_STOP -> "ADB: остановить приложение"
-    AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
-    AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
+        ruEn("Симулировать потерю геоисточника", "Simulate location-source loss")
+    AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> ruEn("Запись гео-журнала", "Geo log recording")
+    AutomationBuiltinActionType.WIFI_SET_ENABLED -> ruEn("Wi-Fi: включить / выключить", "Wi-Fi: on / off")
+    AutomationBuiltinActionType.WIFI_CONNECT -> ruEn("Wi-Fi: подключиться к сети", "Wi-Fi: connect to network")
+    AutomationBuiltinActionType.WIFI_DISCONNECT -> ruEn("Wi-Fi: отключиться от сети", "Wi-Fi: disconnect from network")
+    AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> ruEn("Wi‑Fi модем: данные вкл/выкл", "Wi‑Fi modem: data on/off")
+    AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> ruEn("Wi‑Fi модем: перезагрузка", "Wi‑Fi modem: reboot")
+    AutomationBuiltinActionType.ADB_SET_TCP -> ruEn("ADB TCP: включить / выключить", "ADB TCP: on / off")
+    AutomationBuiltinActionType.ADB_SHELL -> ruEn("ADB: выполнить shell-команду", "ADB: run shell command")
+    AutomationBuiltinActionType.ADB_FORCE_STOP -> ruEn("ADB: остановить приложение", "ADB: stop app")
+    AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> ruEn("Яркость экрана ГУ", "HU screen brightness")
+    AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> ruEn("Автояркость экрана ГУ", "HU screen auto-brightness")
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
-    AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
-    AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"
-    AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> "Включить / выключить автоматизацию"
+    AutomationBuiltinActionType.SHOW_ALERT -> ruEn("Сообщение на экране", "On-screen message")
+    AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> ruEn("Триггер автоматизации (виджет)", "Automation trigger (widget)")
+    AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> ruEn("Включить / выключить автоматизацию", "Turn an automation on / off")
     AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
-        "Круиз: включить и довести до уставки"
-    AutomationBuiltinActionType.CRUISE_PAUSE -> "Круиз: пауза (Cancel)"
-    AutomationBuiltinActionType.CRUISE_FULL_OFF -> "Круиз: полностью выключить"
-    AutomationBuiltinActionType.CRUISE_RESUME -> "Круиз: возобновить (RES+)"
+        ruEn("Круиз: включить и довести до уставки", "Cruise: turn on and reach the setpoint")
+    AutomationBuiltinActionType.CRUISE_PAUSE -> ruEn("Круиз: пауза (Cancel)", "Cruise: pause (Cancel)")
+    AutomationBuiltinActionType.CRUISE_FULL_OFF -> ruEn("Круиз: полностью выключить", "Cruise: turn fully off")
+    AutomationBuiltinActionType.CRUISE_RESUME -> ruEn("Круиз: возобновить (RES+)", "Cruise: resume (RES+)")
     AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
-        "Круиз: активировать на текущей скорости (SET−)"
-    AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
-    AutomationBuiltinActionType.START_VAD_VOICE -> "VAD Voice: слушать"
-    AutomationBuiltinActionType.PLACE_CALL -> "Позвонить (HFP)"
-    AutomationBuiltinActionType.ANSWER_CALL -> "Ответить на звонок (HFP)"
-    AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
-    AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
-    AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
-    AutomationBuiltinActionType.CAMD_RECORDER -> "Регистратор Камеры ГУ"
-    AutomationBuiltinActionType.CAMD_RECORDER_SOS -> "SOS регистратора (сохранить кадр)"
-    AutomationBuiltinActionType.DCL_SET_SMART_ACC -> "DCL: Умный ACC вкл/выкл"
-    AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> "DCL: переключить Умный ACC"
+        ruEn("Круиз: активировать на текущей скорости (SET−)", "Cruise: activate at the current speed (SET−)")
+    AutomationBuiltinActionType.CRUISE_NUDGE -> ruEn("Круиз: уставка ±1", "Cruise: setpoint ±1")
+    AutomationBuiltinActionType.START_VAD_VOICE -> ruEn("VAD Voice: слушать", "VAD Voice: listen")
+    AutomationBuiltinActionType.PLACE_CALL -> ruEn("Позвонить (HFP)", "Place call (HFP)")
+    AutomationBuiltinActionType.ANSWER_CALL -> ruEn("Ответить на звонок (HFP)", "Answer call (HFP)")
+    AutomationBuiltinActionType.HANGUP_CALL -> ruEn("Сбросить звонок (HFP)", "End call (HFP)")
+    AutomationBuiltinActionType.CAMD_WINDOW -> ruEn("Окно камеры", "Camera window")
+    AutomationBuiltinActionType.CAMD_KEEP_AVM -> ruEn("Держать штатный AVM отключенным", "Keep stock AVM disabled")
+    AutomationBuiltinActionType.CAMD_RECORDER -> ruEn("Регистратор Камеры ГУ", "HU Cameras recorder")
+    AutomationBuiltinActionType.CAMD_RECORDER_SOS -> ruEn("SOS регистратора (сохранить кадр)", "Recorder SOS (save frame)")
+    AutomationBuiltinActionType.DCL_SET_SMART_ACC -> ruEn("DCL: Умный ACC вкл/выкл", "DCL: Smart ACC on/off")
+    AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> ruEn("DCL: переключить Умный ACC", "DCL: toggle Smart ACC")
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {
@@ -1890,7 +1898,7 @@ private fun FloatingPanelVisibilityActionFields(
         onChange = onChange,
     )
     AutomationDropdown(
-        label = "Операция",
+        label = ruEn("Операция", "Operation"),
         value = action.floatingPanelVisibilityOp(),
         options = AutomationFloatingPanelVisibilityOp.entries.toList(),
         optionLabel = ::floatingPanelVisibilityOpLabel,
@@ -1899,10 +1907,10 @@ private fun FloatingPanelVisibilityActionFields(
         },
     )
     Text(
-        text = "Скрытие и показ временные: настройку «Показывать плавающую панель» не меняют. " +
-            "После перезапуска приложения или службы панели снова появятся, если для них " +
-            "включено «Показывать плавающую панель» и нет других ограничений (правила " +
-            "скрытия по приложениям, разрешение «Поверх других окон»).",
+        text = ruEn("Скрытие и показ временные: настройку «Показывать плавающую панель» не меняют. ", "Hide and show are temporary: they do not change the “Show floating panel” setting. ") +
+            ruEn("После перезапуска приложения или службы панели снова появятся, если для них ", "After the app or service restarts, panels appear again if ") +
+            ruEn("включено «Показывать плавающую панель» и нет других ограничений (правила ", "“Show floating panel” is on and there are no other limits (rules ") +
+            ruEn("скрытия по приложениям, разрешение «Поверх других окон»).", "for hiding by app, the “Display over other apps” permission)."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -1921,7 +1929,7 @@ private fun FloatingPanelEnabledActionFields(
         onChange = onChange,
     )
     AutomationDropdown(
-        label = "Операция",
+        label = ruEn("Операция", "Operation"),
         value = action.floatingPanelEnabledOp(),
         options = AutomationFloatingPanelEnabledOp.entries.toList(),
         optionLabel = ::floatingPanelEnabledOpLabel,
@@ -1930,9 +1938,9 @@ private fun FloatingPanelEnabledActionFields(
         },
     )
     Text(
-        text = "Включение и выключение сохраняются в настройках (переключатель «Показывать " +
-            "плавающую панель») и действуют после перезагрузки. При выполнении сбрасывается " +
-            "временное скрытие всех панелей.",
+        text = ruEn("Включение и выключение сохраняются в настройках (переключатель «Показывать ", "On and off are saved in settings (the “Show ") +
+            ruEn("плавающую панель») и действуют после перезагрузки. При выполнении сбрасывается ", "floating panel” switch) and they apply after a reboot. When it runs, this clears ") +
+            ruEn("временное скрытие всех панелей.", "the temporary hide of all panels."),
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -1947,7 +1955,7 @@ private fun FloatingPanelTargetFields(
 ) {
     val scope = action.floatingPanelScope()
     AutomationDropdown(
-        label = "Панели",
+        label = ruEn("Панели", "Panels"),
         value = scope,
         options = AutomationFloatingPanelScope.entries.toList(),
         optionLabel = ::floatingPanelScopeLabel,
@@ -1968,14 +1976,14 @@ private fun FloatingPanelTargetFields(
     if (scope == AutomationFloatingPanelScope.SELECTED) {
         if (floatingPanels.isEmpty()) {
             Text(
-                text = "Нет плавающих панелей. Создайте панель в настройках.",
+                text = ruEn("Нет плавающих панелей. Создайте панель в настройках.", "No floating panels. Create a panel in settings."),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
             AutomationDropdown(
-                label = "Панель",
+                label = ruEn("Панель", "Panel"),
                 value = floatingPanels.firstOrNull { it.id == action.stringValue }
                     ?: floatingPanels.first(),
                 options = floatingPanels,

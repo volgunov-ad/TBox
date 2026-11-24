@@ -94,8 +94,13 @@ val CAMD_PRESET_NAME_REGEX = Regex("^[a-z0-9_]{1,32}$")
 fun isValidCamdPresetName(name: String): Boolean = CAMD_PRESET_NAME_REGEX.matches(name)
 
 fun camdPresetNameIssue(name: String): String? {
-    if (name.isBlank()) return "Укажите имя пресета"
-    if (!isValidCamdPresetName(name)) return "Имя пресета: строчная латиница, цифры и _, 1–32 символа"
+    if (name.isBlank()) return ruEn("Укажите имя пресета", "Enter a preset name")
+    if (!isValidCamdPresetName(name)) {
+        return ruEn(
+            "Имя пресета: строчная латиница, цифры и _, 1–32 символа",
+            "Preset name: lowercase latin, digits and _, 1–32 characters",
+        )
+    }
     return null
 }
 
@@ -730,14 +735,22 @@ fun parseCamdPresetsReply(reply: String): List<CamdPresetInfo>? {
 }
 
 fun camdWindowGeometryIssue(x: Int, y: Int, w: Int, h: Int): String? {
-    if (w !in 5..100 || h !in 5..100) return "Ширина и высота окна: 5–100 %"
-    if (x !in 0..(100 - w) || y !in 0..(100 - h)) return "Окно выходит за экран"
+    if (w !in 5..100 || h !in 5..100) {
+        return ruEn("Ширина и высота окна: 5–100 %", "Window width and height: 5–100%")
+    }
+    if (x !in 0..(100 - w) || y !in 0..(100 - h)) {
+        return ruEn("Окно выходит за экран", "Window goes off-screen")
+    }
     return null
 }
 
 fun camdWindowCropIssue(x: Int, y: Int, w: Int, h: Int): String? {
-    if (w !in 5..100 || h !in 5..100) return "Ширина и высота вырезки: 5–100 %"
-    if (x !in 0..(100 - w) || y !in 0..(100 - h)) return "Вырезка выходит за кадр"
+    if (w !in 5..100 || h !in 5..100) {
+        return ruEn("Ширина и высота вырезки: 5–100 %", "Crop width and height: 5–100%")
+    }
+    if (x !in 0..(100 - w) || y !in 0..(100 - h)) {
+        return ruEn("Вырезка выходит за кадр", "Crop goes outside the frame")
+    }
     return null
 }
 

@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.telecom.TelecomManager
 import android.util.Log
+import vad.dashing.tbox.ruEn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -158,12 +159,17 @@ object PhoneCallStateRepository {
     fun answerIncomingCall(): PhoneCallControlResult {
         if (!answerCapability()) {
             return PhoneCallControlResult.Failure(
-                "Ответ на звонок недоступен на этой прошивке / без привилегий",
+                ruEn(
+                    "Ответ на звонок недоступен на этой прошивке / без привилегий",
+                    "Answering is unavailable on this firmware / without privileges",
+                ),
             )
         }
         val snap = _snapshot.value
         if (snap.callState != PhoneCallState.INCOMING) {
-            return PhoneCallControlResult.Failure("Нет входящего звонка")
+            return PhoneCallControlResult.Failure(
+                ruEn("Нет входящего звонка", "No incoming call"),
+            )
         }
         if (answerViaHeadsetClient && invokeHeadsetClientAnswer()) {
             return PhoneCallControlResult.Success
@@ -171,13 +177,16 @@ object PhoneCallStateRepository {
         if (answerViaTelecom && invokeTelecom("acceptRingingCall")) {
             return PhoneCallControlResult.Success
         }
-        return controlFailure("Не удалось ответить на звонок")
+        return controlFailure(ruEn("Не удалось ответить на звонок", "Couldn't answer the call"))
     }
 
     fun hangupCall(): PhoneCallControlResult {
         if (!hangupCapability()) {
             return PhoneCallControlResult.Failure(
-                "Сброс звонка недоступен на этой прошивке / без привилегий",
+                ruEn(
+                    "Сброс звонка недоступен на этой прошивке / без привилегий",
+                    "Ending the call is unavailable on this firmware / without privileges",
+                ),
             )
         }
         val snap = _snapshot.value
@@ -193,14 +202,18 @@ object PhoneCallStateRepository {
             return PhoneCallControlResult.Success
         }
         return controlFailure(
-            if (unknown) HANGUP_STATE_UNKNOWN_MESSAGE else "Не удалось сбросить звонок",
+            if (unknown) HANGUP_STATE_UNKNOWN_MESSAGE
+            else ruEn("Не удалось сбросить звонок", "Couldn't end the call"),
         )
     }
 
     private fun controlFailure(message: String): PhoneCallControlResult.Failure {
         val ctx = appContext
         val hint = if (ctx != null && !hasAnswerPhoneCallsPermission(ctx)) {
-            ": нет разрешения на управление звонками (ANSWER_PHONE_CALLS)"
+            ruEn(
+                ": нет разрешения на управление звонками (ANSWER_PHONE_CALLS)",
+                ": no permission to control calls (ANSWER_PHONE_CALLS)",
+            )
         } else {
             ""
         }

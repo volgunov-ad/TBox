@@ -32,6 +32,7 @@ import vad.dashing.tbox.BLUETOOTH_PROFILE_HEADSET_CLIENT
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
+import vad.dashing.tbox.ruEn
 import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.phone.PhoneCallSnapshot
 import vad.dashing.tbox.phone.PhoneCallState
@@ -151,7 +152,10 @@ class DashboardPhoneDialWidgetOverlayTest {
         assertNotEquals(Intent.ACTION_CALL, ShadowToast.getTextOfLatestToast())
         // Hangup capability missing → Russian failure from repository, not NO_HFP / dial.
         assertEquals(
-            "Сброс звонка недоступен на этой прошивке / без привилегий",
+            ruEn(
+                "Сброс звонка недоступен на этой прошивке / без привилегий",
+                "Ending the call is unavailable on this firmware / without privileges",
+            ),
             ShadowToast.getTextOfLatestToast(),
         )
     }
@@ -175,7 +179,10 @@ class DashboardPhoneDialWidgetOverlayTest {
 
         assertTrue(drainStartedActivities().isEmpty())
         assertEquals(
-            "Сброс звонка недоступен на этой прошивке / без привилегий",
+            ruEn(
+                "Сброс звонка недоступен на этой прошивке / без привилегий",
+                "Ending the call is unavailable on this firmware / without privileges",
+            ),
             ShadowToast.getTextOfLatestToast(),
         )
     }

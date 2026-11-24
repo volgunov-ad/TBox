@@ -41,8 +41,8 @@ class ZteReqprocStatusMapperTest {
         assertEquals(512L, snap.netState.uploadSpeedBps)
         assertEquals(4, snap.netState.signalLevel)
         assertEquals(21, snap.netState.csq) // (-71+113)/2 = 21
-        assertEquals("домашняя сеть", snap.netState.regStatus)
-        assertEquals("SIM готова", snap.netState.simStatus)
+        assertEquals("home", snap.netState.regStatus)
+        assertEquals("ready", snap.netState.simStatus)
         assertEquals("MTS", snap.netValues.operator)
         assertEquals("860000000000001", snap.netValues.imei)
         assertEquals("250010000000001", snap.netValues.imsi)
@@ -98,7 +98,7 @@ class ZteReqprocStatusMapperTest {
                 "simcard_roam" to "Roaming",
             ),
         )
-        assertEquals("роуминг", roam.netState.regStatus)
+        assertEquals("roaming", roam.netState.regStatus)
 
         val noSim = ZteReqprocStatusMapper.map(
             mapOf(
@@ -106,7 +106,7 @@ class ZteReqprocStatusMapperTest {
                 "ppp_status" to "",
             ),
         )
-        assertEquals("нет SIM", noSim.netState.simStatus)
+        assertEquals("none", noSim.netState.simStatus)
     }
 
     @Test

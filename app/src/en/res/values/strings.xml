@@ -455,7 +455,7 @@
     <string name="widget_value_accuracy_1">1</string>
     <string name="widget_value_accuracy_2">2</string>
     <string name="widget_datetime_format_label">Date/time format</string>
-    <string name="widget_datetime_format_hint">Empty — system format. Examples: дд.ММ.гггг, dd.MM.yyyy (EEE), чч:мм, HH:mm:ss, дд.ММ.гггг (день)</string>
+    <string name="widget_datetime_format_hint">Empty — system format. Examples: dd.MM.yyyy, dd.MM.yyyy (EEE), HH:mm, HH:mm:ss</string>
     <string name="widget_datetime_format_preview">Preview: %1$s</string>
     <string name="widget_datetime_format_error">Invalid format</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
@@ -3539,4 +3539,23 @@
     <string name="widget_editor_card_placement_values">Exact values</string>
     <string name="widget_editor_center_horizontal">Center horizontally</string>
     <string name="widget_editor_center_vertical">Center vertically</string>
+
+    <string name="data_title_camd_sos_widget">Recorder SOS</string>
+    <string name="widget_desc_camd_sos">One-tap «save important clip» for the Cameras HU recorder (REC SOS, camd 0.8.6+). Tap saves the current recording segment to the SOS folder. The tile does not show state; the recorder must be on.</string>
+    <string name="widget_actions_camd_sos">Tap — save the current segment to SOS (REC SOS). In edit mode — tile settings.</string>
+    <string name="camd_recorder_error_rec_off">Recorder is off — turn it on with the «Recorder» tile</string>
+    <string name="camd_recorder_error_no_sos_folder">Recorder: no SOS folder in Cameras HU</string>
+    <string name="camd_recorder_sos_started">Saving important clip</string>
+    <string name="camd_recorder_sos_busy">Already saving</string>
+    <string name="info_camd_rec_enabled">Recording enabled</string>
+    <string name="info_camd_rec_active">Recording</string>
+    <string name="info_camd_rec_not_recording">Recording is off: in Cameras HU, open the «Recorder» tab and tap «Dashcam».</string>
+    <string name="update_download_speed">Speed: %1$s</string>
+    <string name="update_download_eta">Remaining: %1$s</string>
+    <string name="update_cancel_download">Cancel download</string>
+    <string name="themes_clear_shared_http_request_icons">Clear shared HTTP request icons folder</string>
+    <string name="themes_clear_shared_http_request_icons_dialog_title">Clear shared HTTP request icons folder?</string>
+    <string name="themes_clear_shared_http_request_icons_dialog_message">All manual icons in the shared http_request_icons folder will be deleted. Icons stored inside materialized themes are kept.</string>
+    <string name="themes_clear_shared_http_request_icons_confirm">Clear</string>
+    <string name="toast_theme_shared_http_request_icons_cleared">Shared HTTP request icons folder cleared</string>
 </resources>
