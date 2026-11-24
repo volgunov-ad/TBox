@@ -8,7 +8,7 @@
       mqtt/version.json
       camd/version.json
       …
-      catalog.meta.json   # опционально: id → title/summary/hu/…
+      catalog.meta.json   # опционально: sections + apps[]
 
 Public key: https://disk.yandex.ru/d/KDaHLxbFtPAjYA
 Зеркало:   https://cloud.mail.ru/public/voi3/4Lx1RhqV9
@@ -19,6 +19,7 @@ GUI для наполнения: tools/appstore_manager/ (Запуск.cmd).
 
   python tools/build_apps_catalog.py --apps-dir /path/to/AppStore/release/apps
   python tools/build_apps_catalog.py --apps-dir /path/to/AppStore/release/apps --write
+  python tools/build_apps_catalog.py --apps-dir /path/to/AppStore/release/apps --migrate --write
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ _MANAGER = Path(__file__).resolve().parent / "appstore_manager"
 if str(_MANAGER) not in sys.path:
     sys.path.insert(0, str(_MANAGER))
 
-from appstore_catalog import build_catalog, write_catalog  # noqa: E402
+from appstore_catalog import build_catalog, migrate_legacy_catalog, write_catalog  # noqa: E402
 
 
 def main() -> int:
@@ -48,11 +49,20 @@ def main() -> int:
         action="store_true",
         help="Write catalog.json into apps-dir (default: print to stdout)",
     )
+    parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Migrate legacy catalog.meta.json / version.json to the new format first",
+    )
     args = parser.parse_args()
     apps_dir: Path = args.apps_dir
     if not apps_dir.is_dir():
         print(f"error: not a directory: {apps_dir}", file=sys.stderr)
         return 1
+    if args.migrate:
+        report = migrate_legacy_catalog(apps_dir)
+        for line in report.summary_lines():
+            print(line, file=sys.stderr)
     if args.write:
         out = write_catalog(apps_dir)
         catalog = json.loads(out.read_text(encoding="utf-8"))

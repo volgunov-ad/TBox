@@ -9,6 +9,7 @@ catalog.meta.json + version.json + catalog.json.
 
 from __future__ import annotations
 
+import copy
 import os
 import subprocess
 import sys
@@ -19,6 +20,8 @@ from tkinter import (
     DISABLED,
     END,
     LEFT,
+    MULTIPLE,
+    Listbox,
     NORMAL,
     RIGHT,
     StringVar,
@@ -42,29 +45,37 @@ from appstore_catalog import (  # noqa: E402
     AppMeta,
     AppRecord,
     CertPinMismatchError,
+    HU_CHOICES,
+    INSTALL_MODE_CHOICES,
     add_app,
+    add_download_files,
+    add_section,
     delete_app,
+    delete_section,
     ensure_seed_meta,
+    files_dir,
     find_changelog_file,
     find_icon_file,
+    hu_from_label,
+    hu_label,
+    install_mode_from_label,
+    install_mode_label,
     list_channel_apps_dirs,
+    load_sections,
+    migrate_legacy_catalog,
+    move_section,
     read_changelog,
+    remove_download_files,
     resolve_apps_dir,
     scan_apps,
     set_apk,
     set_icon,
-    write_changelog,
+    update_section,
     upsert_meta,
+    validate_downloads_folder,
     write_catalog,
+    write_changelog,
 )
-
-# Fixed vocabularies of catalog.meta.json; free text here used to produce silent typos.
-CHOICES: dict[str, tuple[str, ...]] = {
-    "origin": ("first-party", "third-party"),
-    "category": ("app", "tool", "oneshot"),
-    "installMode": ("hu", "phone"),
-    "verified": ("true", "false"),
-}
 
 
 class AppStoreManagerApp:
@@ -82,6 +93,7 @@ class AppStoreManagerApp:
         self.selected_id: str | None = None
         self._loaded_snapshot: tuple | None = None
         self._current_channel = self.channel.get()
+        self._section_ids_order: list[str] = []
 
         self._build_ui()
         self._set_form_enabled(False)
@@ -106,6 +118,7 @@ class AppStoreManagerApp:
         channel.bind("<<ComboboxSelected>>", lambda _e: self.on_channel_changed())
         ttk.Button(top, text="Обновить", command=self.user_reload).pack(side=LEFT, padx=8)
         ttk.Button(top, text="Добавить…", command=self.add_dialog).pack(side=LEFT)
+        ttk.Button(top, text="Разделы…", command=self.sections_dialog).pack(side=LEFT, padx=8)
         ttk.Button(top, text="Пересобрать catalog.json", command=self.rebuild_catalog).pack(
             side=LEFT,
             padx=8,
@@ -131,7 +144,7 @@ class AppStoreManagerApp:
         self.tree.column("id", width=120, stretch=False)
         self.tree.column("title", width=180)
         self.tree.column("version", width=90, stretch=False)
-        self.tree.column("state", width=130, stretch=False)
+        self.tree.column("state", width=160, stretch=False)
         self.tree.tag_configure("problem", foreground="#B3261E")
         scroll = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
@@ -142,8 +155,10 @@ class AppStoreManagerApp:
         notebook = ttk.Notebook(right)
         notebook.pack(fill=BOTH, expand=True)
         form = ttk.Frame(notebook, padding=4)
+        files_tab = ttk.Frame(notebook, padding=4)
         changelog_tab = ttk.Frame(notebook, padding=4)
         notebook.add(form, text="Описание")
+        notebook.add(files_tab, text="Файлы в Загрузки")
         notebook.add(changelog_tab, text="Changelog (карточка)")
 
         self.fields: dict[str, StringVar] = {}
@@ -153,34 +168,67 @@ class AppStoreManagerApp:
             ("packageName", "packageName"),
             ("title", "Название"),
             ("publisher", "Издатель"),
-            ("origin", "Происхождение"),
-            ("hu", "ГУ (a9,a10)"),
-            ("category", "Категория"),
+            ("hu", "ГУ"),
             ("installMode", "Куда ставится"),
-            ("verified", "Проверено"),
-            ("reviewNotes", "Заметки проверки"),
-            ("copyApkToDownloadsAppId", "APK в Загрузки (id, напр. dcl-launcher)"),
             ("signingCertSha256", "cert SHA-256 (из APK, pin)"),
             ("versionCode", "versionCode (из APK)"),
             ("versionName", "versionName (из APK)"),
-            ("changelog", "Changelog APK (кратко в version.json)"),
             ("apkInfo", "Текущий APK"),
             ("iconInfo", "Иконка"),
         ]
         readonly = {"id", "versionCode", "versionName", "apkInfo", "iconInfo"}
+        hu_labels = [label for _, label in HU_CHOICES]
+        install_labels = [label for _, label in INSTALL_MODE_CHOICES]
         for key, label in rows:
             row = ttk.Frame(form)
             row.pack(fill=X, pady=2)
             ttk.Label(row, text=label, width=36).pack(side=LEFT)
             var = StringVar()
             self.fields[key] = var
-            if key in CHOICES:
-                entry = ttk.Combobox(row, textvariable=var, values=CHOICES[key], state="readonly")
+            if key == "hu":
+                entry = ttk.Combobox(row, textvariable=var, values=hu_labels, state="readonly")
+            elif key == "installMode":
+                entry = ttk.Combobox(
+                    row,
+                    textvariable=var,
+                    values=install_labels,
+                    state="readonly",
+                )
             else:
                 entry = ttk.Entry(row, textvariable=var, state=DISABLED if key in readonly else NORMAL)
             entry.pack(side=LEFT, fill=X, expand=True)
             if key not in readonly:
                 self._editable_widgets.append(entry)
+
+        # Hidden field for dirty tracking of section multi-select.
+        self.fields["sections"] = StringVar()
+        self.fields["downloadsFolder"] = StringVar()
+
+        sections_row = ttk.Frame(form)
+        sections_row.pack(fill=X, pady=4)
+        ttk.Label(sections_row, text="Разделы магазина", width=36).pack(side=LEFT, anchor="n")
+        sections_col = ttk.Frame(sections_row)
+        sections_col.pack(side=LEFT, fill=X, expand=True)
+        self.sections_list = Listbox(
+            sections_col,
+            selectmode=MULTIPLE,
+            exportselection=False,
+            height=3,
+            activestyle="dotbox",
+        )
+        self.sections_list.pack(side=LEFT, fill=X, expand=True)
+        self.sections_list.bind("<<ListboxSelect>>", self._on_sections_select)
+        ttk.Button(sections_col, text="Разделы…", command=self.sections_dialog).pack(
+            side=LEFT,
+            padx=6,
+            anchor="n",
+        )
+        self.sections_hint = ttk.Label(
+            form,
+            text="",
+            foreground="#666",
+        )
+        self.sections_hint.pack(fill=X, padx=(0, 0))
 
         summary_box = ttk.LabelFrame(form, text="Описание (блок «О приложении» в магазине)", padding=4)
         summary_box.pack(fill=BOTH, expand=True, pady=(6, 2))
@@ -195,6 +243,58 @@ class AppStoreManagerApp:
         ttk.Button(btns, text="Открыть папку", command=self.open_folder).pack(side=LEFT, padx=8)
         ttk.Button(btns, text="Удалить приложение…", command=self.delete_selected).pack(side=RIGHT)
 
+        # --- Files tab ---
+        ttk.Label(
+            files_tab,
+            text=(
+                "Store сохраняет эти файлы при скачивании приложения в "
+                "«Загрузки/<папка>/» (ГУ и телефон). Лежат в apps\\<id>\\files\\."
+            ),
+            wraplength=520,
+        ).pack(fill=X, pady=(0, 8))
+        folder_row = ttk.Frame(files_tab)
+        folder_row.pack(fill=X, pady=2)
+        ttk.Label(folder_row, text="Папка в Загрузках", width=24).pack(side=LEFT)
+        folder_entry = ttk.Entry(folder_row, textvariable=self.fields["downloadsFolder"])
+        folder_entry.pack(side=LEFT, fill=X, expand=True)
+        self._editable_widgets.append(folder_entry)
+
+        files_cols = ("name", "size", "sha", "state")
+        self.files_tree = ttk.Treeview(
+            files_tab,
+            columns=files_cols,
+            show="headings",
+            selectmode="extended",
+            height=10,
+        )
+        self.files_tree.heading("name", text="Файл")
+        self.files_tree.heading("size", text="Размер")
+        self.files_tree.heading("sha", text="SHA-256 (12 симв.)")
+        self.files_tree.heading("state", text="Состояние")
+        self.files_tree.column("name", width=220)
+        self.files_tree.column("size", width=90, stretch=False)
+        self.files_tree.column("sha", width=120, stretch=False)
+        self.files_tree.column("state", width=120, stretch=False)
+        self.files_tree.tag_configure("problem", foreground="#B3261E")
+        self.files_tree.pack(fill=BOTH, expand=True, pady=4)
+
+        files_btns = ttk.Frame(files_tab)
+        files_btns.pack(fill=X, pady=6)
+        ttk.Button(files_btns, text="Добавить файлы…", command=self.add_download_files_ui).pack(
+            side=LEFT,
+        )
+        ttk.Button(
+            files_btns,
+            text="Удалить выбранные…",
+            command=self.remove_download_files_ui,
+        ).pack(side=LEFT, padx=8)
+        ttk.Button(
+            files_btns,
+            text="Открыть папку файлов",
+            command=self.open_files_folder,
+        ).pack(side=LEFT)
+
+        # --- Changelog tab ---
         ttk.Label(
             changelog_tab,
             text=(
@@ -228,6 +328,38 @@ class AppStoreManagerApp:
         status = ttk.Label(self.root, textvariable=self.status, relief="sunken", anchor=W, padding=6)
         status.pack(fill=X, side="bottom")
 
+    def _on_sections_select(self, _event=None) -> None:
+        selected = [
+            self._section_ids_order[i]
+            for i in self.sections_list.curselection()
+            if 0 <= i < len(self._section_ids_order)
+        ]
+        self.fields["sections"].set(",".join(selected))
+
+    def _refresh_sections_listbox(self, selected_ids: list[str] | None = None) -> None:
+        selected = set(selected_ids or [])
+        self.sections_list.delete(0, END)
+        self._section_ids_order = []
+        try:
+            sections = load_sections(self._current_apps_dir()) if self.appstore_root or self.apps_dir else []
+        except Exception:
+            sections = []
+        if not sections:
+            self.sections_list.configure(state=DISABLED)
+            self.sections_hint.configure(text="Нет разделов — кнопка «Разделы…»")
+            self.fields["sections"].set("")
+            return
+        self.sections_list.configure(state=NORMAL)
+        self.sections_hint.configure(text="")
+        height = min(5, max(1, len(sections)))
+        self.sections_list.configure(height=height)
+        for idx, section in enumerate(sections):
+            self.sections_list.insert(END, section.title)
+            self._section_ids_order.append(section.id)
+            if section.id in selected:
+                self.sections_list.selection_set(idx)
+        self._on_sections_select()
+
     def _set_form_enabled(self, enabled: bool) -> None:
         state = NORMAL if enabled else DISABLED
         for widget in self._editable_widgets:
@@ -237,6 +369,13 @@ class AppStoreManagerApp:
                 widget.configure(state=state)
         for widget in (self.summary_text, *self.changelog_texts.values()):
             widget.configure(state=state)
+        try:
+            if enabled and self._section_ids_order:
+                self.sections_list.configure(state=NORMAL)
+            else:
+                self.sections_list.configure(state=DISABLED)
+        except Exception:
+            pass
 
     @staticmethod
     def _set_text(widget: ScrolledText, body: str) -> None:
@@ -290,6 +429,19 @@ class AppStoreManagerApp:
             except Exception as exc:
                 messagebox.showerror("Ошибка", str(exc))
                 return
+        self._open_path(folder)
+
+    def open_files_folder(self) -> None:
+        if not self.selected_id:
+            return
+        try:
+            folder = files_dir(self._current_apps_dir(), self.selected_id)
+            folder.mkdir(parents=True, exist_ok=True)
+            self._open_path(folder)
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
+    def _open_path(self, folder: Path) -> None:
         try:
             if sys.platform.startswith("win"):
                 os.startfile(folder)  # type: ignore[attr-defined]
@@ -344,6 +496,14 @@ class AppStoreManagerApp:
             apps_dir = self._current_apps_dir()
             apps_dir.mkdir(parents=True, exist_ok=True)
             ensure_seed_meta(apps_dir)
+            report = migrate_legacy_catalog(apps_dir)
+            if report.changed:
+                channel = self.channel.get()
+                body = "\n".join(report.summary_lines())
+                messagebox.showinfo(
+                    "Миграция каталога",
+                    f"Каталог {channel} переведён на новый формат\n\n{body}",
+                )
             self.apps_dir = apps_dir
             self.path_label.configure(text=f"Папка apps: {apps_dir}")
             self.records = scan_apps(apps_dir)
@@ -365,6 +525,7 @@ class AppStoreManagerApp:
                     problems.append("нет version.json")
                 if record.missing_package:
                     problems.append("нет packageName")
+                problems.extend(record.download_problems)
                 if problems:
                     state = ", ".join(problems)
                 elif (record.meta.installMode or "hu") == "phone":
@@ -408,6 +569,9 @@ class AppStoreManagerApp:
         self._set_text(self.summary_text, "")
         for lang in self.changelog_texts:
             self._set_changelog_text(lang, "")
+        self.sections_list.delete(0, END)
+        self._section_ids_order = []
+        self.files_tree.delete(*self.files_tree.get_children())
         self._loaded_snapshot = None
 
     def on_select(self, _event=None) -> None:
@@ -421,6 +585,30 @@ class AppStoreManagerApp:
             return
         self._fill_form(sel[0])
 
+    def _fill_files_table(self, record: AppRecord) -> None:
+        self.files_tree.delete(*self.files_tree.get_children())
+        problem_by_name = {}
+        for msg in record.download_problems:
+            # «нет файла X» / «файл X изменён»
+            if msg.startswith("нет файла "):
+                problem_by_name[msg[len("нет файла "):]] = "нет файла"
+            elif msg.startswith("файл ") and msg.endswith(" изменён"):
+                problem_by_name[msg[len("файл "):-len(" изменён")]] = "изменён"
+        for entry in record.meta.downloadFiles:
+            state = problem_by_name.get(entry.name, "ок")
+            self.files_tree.insert(
+                "",
+                END,
+                iid=entry.name,
+                values=(
+                    entry.name,
+                    str(entry.sizeBytes),
+                    entry.sha256[:12],
+                    state,
+                ),
+                tags=("problem",) if state != "ок" else (),
+            )
+
     def _fill_form(self, app_id: str) -> None:
         record = next((r for r in self.records if r.meta.id == app_id), None)
         if record is None:
@@ -433,19 +621,15 @@ class AppStoreManagerApp:
         self.fields["title"].set(m.title)
         self._set_text(self.summary_text, m.summary)
         self.fields["publisher"].set(m.publisher)
-        self.fields["origin"].set(m.origin)
-        self.fields["hu"].set(",".join(m.hu))
-        self.fields["category"].set(m.category)
-        self.fields["verified"].set("true" if m.verified else "false")
-        self.fields["reviewNotes"].set(m.reviewNotes)
-        self.fields["copyApkToDownloadsAppId"].set(m.copyApkToDownloadsAppId)
-        self.fields["installMode"].set(m.installMode or "hu")
+        self.fields["hu"].set(hu_label(m.hu))
+        self.fields["installMode"].set(install_mode_label(m.installMode))
         self.fields["signingCertSha256"].set(",".join(m.signingCertSha256))
+        self.fields["downloadsFolder"].set(m.downloadsFolder)
+        self._refresh_sections_listbox(m.sections)
         if record.releases:
             primary = record.release or record.releases[0]
             self.fields["versionCode"].set(str(primary.versionCode))
             self.fields["versionName"].set(primary.versionName)
-            self.fields["changelog"].set(primary.changelog)
             lines = []
             for rel in record.releases:
                 size = rel.apkSizeBytes or 0
@@ -458,7 +642,6 @@ class AppStoreManagerApp:
         else:
             self.fields["versionCode"].set("")
             self.fields["versionName"].set("")
-            self.fields["changelog"].set("")
             self.fields["apkInfo"].set("нет APK / version.json")
         icon = find_icon_file(record.folder)
         if icon is not None:
@@ -467,34 +650,35 @@ class AppStoreManagerApp:
             self.fields["iconInfo"].set(record.meta.icon)
         else:
             self.fields["iconInfo"].set("нет (будет буква / иконка установленного APK)")
+        self._fill_files_table(record)
         for lang in ("ru", "en"):
             self._set_changelog_text(lang, read_changelog(record.folder, lang))
         self._loaded_snapshot = self._form_snapshot()
 
     def _meta_from_form(self) -> AppMeta:
-        hu = [x.strip() for x in self.fields["hu"].get().split(",") if x.strip()]
+        record = next((r for r in self.records if r.meta.id == self.selected_id), None)
+        if record is not None:
+            meta = copy.deepcopy(record.meta)
+        else:
+            meta = AppMeta(id=self.fields["id"].get().strip(), packageName="", title="")
         certs = [
             x.strip().lower()
             for x in self.fields["signingCertSha256"].get().replace(";", ",").split(",")
             if x.strip()
         ]
-        verified_raw = self.fields["verified"].get().strip().lower()
-        verified = verified_raw in ("1", "true", "yes", "да")
-        return AppMeta(
-            id=self.fields["id"].get().strip(),
-            packageName=self.fields["packageName"].get().strip(),
-            title=self.fields["title"].get().strip(),
-            summary=self.summary_text.get("1.0", "end-1c").strip(),
-            publisher=self.fields["publisher"].get().strip() or "TBox",
-            origin=self.fields["origin"].get().strip() or "first-party",
-            hu=hu or ["a9", "a10"],
-            category=self.fields["category"].get().strip() or "app",
-            verified=verified,
-            reviewNotes=self.fields["reviewNotes"].get().strip(),
-            copyApkToDownloadsAppId=self.fields["copyApkToDownloadsAppId"].get().strip(),
-            installMode=self.fields["installMode"].get().strip().lower() or "hu",
-            signingCertSha256=certs,
-        )
+        sections = [
+            s.strip() for s in self.fields["sections"].get().split(",") if s.strip()
+        ]
+        meta.packageName = self.fields["packageName"].get().strip()
+        meta.title = self.fields["title"].get().strip()
+        meta.summary = self.summary_text.get("1.0", "end-1c").strip()
+        meta.publisher = self.fields["publisher"].get().strip() or "TBox"
+        meta.hu = hu_from_label(self.fields["hu"].get())
+        meta.installMode = install_mode_from_label(self.fields["installMode"].get())
+        meta.signingCertSha256 = certs
+        meta.sections = sections
+        meta.downloadsFolder = self.fields["downloadsFolder"].get().strip()
+        return meta
 
     def _selected_folder(self) -> Path | None:
         if not self.selected_id:
@@ -546,6 +730,217 @@ class AppStoreManagerApp:
             messagebox.showerror("Ошибка", str(exc))
             return False
 
+    def add_download_files_ui(self) -> None:
+        if not self.selected_id or not self._confirm_discard():
+            return
+        paths = filedialog.askopenfilenames(title="Файлы для Загрузок")
+        if not paths:
+            return
+        # askopenfilenames may return a string on some platforms when empty/cancelled.
+        if isinstance(paths, str):
+            if not paths.strip():
+                return
+            paths = (paths,)
+        try:
+            apps_dir = self._current_apps_dir()
+            record = next((r for r in self.records if r.meta.id == self.selected_id), None)
+            if record is not None and not record.meta.downloadsFolder.strip():
+                title = record.meta.title or self.selected_id
+                try:
+                    folder = validate_downloads_folder(title)
+                except ValueError:
+                    folder = self.selected_id
+                meta = copy.deepcopy(record.meta)
+                meta.downloadsFolder = folder
+                upsert_meta(apps_dir, meta)
+            try:
+                added = add_download_files(apps_dir, self.selected_id, list(paths), replace=False)
+            except FileExistsError as exc:
+                names = str(exc)
+                if not messagebox.askyesno("Заменить файлы", f"Заменить: {names}?"):
+                    return
+                added = add_download_files(apps_dir, self.selected_id, list(paths), replace=True)
+            self.status.set(f"Файлов добавлено: {len(added)}")
+            self.reload()
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
+    def remove_download_files_ui(self) -> None:
+        if not self.selected_id:
+            return
+        selected = list(self.files_tree.selection())
+        if not selected:
+            messagebox.showinfo("Файлы", "Выберите файлы в таблице")
+            return
+        if not messagebox.askyesno(
+            "Удалить файлы",
+            f"Удалить выбранные файлы ({len(selected)}) из карточки и с диска?",
+        ):
+            return
+        try:
+            remove_download_files(self._current_apps_dir(), self.selected_id, selected)
+            self.reload()
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
+    def sections_dialog(self) -> None:
+        if not self._confirm_discard():
+            return
+        try:
+            apps_dir = self._current_apps_dir()
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+            return
+
+        dlg = Toplevel(self.root)
+        dlg.title(f"Разделы магазина — канал {self.channel.get()}")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry("560x360")
+
+        cols = ("title", "titleEn", "count")
+        tree = ttk.Treeview(dlg, columns=cols, show="headings", selectmode="browse")
+        tree.heading("title", text="Название")
+        tree.heading("titleEn", text="Название EN")
+        tree.heading("count", text="Приложений")
+        tree.column("title", width=200)
+        tree.column("titleEn", width=160)
+        tree.column("count", width=90, stretch=False)
+        tree.pack(fill=BOTH, expand=True, padx=8, pady=8)
+
+        def refresh() -> None:
+            tree.delete(*tree.get_children())
+            metas = {r.meta.id: r.meta for r in scan_apps(apps_dir)}
+            for section in load_sections(apps_dir):
+                count = sum(1 for m in metas.values() if section.id in m.sections)
+                tree.insert(
+                    "",
+                    END,
+                    iid=section.id,
+                    values=(section.title, section.titleEn, count),
+                )
+
+        def selected_id() -> str | None:
+            sel = tree.selection()
+            return sel[0] if sel else None
+
+        def add() -> None:
+            title, title_en = self._ask_section_fields(dlg)
+            if title is None:
+                return
+            try:
+                add_section(apps_dir, title, title_en or "")
+                refresh()
+            except Exception as exc:
+                messagebox.showerror("Ошибка", str(exc), parent=dlg)
+
+        def edit() -> None:
+            sid = selected_id()
+            if not sid:
+                return
+            section = next((s for s in load_sections(apps_dir) if s.id == sid), None)
+            if section is None:
+                return
+            title, title_en = self._ask_section_fields(
+                dlg,
+                initial_title=section.title,
+                initial_title_en=section.titleEn,
+            )
+            if title is None:
+                return
+            try:
+                update_section(apps_dir, sid, title, title_en or "")
+                refresh()
+            except Exception as exc:
+                messagebox.showerror("Ошибка", str(exc), parent=dlg)
+
+        def delete() -> None:
+            sid = selected_id()
+            if not sid:
+                return
+            item = tree.item(sid)
+            count = int(item["values"][2]) if item and item.get("values") else 0
+            if not messagebox.askyesno(
+                "Удалить раздел",
+                f"Удалить раздел «{item['values'][0]}»? "
+                f"Он будет снят с {count} приложений.",
+                parent=dlg,
+            ):
+                return
+            try:
+                delete_section(apps_dir, sid)
+                refresh()
+            except Exception as exc:
+                messagebox.showerror("Ошибка", str(exc), parent=dlg)
+
+        def move(delta: int) -> None:
+            sid = selected_id()
+            if not sid:
+                return
+            try:
+                move_section(apps_dir, sid, delta)
+                refresh()
+                if tree.exists(sid):
+                    tree.selection_set(sid)
+            except Exception as exc:
+                messagebox.showerror("Ошибка", str(exc), parent=dlg)
+
+        btns = ttk.Frame(dlg, padding=8)
+        btns.pack(fill=X)
+        ttk.Button(btns, text="Добавить…", command=add).pack(side=LEFT)
+        ttk.Button(btns, text="Изменить…", command=edit).pack(side=LEFT, padx=4)
+        ttk.Button(btns, text="Удалить…", command=delete).pack(side=LEFT)
+        ttk.Button(btns, text="Выше", command=lambda: move(-1)).pack(side=LEFT, padx=8)
+        ttk.Button(btns, text="Ниже", command=lambda: move(1)).pack(side=LEFT)
+
+        def close() -> None:
+            dlg.destroy()
+            self.reload()
+
+        ttk.Button(btns, text="Закрыть", command=close).pack(side=RIGHT)
+        dlg.protocol("WM_DELETE_WINDOW", close)
+        refresh()
+        dlg.wait_window()
+
+    def _ask_section_fields(
+        self,
+        parent,
+        initial_title: str = "",
+        initial_title_en: str = "",
+    ) -> tuple[str | None, str | None]:
+        dlg = Toplevel(parent)
+        dlg.title("Раздел")
+        dlg.transient(parent)
+        dlg.grab_set()
+        title_var = StringVar(value=initial_title)
+        title_en_var = StringVar(value=initial_title_en)
+        row1 = ttk.Frame(dlg, padding=8)
+        row1.pack(fill=X)
+        ttk.Label(row1, text="Название", width=16).pack(side=LEFT)
+        ttk.Entry(row1, textvariable=title_var, width=40).pack(side=LEFT, fill=X, expand=True)
+        row2 = ttk.Frame(dlg, padding=8)
+        row2.pack(fill=X)
+        ttk.Label(row2, text="Название EN", width=16).pack(side=LEFT)
+        ttk.Entry(row2, textvariable=title_en_var, width=40).pack(side=LEFT, fill=X, expand=True)
+        result: dict[str, str | None] = {"title": None, "titleEn": None}
+
+        def ok() -> None:
+            result["title"] = title_var.get().strip()
+            result["titleEn"] = title_en_var.get().strip()
+            dlg.destroy()
+
+        def cancel() -> None:
+            result["title"] = None
+            result["titleEn"] = None
+            dlg.destroy()
+
+        row = ttk.Frame(dlg, padding=8)
+        row.pack(fill=X)
+        ttk.Button(row, text="OK", command=ok).pack(side=LEFT, padx=4)
+        ttk.Button(row, text="Отмена", command=cancel).pack(side=LEFT)
+        dlg.wait_window()
+        return result["title"], result["titleEn"]
+
     def replace_apk(self) -> None:
         if not self.selected_id or not self._confirm_discard():
             return
@@ -584,7 +979,6 @@ class AppStoreManagerApp:
                         # versionCode / versionName / cert / icon — из APK
                         version_code=None,
                         version_name=None,
-                        changelog=self.fields["changelog"].get().strip(),
                         flavor=flavor,
                         remove_other_apks=True,
                         allow_cert_change=allow_cert_change,
@@ -701,18 +1095,16 @@ class AppStoreManagerApp:
         dlg.transient(self.root)
         dlg.grab_set()
         vars_map: dict[str, StringVar] = {}
+        hu_labels = [label for _, label in HU_CHOICES]
         defaults = {
             "id": "",
             "packageName": "",
             "title": "",
             "summary": "",
             "publisher": "TBox",
-            "origin": "first-party",
-            "hu": "a9,a10",
-            "category": "app",
+            "hu": HU_CHOICES[0][1],
             "versionCode": "",
             "versionName": "",
-            "changelog": "",
         }
         entries: dict[str, ttk.Entry] = {}
         for key, default in defaults.items():
@@ -721,11 +1113,16 @@ class AppStoreManagerApp:
             label = key
             if key in ("versionCode", "versionName"):
                 label = f"{key} (из APK)"
+            elif key == "hu":
+                label = "ГУ"
             ttk.Label(row, text=label, width=18).pack(side=LEFT)
             var = StringVar(value=default)
             vars_map[key] = var
-            state = DISABLED if key in ("versionCode", "versionName") else NORMAL
-            entry = ttk.Entry(row, textvariable=var, width=48, state=state)
+            if key == "hu":
+                entry = ttk.Combobox(row, textvariable=var, values=hu_labels, state="readonly", width=45)
+            else:
+                state = DISABLED if key in ("versionCode", "versionName") else NORMAL
+                entry = ttk.Entry(row, textvariable=var, width=48, state=state)
             entry.pack(side=LEFT, fill=X, expand=True)
             entries[key] = entry
 
@@ -768,7 +1165,6 @@ class AppStoreManagerApp:
 
         def submit() -> None:
             try:
-                hu = [x.strip() for x in vars_map["hu"].get().split(",") if x.strip()]
                 apk = Path(apk_var.get()) if apk_var.get().strip() else None
                 package = vars_map["packageName"].get().strip()
                 if apk is not None:
@@ -785,10 +1181,7 @@ class AppStoreManagerApp:
                     title=vars_map["title"].get().strip(),
                     summary=vars_map["summary"].get().strip(),
                     publisher=vars_map["publisher"].get().strip() or "TBox",
-                    origin=vars_map["origin"].get().strip() or "first-party",
-                    hu=hu or ["a9", "a10"],
-                    category=vars_map["category"].get().strip() or "app",
-                    verified=True,
+                    hu=hu_from_label(vars_map["hu"].get()),
                 )
                 flavor = None
                 if apk is not None:
@@ -805,7 +1198,6 @@ class AppStoreManagerApp:
                     # None → set_apk читает манифест APK
                     version_code=None,
                     version_name=None,
-                    changelog=vars_map["changelog"].get().strip(),
                     flavor=flavor,
                 )
                 dlg.destroy()

@@ -10,6 +10,7 @@
   catalog.json       — отдаёт Store APK (собирается из meta + version.json)
   <id>/version.json  — манифест релиза APK
   <id>/*.apk
+  <id>/files/        — файлы карточки → Загрузки/<папка>/
 """
 
 from __future__ import annotations
@@ -24,9 +25,58 @@ from pathlib import Path
 from typing import Any
 
 APP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+SECTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 META_NAME = "catalog.meta.json"
 CATALOG_NAME = "catalog.json"
 VERSION_NAME = "version.json"
+FILES_DIR_NAME = "files"
+
+# Path-segment forbidden characters (Windows + Android Downloads).
+_FORBIDDEN_NAME_CHARS = set('\\/:*?"<>|\0') | {chr(c) for c in range(1, 32)}
+
+HU_CHOICES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("a9", "a10"), "A9 и A10"),
+    (("a9",), "Только A9"),
+    (("a10",), "Только A10"),
+)
+
+INSTALL_MODE_CHOICES: tuple[tuple[str, str], ...] = (
+    ("hu", "На ГУ"),
+    ("phone", "На телефон (QR и Загрузки)"),
+)
+
+_CATEGORY_SECTION_DEFS: tuple[tuple[str, str, str], ...] = (
+    ("app", "Приложения", "Apps"),
+    ("tool", "Инструменты", "Tools"),
+    ("oneshot", "Утилиты", "Utilities"),
+)
+
+
+@dataclass
+class Section:
+    id: str
+    title: str
+    titleEn: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"id": self.id, "title": self.title}
+        if self.titleEn:
+            data["titleEn"] = self.titleEn
+        return data
+
+
+@dataclass
+class DownloadFile:
+    name: str
+    sha256: str
+    sizeBytes: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "sha256": self.sha256.lower(),
+            "sizeBytes": int(self.sizeBytes),
+        }
 
 
 @dataclass
@@ -36,17 +86,13 @@ class AppMeta:
     title: str
     summary: str = ""
     publisher: str = "TBox"
-    origin: str = "first-party"
     hu: list[str] = field(default_factory=lambda: ["a9", "a10"])
-    category: str = "app"
-    verified: bool = True
     icon: str = ""
     signingCertSha256: list[str] = field(default_factory=list)
     minStoreVersionCode: int | None = None
-    reviewNotes: str = ""
-    # When set (e.g. dclinstall → dcl-launcher), Store also saves that app's APK
-    # into public Downloads after download (for tools that pick an APK from storage).
-    copyApkToDownloadsAppId: str = ""
+    sections: list[str] = field(default_factory=list)
+    downloadsFolder: str = ""
+    downloadFiles: list[DownloadFile] = field(default_factory=list)
     # hu (default) | phone — phone: QR + Downloads on HU, never install on HU.
     installMode: str = "hu"
 
@@ -57,10 +103,7 @@ class AppMeta:
             "title": self.title,
             "summary": self.summary,
             "publisher": self.publisher,
-            "origin": self.origin,
             "hu": list(self.hu),
-            "category": self.category,
-            "verified": bool(self.verified),
         }
         if self.icon:
             data["icon"] = self.icon
@@ -68,22 +111,54 @@ class AppMeta:
             data["signingCertSha256"] = list(self.signingCertSha256)
         if self.minStoreVersionCode is not None:
             data["minStoreVersionCode"] = int(self.minStoreVersionCode)
-        if self.reviewNotes:
-            data["reviewNotes"] = self.reviewNotes
-        if self.copyApkToDownloadsAppId:
-            data["copyApkToDownloadsAppId"] = self.copyApkToDownloadsAppId
+        if self.sections:
+            data["sections"] = list(self.sections)
+        folder = (self.downloadsFolder or "").strip()
+        files = list(self.downloadFiles)
+        if folder or files:
+            downloads: dict[str, Any] = {"folder": folder, "files": [f.to_dict() for f in files]}
+            data["downloads"] = downloads
         mode = (self.installMode or "hu").strip().lower()
         if mode and mode not in ("hu", "head-unit", "head_unit", "default", ""):
             data["installMode"] = mode
         return data
 
-    def to_catalog_entry(self, icon_file_name: str | None = None) -> dict[str, Any]:
-        entry = self.to_meta_dict()
-        entry["manifest"] = f"yandex-disk:/apps/{self.id}/version.json"
+    def to_catalog_entry(
+        self,
+        icon_file_name: str | None = None,
+        files: list[DownloadFile] | None = None,
+        section_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "id": self.id,
+            "packageName": self.packageName,
+            "title": self.title,
+            "summary": self.summary,
+            "publisher": self.publisher,
+            "hu": list(self.hu),
+            "manifest": f"yandex-disk:/apps/{self.id}/version.json",
+        }
         if self.icon:
             entry["icon"] = self.icon
         elif icon_file_name:
             entry["icon"] = f"yandex-disk:/apps/{self.id}/{icon_file_name}"
+        if self.signingCertSha256:
+            entry["signingCertSha256"] = list(self.signingCertSha256)
+        if self.minStoreVersionCode is not None:
+            entry["minStoreVersionCode"] = int(self.minStoreVersionCode)
+        mode = (self.installMode or "hu").strip().lower()
+        if mode and mode not in ("hu", "head-unit", "head_unit", "default", ""):
+            entry["installMode"] = mode
+        secs = list(section_ids) if section_ids is not None else list(self.sections)
+        if secs:
+            entry["sections"] = secs
+        publish_files = files if files is not None else list(self.downloadFiles)
+        folder = (self.downloadsFolder or "").strip()
+        if publish_files and folder:
+            entry["downloads"] = {
+                "folder": folder,
+                "files": [f.to_dict() for f in publish_files],
+            }
         return entry
 
 
@@ -95,7 +170,6 @@ class AppRelease:
     sha256: str
     flavor: str = "default"
     apkSizeBytes: int | None = None
-    changelog: str = ""
     publishedAt: str = ""
     minSupportedVersionCode: int = 0
 
@@ -109,6 +183,55 @@ class AppRecord:
     has_version_json: bool
     missing_package: bool = False
     releases: list[AppRelease] = field(default_factory=list)
+    download_problems: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MigrationReport:
+    changed: bool = False
+    removed_keys: dict[str, int] = field(default_factory=dict)
+    category_sections: dict[str, list[str]] = field(default_factory=dict)
+    unverified_ids: list[str] = field(default_factory=list)
+    sidecar_files: dict[str, list[str]] = field(default_factory=dict)
+    sidecar_sources: dict[str, str] = field(default_factory=dict)
+    sidecar_missing: dict[str, str] = field(default_factory=dict)
+    changelog_files: list[str] = field(default_factory=list)
+    version_json_stripped: list[str] = field(default_factory=list)
+
+    def summary_lines(self) -> list[str]:
+        lines: list[str] = []
+        if self.unverified_ids:
+            ids = ", ".join(self.unverified_ids)
+            lines.append(
+                f"Были скрыты (Проверено = нет), теперь публикуются: {ids} — "
+                f"удалите, если не нужны",
+            )
+        if self.removed_keys:
+            parts = [f"{k}×{n}" for k, n in sorted(self.removed_keys.items())]
+            lines.append("Удалены устаревшие поля: " + ", ".join(parts))
+        titles = {sid: title for sid, title, _ in _CATEGORY_SECTION_DEFS}
+        for sid, app_ids in self.category_sections.items():
+            lines.append(f"Раздел «{titles.get(sid, sid)}»: {', '.join(app_ids)}")
+        for app_id, names in self.sidecar_files.items():
+            source = self.sidecar_sources.get(app_id, "источника")
+            lines.append(
+                f"Скопированы файлы в {app_id}/files/: {', '.join(names)}. "
+                f"Это копии; после обновления {source} прикрепите новый APK",
+            )
+        for app_id, target in self.sidecar_missing.items():
+            lines.append(f"Не найдены APK источника «{target}» для карточки {app_id}")
+        if self.changelog_files:
+            lines.append("Changelog из version.json → " + ", ".join(self.changelog_files))
+        if self.version_json_stripped:
+            lines.append(
+                "Убран ключ changelog из version.json: "
+                + ", ".join(self.version_json_stripped),
+            )
+        if not lines and self.changed:
+            lines.append("Каталог обновлён до нового формата")
+        if not self.changed:
+            lines.append("Миграция не требуется (уже новый формат)")
+        return lines
 
 
 def utc_now() -> str:
@@ -143,6 +266,120 @@ def validate_app_id(app_id: str) -> str:
         raise ValueError(
             "id: латиница/цифры/._-, начинается с буквы или цифры, до 64 символов",
         )
+    return value
+
+
+def normalize_hu(raw: Any) -> list[str]:
+    """Keep only a9/a10 in that order; accept a comma string; empty → both."""
+    if raw is None or raw == "":
+        items: list[str] = []
+    elif isinstance(raw, str):
+        items = [x.strip() for x in raw.replace(";", ",").split(",") if x.strip()]
+    else:
+        items = [str(x).strip() for x in (raw or []) if str(x).strip()]
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        key = item.lower()
+        if key in ("a9", "a10") and key not in seen:
+            seen.add(key)
+            out.append(key)
+    if not out:
+        return ["a9", "a10"]
+    return sorted(out, key=lambda x: 0 if x == "a9" else 1)
+
+
+def hu_label(hu: list[str] | tuple[str, ...] | None) -> str:
+    normalized = tuple(normalize_hu(hu))
+    for wire, label in HU_CHOICES:
+        if tuple(wire) == normalized:
+            return label
+    return HU_CHOICES[0][1]
+
+
+def hu_from_label(label: str) -> list[str]:
+    text = (label or "").strip()
+    for wire, known in HU_CHOICES:
+        if text == known:
+            return list(wire)
+    # Also accept wire forms.
+    if text.lower() in ("a9", "только a9"):
+        return ["a9"]
+    if text.lower() in ("a10", "только a10"):
+        return ["a10"]
+    return ["a9", "a10"]
+
+
+def install_mode_label(mode: str | None) -> str:
+    key = (mode or "hu").strip().lower() or "hu"
+    if key in ("phone", "телефон"):
+        return INSTALL_MODE_CHOICES[1][1]
+    for wire, label in INSTALL_MODE_CHOICES:
+        if wire == key:
+            return label
+    return INSTALL_MODE_CHOICES[0][1]
+
+
+def install_mode_from_label(label: str) -> str:
+    text = (label or "").strip()
+    for wire, known in INSTALL_MODE_CHOICES:
+        if text == known or text.lower() == wire:
+            return wire
+    if "телефон" in text.lower() or text.lower() == "phone":
+        return "phone"
+    return "hu"
+
+
+def validate_downloads_folder(name: str) -> str:
+    value = (name or "").strip()
+    if not value:
+        raise ValueError("Папка в Загрузках обязательна, когда есть файлы")
+    if len(value) > 64:
+        raise ValueError("Папка в Загрузках: не больше 64 символов")
+    if value in (".", "..") or value.startswith(".") or value.endswith("."):
+        raise ValueError("Папка в Загрузках: недопустимое имя")
+    if any(ch in _FORBIDDEN_NAME_CHARS for ch in value):
+        raise ValueError(
+            'Папка в Загрузках: недопустимые символы \\ / : * ? " < > |',
+        )
+    return value
+
+
+def validate_download_file_name(name: str) -> str:
+    value = (name or "").strip()
+    if not value or len(value) > 120:
+        raise ValueError("Имя файла: 1–120 символов")
+    if value.startswith("."):
+        raise ValueError("Имя файла не должно начинаться с точки")
+    if value.endswith(".") or value.endswith(" "):
+        raise ValueError("Имя файла не должно оканчиваться точкой или пробелом")
+    if value.lower().endswith(".part"):
+        raise ValueError("Имя файла не должно оканчиваться на .part")
+    if any(ch in _FORBIDDEN_NAME_CHARS for ch in value):
+        raise ValueError(
+            'Имя файла: недопустимые символы \\ / : * ? " < > |',
+        )
+    return value
+
+
+def validate_section_id(section_id: str) -> str:
+    value = (section_id or "").strip()
+    if not SECTION_ID_RE.match(value):
+        raise ValueError(
+            "id раздела: латиница/цифры/_-, начинается с буквы или цифры, до 32 символов",
+        )
+    return value
+
+
+def validate_section_title(title: str, *, en: bool = False) -> str:
+    value = (title or "").strip()
+    label = "Название EN" if en else "Название"
+    if en:
+        if len(value) > 40:
+            raise ValueError(f"{label}: не больше 40 символов")
+        return value
+    if not value or len(value) > 40:
+        raise ValueError(f"{label}: 1–40 символов")
     return value
 
 
@@ -183,38 +420,94 @@ def list_channel_apps_dirs(appstore_root: Path) -> dict[str, Path]:
     return out
 
 
+def _download_file_from_dict(raw: dict[str, Any]) -> DownloadFile | None:
+    name = str(raw.get("name", "")).strip()
+    sha = str(raw.get("sha256", "")).strip().lower()
+    size = raw.get("sizeBytes")
+    if not name or not sha or size is None:
+        return None
+    try:
+        size_i = int(size)
+    except (TypeError, ValueError):
+        return None
+    return DownloadFile(name=name, sha256=sha, sizeBytes=size_i)
+
+
 def _meta_from_dict(raw: dict[str, Any], fallback_id: str) -> AppMeta:
     app_id = str(raw.get("id", fallback_id)).strip() or fallback_id
-    hu_raw = raw.get("hu", ["a9", "a10"])
-    if isinstance(hu_raw, str):
-        hu = [hu_raw]
-    else:
-        hu = [str(x) for x in (hu_raw or ["a9", "a10"])]
     certs = raw.get("signingCertSha256") or []
     if isinstance(certs, str):
         certs = [certs]
     min_code = raw.get("minStoreVersionCode")
+    sections_raw = raw.get("sections") or []
+    if isinstance(sections_raw, str):
+        sections = [s.strip() for s in sections_raw.split(",") if s.strip()]
+    else:
+        sections = [str(s).strip() for s in sections_raw if str(s).strip()]
+    downloads_raw = raw.get("downloads") if isinstance(raw.get("downloads"), dict) else {}
+    folder = str(downloads_raw.get("folder", "") if downloads_raw else "").strip()
+    files_raw = downloads_raw.get("files") if downloads_raw else None
+    download_files: list[DownloadFile] = []
+    if isinstance(files_raw, list):
+        for item in files_raw:
+            if isinstance(item, dict):
+                parsed = _download_file_from_dict(item)
+                if parsed is not None:
+                    download_files.append(parsed)
     return AppMeta(
         id=app_id,
         packageName=str(raw.get("packageName", "")).strip(),
         title=str(raw.get("title", "")).strip() or app_id,
         summary=str(raw.get("summary", "")),
         publisher=str(raw.get("publisher", "TBox")),
-        origin=str(raw.get("origin", "first-party")),
-        hu=hu,
-        category=str(raw.get("category", "app")),
-        verified=bool(raw.get("verified", True)),
+        hu=normalize_hu(raw.get("hu", ["a9", "a10"])),
         icon=str(raw.get("icon", "")),
         signingCertSha256=[str(c).lower() for c in certs if str(c).strip()],
         minStoreVersionCode=int(min_code) if min_code is not None and str(min_code) != "" else None,
-        reviewNotes=str(raw.get("reviewNotes", "")),
-        copyApkToDownloadsAppId=str(
-            raw.get("copyApkToDownloadsAppId") or raw.get("downloadsSidecarAppId") or "",
-        ).strip(),
+        sections=sections,
+        downloadsFolder=folder,
+        downloadFiles=download_files,
         installMode=str(
             raw.get("installMode") or raw.get("distribution") or "hu",
         ).strip().lower() or "hu",
     )
+
+
+def _section_from_dict(raw: dict[str, Any]) -> Section | None:
+    sid = str(raw.get("id", "")).strip()
+    title = str(raw.get("title", "")).strip()
+    if not sid or not title:
+        return None
+    if not SECTION_ID_RE.match(sid):
+        return None
+    return Section(
+        id=sid,
+        title=title,
+        titleEn=str(raw.get("titleEn", "") or "").strip(),
+    )
+
+
+def load_sections(apps_dir: Path) -> list[Section]:
+    path = apps_dir / META_NAME
+    if not path.is_file():
+        return []
+    raw = load_json(path)
+    if not isinstance(raw, dict):
+        return []
+    items = raw.get("sections") or []
+    if not isinstance(items, list):
+        return []
+    out: list[Section] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        section = _section_from_dict(item)
+        if section is None or section.id in seen:
+            continue
+        seen.add(section.id)
+        out.append(section)
+    return out
 
 
 def load_meta_map(apps_dir: Path) -> dict[str, AppMeta]:
@@ -234,9 +527,224 @@ def load_meta_map(apps_dir: Path) -> dict[str, AppMeta]:
     return result
 
 
-def save_meta_map(apps_dir: Path, metas: dict[str, AppMeta]) -> None:
-    ordered = [metas[key].to_meta_dict() for key in sorted(metas)]
-    save_json(apps_dir / META_NAME, {"apps": ordered})
+def save_meta_map(
+    apps_dir: Path,
+    metas: dict[str, AppMeta],
+    sections: list[Section] | None = None,
+) -> None:
+    if sections is None:
+        sections = load_sections(apps_dir)
+    payload: dict[str, Any] = {}
+    if sections:
+        payload["sections"] = [s.to_dict() for s in sections]
+    payload["apps"] = [metas[key].to_meta_dict() for key in sorted(metas)]
+    save_json(apps_dir / META_NAME, payload)
+
+
+def save_sections(apps_dir: Path, sections: list[Section]) -> None:
+    metas = load_meta_map(apps_dir)
+    defined = {s.id for s in sections}
+    for meta in metas.values():
+        meta.sections = [sid for sid in meta.sections if sid in defined]
+    save_meta_map(apps_dir, metas, sections=sections)
+    write_catalog(apps_dir)
+
+
+def _next_section_id(existing: list[Section]) -> str:
+    used = {s.id for s in existing}
+    n = 1
+    while f"s{n}" in used:
+        n += 1
+    return f"s{n}"
+
+
+def _ensure_unique_title(
+    sections: list[Section],
+    title: str,
+    *,
+    exclude_id: str | None = None,
+) -> None:
+    needle = title.casefold()
+    for section in sections:
+        if exclude_id and section.id == exclude_id:
+            continue
+        if section.title.casefold() == needle:
+            raise ValueError(f"Раздел с названием «{title}» уже есть")
+
+
+def add_section(apps_dir: Path, title: str, title_en: str = "") -> Section:
+    title_v = validate_section_title(title)
+    title_en_v = validate_section_title(title_en, en=True)
+    sections = load_sections(apps_dir)
+    _ensure_unique_title(sections, title_v)
+    section = Section(id=_next_section_id(sections), title=title_v, titleEn=title_en_v)
+    sections.append(section)
+    save_sections(apps_dir, sections)
+    return section
+
+
+def update_section(
+    apps_dir: Path,
+    section_id: str,
+    title: str,
+    title_en: str = "",
+) -> Section:
+    section_id = validate_section_id(section_id)
+    title_v = validate_section_title(title)
+    title_en_v = validate_section_title(title_en, en=True)
+    sections = load_sections(apps_dir)
+    _ensure_unique_title(sections, title_v, exclude_id=section_id)
+    found: Section | None = None
+    for section in sections:
+        if section.id == section_id:
+            section.title = title_v
+            section.titleEn = title_en_v
+            found = section
+            break
+    if found is None:
+        raise KeyError(f"Раздел не найден: {section_id}")
+    save_sections(apps_dir, sections)
+    return found
+
+
+def delete_section(apps_dir: Path, section_id: str) -> int:
+    section_id = validate_section_id(section_id)
+    sections = load_sections(apps_dir)
+    before = len(sections)
+    sections = [s for s in sections if s.id != section_id]
+    if len(sections) == before:
+        raise KeyError(f"Раздел не найден: {section_id}")
+    metas = load_meta_map(apps_dir)
+    detached = 0
+    for meta in metas.values():
+        if section_id in meta.sections:
+            meta.sections = [sid for sid in meta.sections if sid != section_id]
+            detached += 1
+    save_meta_map(apps_dir, metas, sections=sections)
+    write_catalog(apps_dir)
+    return detached
+
+
+def move_section(apps_dir: Path, section_id: str, delta: int) -> None:
+    section_id = validate_section_id(section_id)
+    sections = load_sections(apps_dir)
+    index = next((i for i, s in enumerate(sections) if s.id == section_id), None)
+    if index is None:
+        raise KeyError(f"Раздел не найден: {section_id}")
+    new_index = index + int(delta)
+    if new_index < 0 or new_index >= len(sections):
+        return
+    sections[index], sections[new_index] = sections[new_index], sections[index]
+    save_sections(apps_dir, sections)
+
+
+def files_dir(apps_dir: Path, app_id: str) -> Path:
+    return apps_dir / validate_app_id(app_id) / FILES_DIR_NAME
+
+
+def add_download_files(
+    apps_dir: Path,
+    app_id: str,
+    sources: list[Path] | tuple[Path, ...],
+    replace: bool = False,
+) -> list[DownloadFile]:
+    app_id = validate_app_id(app_id)
+    metas = load_meta_map(apps_dir)
+    meta = metas.get(app_id) or AppMeta(id=app_id, packageName="", title=app_id)
+    dest_dir = files_dir(apps_dir, app_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    incoming: list[tuple[Path, str]] = []
+    for source in sources:
+        src = Path(source).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"Файл не найден: {src}")
+        name = validate_download_file_name(src.name)
+        incoming.append((src, name))
+
+    existing_by_lower = {f.name.casefold(): f for f in meta.downloadFiles}
+    clashes = [
+        name
+        for _, name in incoming
+        if name.casefold() in existing_by_lower and not replace
+    ]
+    # Also clash against other incoming names case-insensitively.
+    seen_in: set[str] = set()
+    for _, name in incoming:
+        key = name.casefold()
+        if key in seen_in:
+            clashes.append(name)
+        seen_in.add(key)
+    if clashes and not replace:
+        unique = sorted(set(clashes), key=str.casefold)
+        raise FileExistsError(", ".join(unique))
+
+    added: list[DownloadFile] = []
+    for src, name in incoming:
+        dest = dest_dir / name
+        # Drop previous entry with same case-insensitive name.
+        meta.downloadFiles = [
+            f for f in meta.downloadFiles if f.name.casefold() != name.casefold()
+        ]
+        if dest.resolve() != src:
+            shutil.copy2(src, dest)
+        digest = sha256_file(dest)
+        entry = DownloadFile(name=name, sha256=digest, sizeBytes=dest.stat().st_size)
+        meta.downloadFiles.append(entry)
+        added.append(entry)
+
+    if not meta.downloadsFolder.strip():
+        try:
+            meta.downloadsFolder = validate_downloads_folder(meta.title or app_id)
+        except ValueError:
+            meta.downloadsFolder = app_id
+
+    metas[app_id] = meta
+    (apps_dir / app_id).mkdir(parents=True, exist_ok=True)
+    save_meta_map(apps_dir, metas)
+    write_catalog(apps_dir)
+    return added
+
+
+def remove_download_files(apps_dir: Path, app_id: str, names: list[str]) -> None:
+    app_id = validate_app_id(app_id)
+    metas = load_meta_map(apps_dir)
+    meta = metas.get(app_id)
+    if meta is None:
+        raise KeyError(f"Приложение не найдено: {app_id}")
+    drop = {n.casefold() for n in names if n.strip()}
+    if not drop:
+        return
+    dest_dir = files_dir(apps_dir, app_id)
+    kept: list[DownloadFile] = []
+    for entry in meta.downloadFiles:
+        if entry.name.casefold() in drop:
+            path = dest_dir / entry.name
+            if path.is_file():
+                path.unlink(missing_ok=True)
+        else:
+            kept.append(entry)
+    meta.downloadFiles = kept
+    metas[app_id] = meta
+    save_meta_map(apps_dir, metas)
+    write_catalog(apps_dir)
+
+
+def _verified_download_files(record: AppRecord) -> tuple[list[DownloadFile], list[str]]:
+    """Return (publishable files, problem messages)."""
+    problems: list[str] = []
+    ok: list[DownloadFile] = []
+    folder = record.folder / FILES_DIR_NAME
+    for entry in record.meta.downloadFiles:
+        path = folder / entry.name
+        if not path.is_file():
+            problems.append(f"нет файла {entry.name}")
+            continue
+        if path.stat().st_size != int(entry.sizeBytes):
+            problems.append(f"файл {entry.name} изменён")
+            continue
+        ok.append(entry)
+    return ok, problems
 
 
 def detect_flavor_from_filename(name: str) -> str | None:
@@ -267,7 +775,6 @@ def _release_from_dict(item: dict[str, Any]) -> AppRelease | None:
         sha256=sha256,
         flavor=str(item.get("flavor", "default") or "default"),
         apkSizeBytes=int(size) if size else None,
-        changelog=str(item.get("changelog", "")),
         publishedAt=str(item.get("publishedAt", "")),
         minSupportedVersionCode=int(item.get("minSupportedVersionCode", 0) or 0),
     )
@@ -311,7 +818,6 @@ def _release_to_dict(release: AppRelease) -> dict[str, Any]:
         "flavor": release.flavor or "default",
         "apkFileName": release.apkFileName,
         "sha256": release.sha256.lower(),
-        "changelog": release.changelog,
         "publishedAt": release.publishedAt or utc_now(),
         "minSupportedVersionCode": int(release.minSupportedVersionCode or 0),
     }
@@ -349,7 +855,11 @@ def upsert_release(folder: Path, release: AppRelease) -> list[AppRelease]:
 def list_apks(folder: Path) -> list[Path]:
     if not folder.is_dir():
         return []
-    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ".apk")
+    return sorted(
+        p
+        for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() == ".apk"
+    )
 
 
 ICON_NAMES = ("icon.png", "icon.webp", "icon.jpg", "icon.jpeg")
@@ -417,41 +927,49 @@ def scan_apps(apps_dir: Path) -> list[AppRecord]:
         if apk_path is None:
             apks = list_apks(folder)
             apk_path = apks[0] if apks else None
-        records.append(
-            AppRecord(
-                meta=meta,
-                release=release,
-                apk_path=apk_path,
-                folder=folder,
-                has_version_json=(folder / VERSION_NAME).is_file(),
-                missing_package=not bool(meta.packageName.strip()),
-                releases=releases,
-            ),
+        record = AppRecord(
+            meta=meta,
+            release=release,
+            apk_path=apk_path,
+            folder=folder,
+            has_version_json=(folder / VERSION_NAME).is_file(),
+            missing_package=not bool(meta.packageName.strip()),
+            releases=releases,
         )
+        _, problems = _verified_download_files(record)
+        record.download_problems = problems
+        records.append(record)
     return records
 
 
 def build_catalog(apps_dir: Path) -> dict[str, Any]:
     records = scan_apps(apps_dir)
+    sections = load_sections(apps_dir)
+    defined = {s.id for s in sections}
     apps: list[dict[str, Any]] = []
     for record in records:
         if record.missing_package:
             continue
         if not record.has_version_json:
             continue
-        if not record.meta.verified:
-            continue
         icon = find_icon_file(record.folder)
+        publish_files, _ = _verified_download_files(record)
+        filtered_sections = [sid for sid in record.meta.sections if sid in defined]
         apps.append(
             record.meta.to_catalog_entry(
                 icon_file_name=icon.name if icon is not None else None,
+                files=publish_files,
+                section_ids=filtered_sections,
             ),
         )
-    return {
+    result: dict[str, Any] = {
         "schemaVersion": 1,
         "publishedAt": utc_now(),
-        "apps": apps,
     }
+    if sections:
+        result["sections"] = [s.to_dict() for s in sections]
+    result["apps"] = apps
+    return result
 
 
 def write_catalog(apps_dir: Path) -> Path:
@@ -466,10 +984,21 @@ def upsert_meta(apps_dir: Path, meta: AppMeta) -> None:
         raise ValueError("packageName обязателен")
     if not meta.title.strip():
         meta.title = meta.id
+    folder = (meta.downloadsFolder or "").strip()
+    if meta.downloadFiles:
+        meta.downloadsFolder = validate_downloads_folder(folder)
+    elif folder:
+        meta.downloadsFolder = validate_downloads_folder(folder)
+    else:
+        meta.downloadsFolder = ""
+    sections = load_sections(apps_dir)
+    defined = {s.id for s in sections}
+    meta.sections = [sid for sid in meta.sections if sid in defined]
+    meta.hu = normalize_hu(meta.hu)
     metas = load_meta_map(apps_dir)
     metas[meta.id] = meta
     (apps_dir / meta.id).mkdir(parents=True, exist_ok=True)
-    save_meta_map(apps_dir, metas)
+    save_meta_map(apps_dir, metas, sections=sections)
 
 
 def add_app(
@@ -478,7 +1007,6 @@ def add_app(
     apk_source: Path | None = None,
     version_code: int | None = None,
     version_name: str | None = None,
-    changelog: str = "",
     flavor: str | None = None,
     remove_other_apks: bool = True,
 ) -> AppRecord:
@@ -496,7 +1024,6 @@ def add_app(
             apk_source,
             version_code=version_code,
             version_name=version_name,
-            changelog=changelog,
             flavor=flavor,
             remove_other_apks=remove_other_apks,
         )
@@ -523,7 +1050,6 @@ def set_apk(
     apk_source: Path,
     version_code: int | None = None,
     version_name: str | None = None,
-    changelog: str = "",
     flavor: str | None = None,
     remove_other_apks: bool = True,
     min_supported_version_code: int = 0,
@@ -606,7 +1132,6 @@ def set_apk(
         sha256=digest,
         flavor=resolved_flavor,
         apkSizeBytes=dest.stat().st_size,
-        changelog=changelog,
         publishedAt=utc_now(),
         minSupportedVersionCode=int(min_supported_version_code or 0),
     )
@@ -693,6 +1218,188 @@ def delete_app(apps_dir: Path, app_id: str, remove_files: bool = True) -> None:
     write_catalog(apps_dir)
 
 
+def _normalize_legacy_category(raw: Any) -> str:
+    value = str(raw or "app").strip().lower().replace("-", "_")
+    if value in ("tool", "tools"):
+        return "tool"
+    if value in ("oneshot", "one_shot", "one-shot"):
+        return "oneshot"
+    return "app"
+
+
+def migrate_legacy_catalog(apps_dir: Path) -> MigrationReport:
+    """
+    One-time / idempotent migration of catalog.meta.json + version.json
+    to the new sections / downloads / no-changelog shape.
+    """
+    report = MigrationReport()
+    apps_dir = apps_dir.resolve()
+    apps_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = apps_dir / META_NAME
+
+    raw_apps: list[dict[str, Any]] = []
+    raw_sections: list[dict[str, Any]] = []
+    if meta_path.is_file():
+        raw = load_json(meta_path)
+        if isinstance(raw, dict):
+            raw_apps = [a for a in (raw.get("apps") or []) if isinstance(a, dict)]
+            raw_sections = [s for s in (raw.get("sections") or []) if isinstance(s, dict)]
+
+    legacy_keys = (
+        "origin",
+        "verified",
+        "reviewNotes",
+        "category",
+        "copyApkToDownloadsAppId",
+        "downloadsSidecarAppId",
+    )
+    used_categories: dict[str, list[str]] = {}
+    sidecars: list[tuple[str, str]] = []
+    meta_changed = False
+    cleaned_apps: list[dict[str, Any]] = []
+
+    for item in raw_apps:
+        app_id = str(item.get("id", "")).strip()
+        if not app_id:
+            continue
+        item = dict(item)
+
+        if item.get("verified") is False:
+            report.unverified_ids.append(app_id)
+
+        has_sections = bool(item.get("sections"))
+        if not has_sections and "category" in item:
+            cat = _normalize_legacy_category(item.get("category"))
+            item["sections"] = [cat]
+            used_categories.setdefault(cat, []).append(app_id)
+            meta_changed = True
+
+        target = str(
+            item.get("copyApkToDownloadsAppId") or item.get("downloadsSidecarAppId") or "",
+        ).strip()
+        if target:
+            sidecars.append((app_id, target))
+
+        for key in legacy_keys:
+            if key in item:
+                item.pop(key, None)
+                report.removed_keys[key] = report.removed_keys.get(key, 0) + 1
+                meta_changed = True
+
+        cleaned_apps.append(item)
+
+    # Build sections list: keep existing, append missing category sections.
+    sections: list[Section] = []
+    seen_ids: set[str] = set()
+    for raw_sec in raw_sections:
+        section = _section_from_dict(raw_sec)
+        if section is None or section.id in seen_ids:
+            continue
+        seen_ids.add(section.id)
+        sections.append(section)
+
+    for sid, title, title_en in _CATEGORY_SECTION_DEFS:
+        if sid in used_categories and sid not in seen_ids:
+            sections.append(Section(id=sid, title=title, titleEn=title_en))
+            seen_ids.add(sid)
+            meta_changed = True
+            report.category_sections[sid] = list(used_categories[sid])
+        elif sid in used_categories:
+            report.category_sections[sid] = list(used_categories[sid])
+
+    if meta_changed:
+        payload: dict[str, Any] = {}
+        if sections:
+            payload["sections"] = [s.to_dict() for s in sections]
+        payload["apps"] = cleaned_apps
+        save_json(meta_path, payload)
+        report.changed = True
+
+    # Sidecar → card files
+    metas = load_meta_map(apps_dir)
+    for app_id, target_id in sidecars:
+        meta = metas.get(app_id)
+        if meta is None:
+            continue
+        if meta.downloadFiles:
+            continue
+        target_folder = apps_dir / target_id
+        target_releases = parse_all_releases(target_folder / VERSION_NAME)
+        sources: list[Path] = []
+        for rel in target_releases:
+            apk = target_folder / rel.apkFileName
+            if apk.is_file():
+                sources.append(apk)
+        if not sources:
+            report.sidecar_missing[app_id] = target_id
+            report.changed = True
+            continue
+        target_meta = metas.get(target_id)
+        folder_name = (target_meta.title if target_meta else "") or target_id
+        try:
+            folder_name = validate_downloads_folder(folder_name)
+        except ValueError:
+            folder_name = target_id
+        meta.downloadsFolder = folder_name
+        metas[app_id] = meta
+        save_meta_map(apps_dir, metas)
+        added = add_download_files(apps_dir, app_id, sources, replace=True)
+        report.sidecar_files[app_id] = [f.name for f in added]
+        report.sidecar_sources[app_id] = target_id
+        report.changed = True
+        metas = load_meta_map(apps_dir)
+
+    # version.json changelog → changelog.<lang>.txt
+    if apps_dir.is_dir():
+        for child in sorted(apps_dir.iterdir()):
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            version_path = child / VERSION_NAME
+            if not version_path.is_file():
+                continue
+            raw = load_json(version_path)
+            if not isinstance(raw, dict):
+                continue
+            releases = raw.get("releases")
+            if not isinstance(releases, list):
+                continue
+            had_changelog_key = False
+            written_langs: set[str] = set()
+            new_releases: list[dict[str, Any]] = []
+            for item in releases:
+                if not isinstance(item, dict):
+                    continue
+                item = dict(item)
+                if "changelog" in item:
+                    had_changelog_key = True
+                    text = str(item.pop("changelog") or "").strip()
+                    if text:
+                        flavor = str(item.get("flavor", "default") or "default").lower()
+                        lang = "en" if flavor == "en" else "ru"
+                        if lang not in written_langs:
+                            existing = read_changelog(child, lang).strip()
+                            if not existing:
+                                path = write_changelog(child, lang, text)
+                                report.changelog_files.append(
+                                    f"{child.name}/{path.name}",
+                                )
+                                report.changed = True
+                            written_langs.add(lang)
+                new_releases.append(item)
+            if had_changelog_key:
+                save_json(
+                    version_path,
+                    {"schemaVersion": int(raw.get("schemaVersion", 1) or 1), "releases": new_releases},
+                )
+                report.version_json_stripped.append(child.name)
+                report.changed = True
+
+    if report.changed:
+        write_catalog(apps_dir)
+
+    return report
+
+
 def _default_seed_path() -> Path:
     return (
         Path(__file__).resolve().parents[2]
@@ -730,6 +1437,14 @@ def ensure_seed_meta(apps_dir: Path, seed_path: Path | None = None) -> bool:
     seed_raw = load_json(seed_path)
     seed_apps = seed_raw.get("apps", []) if isinstance(seed_raw, dict) else []
     current = load_meta_map(apps_dir)
+    sections = load_sections(apps_dir)
+    # Also seed sections if the seed defines them and current has none.
+    if not sections and isinstance(seed_raw, dict):
+        for item in seed_raw.get("sections") or []:
+            if isinstance(item, dict):
+                section = _section_from_dict(item)
+                if section is not None:
+                    sections.append(section)
     added = False
     for item in seed_apps:
         if not isinstance(item, dict):
@@ -741,5 +1456,5 @@ def ensure_seed_meta(apps_dir: Path, seed_path: Path | None = None) -> bool:
         (apps_dir / app_id).mkdir(parents=True, exist_ok=True)
         added = True
     if added:
-        save_meta_map(apps_dir, current)
+        save_meta_map(apps_dir, current, sections=sections or None)
     return added

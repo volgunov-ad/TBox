@@ -115,10 +115,10 @@ DCLInstall (`tools/dcl_install/`) **не** становится магазино
 
 1. **DCL Launcher** (`dcl-launcher`) — обычная установка/обновление лаунчера
    без DCLInstall (Intent + FileProvider, как у остальных приложений).
-2. **DCL Install** (`dclinstall`) — ставит сам установщик окружения; поле
-   `copyApkToDownloadsAppId: "dcl-launcher"` заставляет Store после скачивания
-   ещё положить APK лаунчера в публичные **Загрузки**, чтобы пользователь
-   выбрал его внутри DCLInstall.
+2. **DCL Install** (`dclinstall`) — ставит сам установщик окружения; APK
+   лаунчера прикреплён как **файл карточки** (`downloads` / `apps/dclinstall/files/`).
+   Store при скачивании карточки сохраняет эти файлы в **Загрузки/<папка>/**,
+   чтобы пользователь выбрал лаунчер внутри DCLInstall.
 
 ---
 
@@ -130,8 +130,8 @@ DCLInstall (`tools/dcl_install/`) **не** становится магазино
 AppStore/                         # https://disk.yandex.ru/d/KDaHLxbFtPAjYA
   release/
     apps/
-      catalog.json                # витрина
-      catalog.meta.json           # опционально для tools/build_apps_catalog.py
+      catalog.json                # витрина (sections + apps)
+      catalog.meta.json           # менеджер: sections + apps metadata
       tbox-monitor/
         version.json
         changelog.ru.txt          # опционально, журнал на карточке
@@ -142,6 +142,7 @@ AppStore/                         # https://disk.yandex.ru/d/KDaHLxbFtPAjYA
         tbox_mqtt-….apk
       camd/
       dclinstall/
+        files/                    # файлы карточки → Download/<папка>/
       dcl-launcher/               # кладёт разработчик лаунчера
       <third-party-id>/
   dev/
@@ -153,12 +154,16 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 логические URL вида `yandex-disk:/apps/<id>/version.json`; клиент добавляет
 префикс `/release` или `/dev` по выбранному каналу.
 
-### 4.1. `apps/catalog.json` (черновик схемы)
+### 4.1. `apps/catalog.json` (схема)
 
 ```json
 {
   "schemaVersion": 1,
   "publishedAt": "2026-11-21T12:00:00Z",
+  "sections": [
+    {"id": "app", "title": "Приложения", "titleEn": "Apps"},
+    {"id": "tool", "title": "Инструменты", "titleEn": "Tools"}
+  ],
   "apps": [
     {
       "id": "tbox-monitor",
@@ -166,28 +171,28 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
       "title": "TBox Monitor",
       "summary": "Телеметрия, поездки, панели, CAN",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
+      "sections": ["app"],
       "icon": "yandex-disk:/apps/tbox-monitor/icon.png",
       "manifest": "yandex-disk:/apps/tbox-monitor/version.json",
       "signingCertSha256": ["…"],
       "minStoreVersionCode": 1
     },
     {
-      "id": "example-nav",
-      "packageName": "com.example.nav",
-      "title": "Пример навигации",
-      "summary": "Стороннее, проверенное вручную",
-      "publisher": "Vendor Name",
-      "origin": "third-party",
-      "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
-      "manifest": "yandex-disk:/apps/example-nav/version.json",
-      "signingCertSha256": ["…"],
-      "reviewNotes": "Проверено на A9/A10: сеть, тач, не ломает HOME"
+      "id": "dclinstall",
+      "packageName": "vad.dashing.dclinstall",
+      "title": "DCL Install",
+      "summary": "Окружение DCL на A9",
+      "publisher": "TBox",
+      "hu": ["a9"],
+      "sections": ["tool"],
+      "manifest": "yandex-disk:/apps/dclinstall/version.json",
+      "downloads": {
+        "folder": "DCL Launcher",
+        "files": [
+          {"name": "dcl-launcher-….apk", "sha256": "…", "sizeBytes": 31457280}
+        ]
+      }
     }
   ]
 }
@@ -195,20 +200,22 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 
 | Поле | Смысл |
 |------|--------|
-| `origin` | `first-party` \| `third-party` |
-| `verified` | В MVP в каталог попадают **только** `verified: true`; непроверянное не публикуем |
+| `sections` (top-level) | Разделы витрины: `id`, `title`, опционально `titleEn` |
 | `hu` | Фильтр по типу ГУ (`a9` / `a10`) |
-| `category` | `app` \| `tool` \| `oneshot` (утилиты вроде dataresize — фаза 2) |
+| `sections` (per-app) | Id разделов, в которых показывается карточка (можно несколько) |
 | `signingCertSha256` | Белый список отпечатков (lowercase hex); несовпадение → отказ. Менеджер каталога заполняет из APK (`apksigner` / `keytool`); пустой = проверка cert на клиенте выключена |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
-| `copyApkToDownloadsAppId` | Опционально: id другого приложения каталога; его APK дополнительно сохраняется в публичные Загрузки (не устанавливается). Для DCLInstall → `dcl-launcher` |
+| `downloads` | Опционально: `{folder, files[]}` — файлы карточки из `apps/<id>/files/` сохраняются в `Download/<folder>/` при скачивании приложения |
 | `installMode` | `hu` (по умолчанию) — ставить на ГУ; `phone` — карточка на ГУ показывает QR (публичная страница APK) и кнопку «Скачать в Загрузки», без установки на ГУ. Для `:phone` / `vad.dashing.tbox.phone` |
-| `changelogRu` / `changelogEn` | Опционально: путь к файлу changelog; по умолчанию `apps/<id>/changelog.ru.txt` и `changelog.en.txt` (UTF-8). Store грузит при открытии карточки (язык UI → fallback другой язык → короткий `changelog` в `version.json`) |
+| changelog-файлы | `apps/<id>/changelog.ru.txt` и `changelog.en.txt` (UTF-8). Store грузит при открытии карточки (язык UI → fallback другой язык) |
 
-Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releases[]` с
+Не пишутся: `origin`, `verified`, `reviewNotes`, `category`,
+`copyApkToDownloadsAppId`, короткий `changelog` в `version.json`.
+
+Per-app `version.json`: `schemaVersion`, `releases[]` с
 `versionCode`, `versionName`, `flavor`, `apkFileName`,
-`sha256`, `apkSizeBytes`, `changelog`, `publishedAt`,
-`minSupportedVersionCode`).
+`sha256`, `apkSizeBytes`, `publishedAt`,
+`minSupportedVersionCode`.
 
 - Приложения с ru/en сборками (Monitor, Store, …): две записи
   `flavor: "ru"` и `flavor: "en"` (два APK в папке). Клиент Store даёт выбор
@@ -223,7 +230,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
   тач, не перехват HOME, размер, подпись стабильна).
 - Отдельный `id` и папка `apps/<id>/`; APK и `version.json` кладёт куратор
   каталога (не обязательно автор приложения).
-- Поля `publisher`, `reviewNotes`, `verified` обязательны для `third-party`.
+- Обязательны `publisher` и pin `signingCertSha256`; разделы — по желанию.
 - Обновления стороннего APK с **другой** подписью → как сейчас у DCLInstall:
   только через удаление (данные пользователя предупредить).
 - Не цель MVP: произвольная загрузка APK пользователем «с URL».
@@ -232,11 +239,11 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 
 - Пакет лаунчера: `ras.dashing.tbox.launcher` (`id`: `dcl-launcher`) — в
   витрине как обычное приложение: скачать / обновить без DCLInstall.
-- Пакет установщика: `vad.dashing.dclinstall` (`id`: `dclinstall`,
-  `category: tool`) — при «Скачать» магазин:
+- Пакет установщика: `vad.dashing.dclinstall` (`id`: `dclinstall`) — при
+  «Скачать» / «Получить» магазин:
   1. готовит APK DCLInstall к установке;
-  2. скачивает актуальный APK `dcl-launcher` и кладёт его в
-     `/sdcard/Download` (имя вида `dcl-launcher-<version>.apk`);
+  2. сохраняет файлы карточки (APK лаунчера) в
+     `Download/<папка>/` (имя из менеджера, например `DCL Launcher`);
   3. пользователь запускает DCLInstall и выбирает этот APK из Загрузок.
 - Публикация лаунчера: папка `apps/dcl-launcher/` на обоих каналах (или только
   `release/`, если dev ведёт сам разработчик в `dev/apps/dcl-launcher/`).
@@ -304,10 +311,12 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 ## 6. Публикация и инструменты
 
 1. **GUI наполнения (Windows):** `tools/appstore_manager/` — указывает на
-   sync-папку AppStore, список приложений, правка meta, замена/добавление APK,
-   запись `catalog.meta.json` + `version.json` + `catalog.json`. Инструкция:
+   sync-папку AppStore, список приложений, правка meta, разделы витрины,
+   файлы карточки → Загрузки, замена/добавление APK, запись
+   `catalog.meta.json` + `version.json` + `catalog.json` + одноразовая
+   миграция со старого формата. Инструкция:
    `tools/appstore_manager/ИНСТРУКЦИЯ.md`.
-2. CLI: `tools/build_apps_catalog.py --apps-dir …/release/apps --write`
+2. CLI: `tools/build_apps_catalog.py --apps-dir …/release/apps [--migrate] --write`
    (та же библиотека `appstore_catalog.py`).
 3. Для first-party Gradle-модулей: копировать APK в `apps/<id>/` (GUI или
    вручную), versionCode/versionName в диалоге замены APK.
@@ -334,7 +343,7 @@ Per-app `version.json`: как сейчас у Monitor (`schemaVersion`, `releas
 ## 8. Безопасность
 
 - Публичные share только на чтение; mapping/keystore на Диск не класть.
-- Каталог — источник истины по `verified` и cert pin; клиент не ставит
+- Каталог — источник истины по составу каталога и cert pin; клиент не ставит
   APK вне записей каталога.
 - Третьи стороны: только проверенные; смена cert = новая рецензия.
 - Целостность: sha256 из `version.json` обязателен до `install`.

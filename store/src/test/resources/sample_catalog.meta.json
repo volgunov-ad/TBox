@@ -6,10 +6,7 @@
       "title": "Dashing Store",
       "summary": "Магазин приложений ГУ — обновляется сам из каталога (ru/en)",
       "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true
+      "hu": ["a9", "a10"]
     },
     {
       "id": "tbox-monitor",
@@ -17,10 +14,7 @@
       "title": "TBox Monitor",
       "summary": "Телеметрия, поездки, панели, CAN",
       "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true
+      "hu": ["a9", "a10"]
     },
     {
       "id": "mqtt",
@@ -28,10 +22,7 @@
       "title": "TBox MQTT",
       "summary": "Мост External API → MQTT / Home Assistant",
       "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true
+      "hu": ["a9", "a10"]
     },
     {
       "id": "camd",
@@ -39,10 +30,7 @@
       "title": "Камеры ГУ",
       "summary": "Окна камер A9",
       "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9"],
-      "category": "app",
-      "verified": true
+      "hu": ["a9"]
     },
     {
       "id": "dcl-launcher",
@@ -50,23 +38,15 @@
       "title": "DCL Launcher",
       "summary": "Лаунчер DCL — установка и обновление без DCLInstall",
       "publisher": "DCL",
-      "origin": "third-party",
-      "hu": ["a9"],
-      "category": "app",
-      "verified": true,
-      "reviewNotes": "Публикует разработчик лаунчера"
+      "hu": ["a9"]
     },
     {
       "id": "dclinstall",
       "packageName": "vad.dashing.dclinstall",
       "title": "DCL Install",
-      "summary": "Окружение DCL на A9. При скачивании APK лаунчера кладётся в Загрузки для выбора в установщике",
+      "summary": "Окружение DCL на A9. При скачивании файлы карточки (APK лаунчера) сохраняются в Загрузки",
       "publisher": "TBox",
-      "origin": "first-party",
-      "hu": ["a9"],
-      "category": "tool",
-      "verified": true,
-      "copyApkToDownloadsAppId": "dcl-launcher"
+      "hu": ["a9"]
     },
     {
       "id": "phone",
@@ -74,10 +54,7 @@
       "title": "TBox Phone",
       "summary": "Связь телефона с ГУ — QR для установки на телефон, APK можно сохранить в Загрузки на ГУ",
       "publisher": "TBox",
-      "origin": "first-party",
       "hu": ["a9", "a10"],
-      "category": "app",
-      "verified": true,
       "installMode": "phone"
     }
   ]
