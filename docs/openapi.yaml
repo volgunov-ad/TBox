@@ -1,0 +1,943 @@
+# OpenAPI 3.1 contract for the TBox Monitor external HTTP API (v1).
+#
+# Authoritative source: `ExternalApiRouter.kt` / `ExternalApiConstants.kt`
+# (app/src/main/java/vad/dashing/tbox/externalapi/). This file documents the
+# same routes and JSON shapes; when in doubt, the Kotlin code wins.
+# Human docs: docs/EXTERNAL_API_RU.md (contract, section 7) and
+# docs/EXTERNAL_API_USER_GUIDE_RU.md (pairing, examples).
+#
+# Max sizes/limits: MAX_ACTIONS_PER_REQUEST=20, MAX_SIGNAL_IDS_PER_REQUEST=50,
+# MAX_PENDING_PAIR_REQUESTS=10, PAIR_RESULT_TTL_MS=10 min, PAIRING_TIMEOUT_MS=120 s,
+# port default 8765 (1024..65535), body up to 256 KB, 8 concurrent clients.
+
+openapi: 3.1.0
+info:
+  title: TBox Monitor External HTTP API
+  version: "1"
+  description: |
+    Local HTTP API of the TBox Monitor app on a Jetour Dashing head unit.
+
+    Routes under `/v1/...` speak JSON (`application/json; charset=utf-8`).
+    Errors use `{ "error": { "code": "...", "message": "..." } }`.
+
+    Auth: every route except `GET /v1/health`, `POST /v1/pair/request`,
+    `GET /v1/pair/status` and the web panel requires
+    `Authorization: Bearer <accessToken>` from pairing (or a manual token
+    created in the app: Settings -> API -> Create token).
+
+    `GET /v1/catalog` describes the signals/actions that exist; it is dynamic
+    data, not part of this static contract.
+  x-limits:
+    maxActionsPerRequest: 20
+    maxSignalIdsPerRequest: 50
+    maxPendingPairRequests: 10
+    pairResultTtlMs: 600000
+    pairingTimeoutMs: 120000
+    defaultPort: 8765
+    portRange: "1024..65535"
+    maxBodyBytes: 262144
+    maxConcurrentClients: 8
+
+servers:
+  - url: http://{host}:{port}
+    description: Head unit on the local network
+    variables:
+      host:
+        default: "192.168.1.128"
+      port:
+        default: "8765"
+
+tags:
+  - name: Health
+    description: Service discovery, no token
+  - name: Pairing
+    description: One-time pairing, no token
+  - name: Catalog
+    description: Signals and actions
+  - name: Signals
+    description: Reading vehicle data
+  - name: Actions
+    description: Executing actions
+  - name: Automations
+    description: Saved automations
+  - name: WebPanel
+    description: Built-in web panel (HTML)
+
+paths:
+  /v1/health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Service discovery (no token)
+      responses:
+        "200":
+          description: Current API state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /v1/pair/request:
+    post:
+      tags: [Pairing]
+      operationId: postPairRequest
+      summary: Submit a pairing request (202, then poll status)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PairRequestBody"
+      responses:
+        "202":
+          description: Pairing request accepted; poll status with requestId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairRequestAccepted"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          description: Pairing mode is not active on the head unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: pairing_inactive
+                  message: Pairing mode is not active
+
+  /v1/pair/status:
+    get:
+      tags: [Pairing]
+      operationId: getPairStatus
+      summary: Poll a pairing request
+      parameters:
+        - name: requestId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: From POST /v1/pair/request
+      responses:
+        "200":
+          description: |
+            Poll result. `accessToken` is returned exactly once: the next poll
+            with the same requestId is 404. Approved/denied results stay
+            pollable for 10 minutes (PAIR_RESULT_TTL_MS).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/PairStatusPending"
+                  - $ref: "#/components/schemas/PairStatusDenied"
+                  - $ref: "#/components/schemas/PairStatusApproved"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/catalog:
+    get:
+      tags: [Catalog]
+      operationId: getCatalog
+      summary: Signals and actions catalog (dynamic data)
+      responses:
+        "200":
+          description: |
+            `catalogVersion` + `signals` + `actionTypes` (builtin / can_command
+            / generic). Signal and action lists and their `write` schemas are
+            dynamic per app build; see docs/EXTERNAL_API_RU.md section 8 for
+            A9/A10 differences.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/signals:
+    get:
+      tags: [Signals]
+      operationId: getSignals
+      summary: Read a signal snapshot (up to 50 ids)
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          examples:
+            single:
+              value: fuel_level_percent
+            multiple:
+              value: engine_rpm,car_speed,fuel_level_percent
+          description: |
+            Comma-separated signal ids from the catalog, up to 50
+            (MAX_SIGNAL_IDS_PER_REQUEST). Extra ids are dropped.
+        - name: source
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [tbox, head_unit, app]
+          description: |
+            Which repository to read from; check catalog `sources` per signal.
+            A signal that does not support the requested source still comes
+            back as `available: false`.
+      responses:
+        "200":
+          description: |
+            Snapshot; every requested id gets one entry, unknown ids are
+            `available: false`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalsResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/actions/invoke:
+    post:
+      tags: [Actions]
+      operationId: invokeActions
+      summary: Execute ad-hoc actions (same shapes as automation actions)
+      description: |
+        Body is `{"actions": [...]}`; every element is one action object.
+        Constraints: 1..20 actions (MAX_ACTIONS_PER_REQUEST), every action must
+        pass AutomationValidator.validateActions, and dangerous actions are
+        rejected with 403 while the "dangerous commands" toggle is off.
+        Values for `can_command` actions come from the catalog `write` schema:
+        `options[].value` for binary/options/pulse kinds, a number within
+        `min`/`max`/`step` for the number kind (or a semantic state string
+        like `on` / `off`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvokeRequest"
+            examples:
+              canCommandBinary:
+                summary: CAN command via catalog write options
+                value:
+                  actions:
+                    - type: can_command
+                      bus: vehicle
+                      propertyId: 289412682
+                      operation: set
+                      value: "on"
+              builtin:
+                summary: Builtin action with arguments
+                value:
+                  actions:
+                    - type: builtin
+                      actionType: set_hu_day_night_theme
+                      intValue: 0
+                      stringValue: dark
+                      boolValue: false
+              delay:
+                summary: Delay between actions
+                value:
+                  actions:
+                    - type: delay
+                      durationMillis: 1000
+      responses:
+        "200":
+          description: |
+            One result per action, same order as the request
+            (`results[i]` ↔ `actions[i]`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvokeResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Dangerous action while the dangerous-commands toggle is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: dangerous_disabled
+                  message: Dangerous commands are disabled
+
+  /v1/automations:
+    get:
+      tags: [Automations]
+      operationId: getAutomations
+      summary: Saved automations (id, name, enabled)
+      responses:
+        "200":
+          description: Flat list without actions/triggers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/automations/{id}/run:
+    post:
+      tags: [Automations]
+      operationId: runAutomation
+      summary: Run a saved automation now (like the UI button)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Automation id from GET /v1/automations
+      responses:
+        "202":
+          description: Accepted; the automation runs in the background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunAccepted"
+        "400":
+          description: |
+            `accepted: false` + message: automation not found, disabled or
+            invalid (AutomationRunNow.rejection), or a runner error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRejected"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /:
+    get:
+      tags: [WebPanel]
+      operationId: getWebPanel
+      summary: Web panel (HTML), enabled by a separate toggle
+      responses:
+        "200":
+          description: >
+            HTML page (text/html; charset=utf-8), Cache-Control: no-store
+          content:
+            text/html: {}
+        "404":
+          description: Panel disabled or route missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /panel:
+    get:
+      tags: [WebPanel]
+      operationId: getWebPanelAlias
+      summary: Alias of `/`
+      responses:
+        "200":
+          description: Same as GET /
+          content:
+            text/html: {}
+        "404":
+          description: Panel disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  responses:
+    InvalidRequest:
+      description: |
+        400 invalid_request: bad JSON, missing fields, empty/oversized lists,
+        validation issues (joined as `path: message` in error.message).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: |
+        401 unauthorized: missing/invalid Bearer token
+        (ExternalApiRouter.requireAuth).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: 404 not_found (unknown route, unknown pair request)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                Machine-readable code: not_found, invalid_request, unauthorized,
+                pairing_inactive, dangerous_disabled, method_not_allowed,
+                line_too_long, headers_too_large, payload_too_large.
+            message:
+              type: string
+
+    HealthResponse:
+      type: object
+      required:
+        - ok
+        - apiVersion
+        - catalogVersion
+        - serverEnabled
+        - webPanelEnabled
+        - pairingActive
+        - appVersion
+        - headUnit
+        - climateControlType
+      properties:
+        ok:
+          type: boolean
+          const: true
+        apiVersion:
+          type: integer
+          const: 1
+        catalogVersion:
+          type: integer
+          description: |
+            Monotonic catalog version (currently 10); clients should invalidate
+            cached catalogs when it changes.
+        serverEnabled:
+          type: boolean
+          description: Server toggle (Settings -> API)
+        webPanelEnabled:
+          type: boolean
+        pairingActive:
+          type: boolean
+          description: Pairing window (120 s) is open on the HU
+        appVersion:
+          type: string
+        headUnit:
+          type: string
+          enum: [android9, android10]
+          description: |
+            Which CAN backend the HU accepts (mbCAN vs VHAL); affects which
+            catalog actions are executable (see docs/EXTERNAL_API_RU.md §8).
+        climateControlType:
+          type: string
+          enum: [ordinary_ac, single_zone, dual_zone]
+
+    PairRequestBody:
+      type: object
+      required: [clientId, clientName]
+      properties:
+        clientId:
+          type: string
+          description: Client-generated stable id
+        clientName:
+          type: string
+        clientKind:
+          type: string
+          description: Optional free-form kind shown to the user on the HU
+
+    PairRequestAccepted:
+      type: object
+      required: [status, requestId]
+      properties:
+        status:
+          type: string
+          const: pending
+        requestId:
+          type: string
+
+    PairStatusPending:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: pending
+
+    PairStatusDenied:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: denied
+
+    PairStatusApproved:
+      type: object
+      required: [status, accessToken, clientId, expiresAt]
+      properties:
+        status:
+          type: string
+          const: approved
+        accessToken:
+          type: string
+          description: |
+            Bearer token; issued exactly once for this requestId (the next
+            poll is 404). Store it safely; tokens idle for 6 months are
+            removed by the app.
+        clientId:
+          type: string
+        expiresAt:
+          type: "null"
+          description: Always null in v1 (tokens do not expire by date)
+
+    CatalogResponse:
+      type: object
+      required: [catalogVersion, signals, actionTypes]
+      properties:
+        catalogVersion:
+          type: integer
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogSignal"
+        actionTypes:
+          type: array
+          description: builtin + can_command + generic entries in one list
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/CatalogBuiltinAction"
+              - $ref: "#/components/schemas/CatalogCanCommand"
+              - $ref: "#/components/schemas/CatalogGenericAction"
+
+    CatalogSignal:
+      type: object
+      required: [id, label, unit, valueType, sources, stateOptions, namedValues, typicalRange, voiceAliasesRu]
+      properties:
+        id:
+          type: string
+          description: Storage key for /v1/signals `ids` and can_command `signalId`
+        label:
+          type: string
+        unit:
+          type: string
+        valueType:
+          type: string
+          enum: [number, state, position]
+        sources:
+          type: array
+          items:
+            type: string
+            enum: [tbox, head_unit, app]
+        stateOptions:
+          type: array
+          items:
+            type: string
+          description: Allowed state strings (for state-valued signals)
+        namedValues:
+          type: array
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+        typicalRange:
+          type: string
+          description: Human-readable hint (localized ru/en by app flavor)
+        voiceAliasesRu:
+          type: array
+          items:
+            type: string
+
+    CatalogWriteSchema:
+      type: object
+      required: [kind, options]
+      description: |
+        How to build the `value` of a can_command invoke action (catalog v4).
+        `binary` / `options` / `pulse`: use `options[].value` (raw CAN integers,
+        already remapped for the current platform). `number`: any value within
+        `min`/`max` snapped to `step`. `write: null` means the command stays a
+        sensor in v1 (no verified value table on every HU mode).
+      properties:
+        kind:
+          type: string
+          enum: [binary, options, number, pulse]
+        options:
+          type: array
+          items:
+            type: object
+            required: [state, value]
+            properties:
+              state:
+                type: string
+                description: Semantic state (off/on/pct5 ...); usable as `value` string
+              value:
+                oneOf:
+                  - type: integer
+                  - type: string
+                description: Raw CAN value to send (or the state key itself for windows)
+        min:
+          type: number
+        max:
+          type: number
+        step:
+          type: number
+        unit:
+          type: string
+
+    CatalogBuiltinAction:
+      type: object
+      required: [type, actionType, safety, voiceAliasesRu]
+      properties:
+        type:
+          type: string
+          const: builtin
+        actionType:
+          type: string
+          description: |
+            Storage key for invoke `actionType` (open_menu, restart_tbox,
+            set_hu_day_night_theme, set_media_volume, adb_shell, ...).
+        safety:
+          $ref: "#/components/schemas/SafetyLevel"
+        write:
+          oneOf:
+            - $ref: "#/components/schemas/CatalogWriteSchema"
+            - type: "null"
+          description: |
+            Present only for set_media_volume (number 0..31 step 1); the other
+            builtins take fixed invoke fields (intValue/stringValue/boolValue).
+        voiceAliasesRu:
+          type: array
+          items:
+            type: string
+
+    CatalogCanCommand:
+      type: object
+      required: [type, bus, propertyId, label, safety, operations, signalId, write, voiceAliasesRu]
+      properties:
+        type:
+          type: string
+          const: can_command
+        bus:
+          type: string
+          enum: [vehicle, audio]
+        propertyId:
+          type: integer
+        label:
+          type: string
+        safety:
+          type: string
+          const: confirm
+        operations:
+          type: array
+          items:
+            type: string
+            enum: [set, toggle, trunk_pulse]
+        signalId:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Linked readback signal id, if any
+        write:
+          oneOf:
+            - $ref: "#/components/schemas/CatalogWriteSchema"
+            - type: "null"
+        voiceAliasesRu:
+          type: array
+          items:
+            type: string
+
+    CatalogGenericAction:
+      type: object
+      required: [type, safety, voiceAliasesRu]
+      description: |
+        Generic actions without CAN/builtin payload: launch_application,
+        open_main_screen, http_request, delay.
+      properties:
+        type:
+          type: string
+          enum: [launch_application, open_main_screen, http_request, delay]
+        safety:
+          $ref: "#/components/schemas/SafetyLevel"
+        voiceAliasesRu:
+          type: array
+          items:
+            type: string
+
+    SafetyLevel:
+      type: string
+      enum: [safe, confirm, dangerous]
+      description: |
+        safe: always allowed; confirm: allowed for paired clients;
+        dangerous: rejected with 403 while the dangerous-commands toggle is off.
+
+    SignalsResponse:
+      type: object
+      required: [observedAtElapsedMillis, signals]
+      properties:
+        observedAtElapsedMillis:
+          type: integer
+          description: SystemClock.elapsedRealtime() at snapshot time (not wall clock)
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalValue"
+
+    SignalValue:
+      type: object
+      required: [id, source, valueType, value, available]
+      properties:
+        id:
+          type: string
+          description: Echoes the requested id (trimmed)
+        source:
+          type: string
+          enum: [tbox, head_unit, app]
+        valueType:
+          type: string
+          enum: [number, state, position]
+        value:
+          oneOf:
+            - type: number
+            - type: string
+            - type: object
+              properties:
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+            - type: "null"
+          description: |
+            number for valueType number, state string for state,
+            {latitude, longitude} for position, null when unavailable.
+        available:
+          type: boolean
+        open:
+          type: boolean
+          description: |
+            Window signals only: BodyComfortDomain.windowStateOpen(state) —
+            whether the window/sunroof is open.
+
+    InvokeRequest:
+      type: object
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/InvokeAction"
+
+    InvokeAction:
+      oneOf:
+        - $ref: "#/components/schemas/InvokeCanCommand"
+        - $ref: "#/components/schemas/InvokeBuiltin"
+        - $ref: "#/components/schemas/InvokeDelay"
+        - $ref: "#/components/schemas/InvokeLaunchApplication"
+        - $ref: "#/components/schemas/InvokeOpenMainScreen"
+        - $ref: "#/components/schemas/InvokeHttpRequest"
+        - $ref: "#/components/schemas/InvokeIfThenElse"
+      description: |
+        Same decode rules as automation actions (AutomationCodec.decodeAction).
+        `if_then_else` conditions that reference triggers are invalid in ad-hoc
+        lists (invoke has no triggers); conditions read live signal values.
+
+    InvokeCanCommand:
+      type: object
+      required: [type, bus, propertyId, operation, value]
+      properties:
+        type:
+          type: string
+          const: can_command
+        bus:
+          type: string
+          enum: [vehicle, audio]
+        propertyId:
+          type: integer
+        operation:
+          type: string
+          enum: [set, toggle, trunk_pulse]
+        value:
+          oneOf:
+            - type: integer
+              description: Raw CAN value (from catalog write options)
+            - type: string
+              description: Semantic state key (e.g. "on", "off", "pct30")
+
+    InvokeBuiltin:
+      type: object
+      required: [type, actionType, intValue, stringValue, boolValue]
+      description: |
+        All three value fields are required by the decoder even when the
+        actionType ignores them (set them to 0 / "" / false).
+      properties:
+        type:
+          type: string
+          const: builtin
+        actionType:
+          type: string
+        intValue:
+          type: integer
+        stringValue:
+          type: string
+        boolValue:
+          type: boolean
+
+    InvokeDelay:
+      type: object
+      required: [type, durationMillis]
+      properties:
+        type:
+          type: string
+          const: delay
+        durationMillis:
+          type: integer
+          minimum: 0
+          maximum: 86400000
+          description: 0..24 h (AUTOMATION_MAX_DELAY_MS)
+
+    InvokeLaunchApplication:
+      type: object
+      required: [type, packageName, launchMode, freeformSide, freeformPercent, freeformOverlayCrop]
+      properties:
+        type:
+          type: string
+          const: launch_application
+        packageName:
+          type: string
+        launchMode:
+          type: string
+          enum: [fullscreen, dcl_full_width, dcl_fullscreen, freeform, stock_window, virtual_display]
+        freeformSide:
+          type: string
+          enum: [left, right, top, bottom]
+        freeformPercent:
+          type: integer
+          minimum: 20
+          maximum: 80
+          description: Clamped to 20..80 and snapped to a multiple of 10
+        freeformOverlayPage:
+          type: integer
+          nullable: true
+        freeformOverlayCrop:
+          type: boolean
+        virtualDisplayId:
+          type: integer
+          nullable: true
+          description: Required (> 0) when launchMode is virtual_display
+        virtualDisplayWidthPx:
+          type: integer
+          nullable: true
+        virtualDisplayHeightPx:
+          type: integer
+          nullable: true
+
+    InvokeOpenMainScreen:
+      type: object
+      required: [type, page, target]
+      properties:
+        type:
+          type: string
+          const: open_main_screen
+        page:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Main screen page (MIN..MAX_MAIN_SCREEN_PAGE_COUNT = 1..5)
+        target:
+          type: string
+          enum: [fullscreen, current_window]
+
+    InvokeHttpRequest:
+      type: object
+      required: [type, yaml, openBrowser]
+      properties:
+        type:
+          type: string
+          const: http_request
+        yaml:
+          type: string
+          description: HTTP widget YAML config (same parser as the widget)
+        openBrowser:
+          type: boolean
+
+    InvokeIfThenElse:
+      type: object
+      required: [type, condition, thenActions]
+      properties:
+        type:
+          type: string
+          const: if_then_else
+        condition:
+          type: object
+          description: AutomationCondition JSON (same schema as automations)
+        thenActions:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/InvokeAction"
+        elseActions:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvokeAction"
+
+    InvokeResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required: [success, message]
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+
+    AutomationsResponse:
+      type: object
+      required: [automations]
+      properties:
+        automations:
+          type: array
+          items:
+            type: object
+            required: [id, name, enabled]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              enabled:
+                type: boolean
+
+    RunAccepted:
+      type: object
+      required: [accepted, message]
+      properties:
+        accepted:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: ""
+
+    RunRejected:
+      type: object
+      required: [accepted, message]
+      properties:
+        accepted:
+          type: boolean
+          const: false
+        message:
+          type: string
+          description: Human-readable rejection/error

@@ -255,6 +255,11 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 
 ## 7. Контракт HTTP v1
 
+Машиночитаемая спека всех маршрутов и схем JSON: [openapi.yaml](openapi.yaml)
+(OpenAPI 3.1, совместима со Swagger UI / Postman / openapi-spec-validator).
+Авторитетный источник — код: `ExternalApiRouter.kt` / `ExternalApiConstants.kt`;
+спека обновляется вручную вместе с ними.
+
 Общие соглашения:
 
 - `Content-Type: application/json; charset=utf-8`
