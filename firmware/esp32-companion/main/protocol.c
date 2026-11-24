@@ -65,6 +65,8 @@ static volatile bool s_ota_erasing;
 static bool s_dtr_high;
 static bool s_app_marked_valid;
 #define BIN_IDLE_MS 8000u
+/** UM980 XMODEM is quiet for 10–20 s. Leave the bridge only after a long gap. */
+#define BRIDGE_IDLE_MS 120000u
 
 /*
  * Senders run on several tasks (main loop, USB RX worker, UM980 / Wi-Fi workers, BLE).
@@ -264,9 +266,9 @@ static void abort_binary_session(const char *why)
 
 void protocol_poll(uint32_t now_ms)
 {
-    /* UM980 XMODEM waits 10–20 s between blocks. That session ends on an
-     * explicit end or DTR drop, not on this idle timer. The erase itself
-     * also exceeds BIN_IDLE_MS, so skip the check while it is running. */
+    /* UM980 XMODEM waits 10–20 s between blocks, so this 8 s timer is only
+     * for OTA. The bridge uses BRIDGE_IDLE_MS below. The erase itself also
+     * exceeds BIN_IDLE_MS, so skip the check while it is running. */
     if (s_ota_bin_mode && !s_ota_erasing && s_bin_rx_ms != 0 &&
         (uint32_t)(now_ms - s_bin_rx_ms) > BIN_IDLE_MS) {
         abort_binary_session("timeout");
@@ -276,6 +278,17 @@ void protocol_poll(uint32_t now_ms)
         s_ota_wait_end = false;
         ota_abort();
         protocol_send_ota_done(false, "timeout");
+    }
+    /* The head unit does not drop DTR. A dead updater otherwise stays in
+     * the bridge until power cycle. Traffic in either direction refreshes
+     * s_bin_rx_ms. */
+    if (s_bridge_bin_mode && s_bin_rx_ms != 0 &&
+        (uint32_t)(now_ms - s_bin_rx_ms) > BRIDGE_IDLE_MS) {
+        leave_bridge();
+        s_text_acc = false;
+        s_line_len = 0;
+        s_bin_rx_ms = 0;
+        protocol_send_um980_bridge_ack("end", false, "timeout");
     }
 }
 
@@ -953,6 +966,7 @@ void protocol_um980_bridge_poll(void)
     uint8_t buf[256];
     int n = um980_uart_read_raw(buf, sizeof(buf));
     if (n > 0) {
+        mark_bin_rx();
         protocol_bridge_send_uart_bytes(buf, (size_t)n);
     }
 }
@@ -1098,13 +1112,13 @@ static void handle_ota_begin(const char *line)
         protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         return;
     }
-    s_ota_erasing = false;
     s_ota_bin_mode = true;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
     s_ota_wait_end = false;
     s_line_len = 0;
     mark_bin_rx();
+    s_ota_erasing = false;
     protocol_send_ota_ack("begin", 0, true, NULL);
 }
 

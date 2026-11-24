@@ -113,9 +113,30 @@ class EspCompanionManager(
     private val bridgeAckWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980BridgeAck>?>(null)
     private val canLightAckWaiter = AtomicReference<CompletableDeferred<EspMessage.CanAck>?>(null)
     private val relayDevAckWaiter = AtomicReference<CompletableDeferred<EspMessage.BleAck>?>(null)
+    private data class RelayUiWrite(val id: String, val mask: Int, val pulseMs: Int)
+
     private val relayDevMutex = Mutex()
     private val relayDevReq = AtomicInteger(0)
     @Volatile private var waitingRelayReq = 0
+    private val relayUiQueue = Channel<RelayUiWrite>(Channel.UNLIMITED)
+
+    init {
+        scope.launch {
+            for (write in relayUiQueue) {
+                relayDevMutex.withLock {
+                    val req = nextRelayReq()
+                    writeLine(
+                        EspCompanionProtocol.encodeRelayDevSet(
+                            write.id,
+                            write.mask,
+                            write.pulseMs,
+                            req,
+                        ),
+                    )
+                }
+            }
+        }
+    }
     @Volatile private var um980BridgeActive: Boolean = false
     private val canLightRefCount = AtomicInteger(0)
     @Volatile private var canLightBridgeOn: Boolean = false
@@ -270,6 +291,7 @@ class EspCompanionManager(
         optionalNmeaEnableSentForLink = false
         canLightRefCount.set(0)
         canLightBridgeOn = false
+        canLightSuspendedForOta = false
         canLightDecoder.reset()
         EspCompanionRepository.updateCanLightActive(false)
         EspCompanionRepository.finishUm980ConfigBusy()
@@ -883,12 +905,7 @@ class EspCompanionManager(
 
     /** UI writes wait out an automation that is already waiting for its own ack. */
     private fun enqueueRelayDevSet(id: String, mask: Int, pulseMs: Int) {
-        scope.launch {
-            relayDevMutex.withLock {
-                val req = nextRelayReq()
-                writeLine(EspCompanionProtocol.encodeRelayDevSet(id, mask, pulseMs, req))
-            }
-        }
+        relayUiQueue.trySend(RelayUiWrite(id, mask, pulseMs))
     }
 
     private suspend fun awaitRelayDevAck(id: String, mask: Int, pulseMs: Int): BleRelaySendResult {
@@ -1075,20 +1092,6 @@ class EspCompanionManager(
             return Result.failure(IllegalStateException(err))
         }
         if (um980BridgeActive) endUm980Bridge()
-        if (canLightBridgeOn || canLightRefCount.get() > 0) {
-            canLightSuspendedForOta = true
-        }
-        if (canLightBridgeOn) {
-            val waiter = CompletableDeferred<EspMessage.CanAck>()
-            canLightAckWaiter.set(waiter)
-            canLightBridgeOn = false
-            sess.setBridgeMode(false)
-            writeLine(EspCompanionProtocol.encodeCanLightEnd())
-            withTimeoutOrNull(2_000L) { waiter.await() }
-            canLightAckWaiter.compareAndSet(waiter, null)
-            canLightDecoder.reset()
-            EspCompanionRepository.updateCanLightActive(false)
-        }
         val channel = Channel<EspMessage>(Channel.BUFFERED)
         otaInbox.set(channel)
         EspCompanionRepository.beginOta()
@@ -1096,6 +1099,20 @@ class EspCompanionManager(
         sess.beginCriticalIo()
         var phase = "begin"
         return try {
+            if (canLightBridgeOn || canLightRefCount.get() > 0) {
+                canLightSuspendedForOta = true
+            }
+            if (canLightBridgeOn) {
+                val waiter = CompletableDeferred<EspMessage.CanAck>()
+                canLightAckWaiter.set(waiter)
+                canLightBridgeOn = false
+                sess.setBridgeMode(false)
+                writeLine(EspCompanionProtocol.encodeCanLightEnd())
+                withTimeoutOrNull(2_000L) { waiter.await() }
+                canLightAckWaiter.compareAndSet(waiter, null)
+                canLightDecoder.reset()
+                EspCompanionRepository.updateCanLightActive(false)
+            }
             runCatching {
                 File(
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),

@@ -134,6 +134,11 @@ bool relay_logic_take_restored(void)
     return r;
 }
 
+bool relay_logic_restored(void)
+{
+    return s_restored;
+}
+
 void relay_logic_mark_self_opened(void)
 {
     s_self_opened = true;
@@ -144,4 +149,9 @@ bool relay_logic_take_self_opened(void)
     bool r = s_self_opened;
     s_self_opened = false;
     return r;
+}
+
+bool relay_logic_self_opened(void)
+{
+    return s_self_opened;
 }

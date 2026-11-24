@@ -126,10 +126,12 @@ static void send_state(void)
     relay_state_lock();
     memset(body, 0, sizeof(body));
     body[0] = relay_logic_mask();
+    /* Keep the one-shot bits until a 0x30 is accepted. A failed write
+     * must still be able to send them again. */
     body[1] = (uint8_t)((s_cmd_echo ? 0x01 : 0) |
-                        (relay_logic_take_restored() ? 0x02 : 0) |
+                        (relay_logic_restored() ? 0x02 : 0) |
                         (relay_logic_pulse_active() ? 0x04 : 0) |
-                        (relay_logic_take_self_opened() ? 0x08 : 0));
+                        (relay_logic_self_opened() ? 0x08 : 0));
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000ULL);
     body[2] = (uint8_t)up;
     body[3] = (uint8_t)(up >> 8);
@@ -499,6 +501,8 @@ void relay_ble_handle_cmd(const uint8_t pkt[24])
     }
     relay_store_commit_rx(counter);
     s_last_sealed_ms = now_ms();
+    relay_logic_take_self_opened();
+    relay_logic_take_restored();
     if (!relay_store_paired()) {
         relay_store_set_paired();
         ESP_LOGI(TAG, "paired (latched)");
