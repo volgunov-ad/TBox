@@ -3,7 +3,9 @@ package vad.dashing.dclinstall;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
@@ -12,11 +14,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -39,6 +43,7 @@ public class InstallActivity extends Activity {
     private static final long CHECKLIST_REFRESH_MS = 3000L;
 
     private TextView status;
+    private TextView progress;
     private LinearLayout statusList;
     private TextView apkLabel;
     private TextView wallpaperNote;
@@ -59,13 +64,19 @@ public class InstallActivity extends Activity {
     private Button restoreStock;
     private Button dealerOn;
     private Button dealerOff;
+    private Button uninstallUsb;
     private TextView log;
     private String apkPath;
     private String customImagePath;
     private boolean running;
     private boolean expectReboot;
+    /** Drop the wallpaper mode file only after restore actually succeeds. */
+    private boolean clearModeOnOk;
     private volatile boolean stopPoll;
     private boolean nativeUnlock;
+    private boolean a9Known;
+    private boolean a9;
+    private boolean restoring;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,8 +93,11 @@ public class InstallActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         column.addView(title);
         status = text("", 22, 0xFFB7C0C8);
-        status.setPadding(0, dp(6), 0, dp(8));
+        status.setPadding(0, dp(6), 0, dp(4));
         column.addView(status);
+        progress = text("", 22, 0xFFE0A045);
+        progress.setPadding(0, 0, 0, dp(8));
+        column.addView(progress);
         statusList = new LinearLayout(this);
         statusList.setOrientation(LinearLayout.VERTICAL);
         column.addView(statusList);
@@ -126,6 +140,7 @@ public class InstallActivity extends Activity {
         wallpapers.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(RadioGroup group, int checkedId) {
+                saveChoices();
                 updateWallpaperNote();
                 refreshStatus();
             }
@@ -183,6 +198,11 @@ public class InstallActivity extends Activity {
         column.addView(note("Служба рядом с помощником. Если помощник скрыт, она может остаться и при этом не падает."));
         column.addView(manual);
         column.addView(note("Руководство по автомобилю. После скрытия пропадает из списка программ."));
+        watch(systemUi);
+        watch(iottube);
+        watch(voice);
+        watch(speechClient);
+        watch(manual);
 
         install = button("Установить и перезагрузить");
         install.setOnClickListener(new View.OnClickListener() {
@@ -238,52 +258,31 @@ public class InstallActivity extends Activity {
             }
         });
         column.addView(compileDcl, extraParams);
-        restoreStock = button("Удалить DCL и вернуть штатное");
-        restoreStock.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                onRestoreClicked();
-            }
-        });
-        column.addView(restoreStock, extraParams);
         column.addView(note(
-                "Кнопка «Настроить установленный DCL» повторяет всю настройку без установки APK: "
-                        + "разрешения, кнопка HOME, "
-                        + (nativeUnlock ? "обои" : "программа флешек, обои")
-                        + ", скрытие и компиляция, "
-                        + "затем перезагрузка. "
-                        + "Остальные кнопки нужны по отдельности. "
-                        + "Разрешения применяются сразу. "
-                        + "Картинка обоев берётся из текущего выбора: по умолчанию, чёрный фон или свой файл. "
-                        + "Компиляция собирает код лаунчера целиком и занимает несколько минут. "
-                        + "На этом ГУ сама она не запускается, поэтому после установки лаунчер тормозит. "
-                        + "Скрытие останавливает постоянные пакеты после перезагрузки. "
-                        + "Штатный лаунчер и системный обработчик USB скрываются всегда, остальные пакеты — по галочкам. "
+                "«Настроить установленный DCL» повторяет настройку без установки APK и перезагружает ГУ. "
+                        + "Разрешения применяются сразу. Обои берутся из текущего выбора. "
+                        + "Компиляция занимает несколько минут. "
+                        + "Штатный лаунчер и обработчик USB скрываются всегда, остальное — по галочкам. "
                         + (nativeUnlock
-                                ? "Лаунчер сам подключает флешки, отдельная программа не ставится. "
-                                : "")
-                        + "Возврат удаляет DCL"
-                        + (nativeUnlock ? "" : ", программу флешек")
-                        + " и старые пустые обои, "
-                        + "показывает штатный лаунчер, System UI, обработчик USB, голос, IoT Tube и руководство "
-                        + "и ставит штатные обои. Сама программа установки остаётся."));
+                                ? "Лаунчер сам подключает флешки."
+                                : "Для этого лаунчера ставится программа флешек.")));
 
         column.addView(heading("Визит к дилеру"));
         column.addView(note(
                 "Включение прячет DCL"
-                        + (nativeUnlock ? "" : ", программу флешек")
-                        + " и наши обои: возвращаются штатный лаунчер, "
-                        + "System UI, штатные обои и обработчик USB, свободные окна и полный экран сбрасываются. "
-                        + "TBox Monitor и сам установщик остаются. "
-                        + "Выключение возвращает всё обратно. Оба действия перезагружают ГУ."));
-        dealerOn = button("Включено");
+                        + (nativeUnlock ? "" : " и программу флешек")
+                        + ", возвращает штатный лаунчер, System UI, штатные обои и обработчик USB "
+                        + "и снова показывает скрытые по желанию приложения. "
+                        + "Выключение прячет обратно ровно то, что было скрыто до визита. "
+                        + "Оба действия перезагружают ГУ. TBox Monitor и установщик остаются."));
+        dealerOn = button("Включить режим дилера");
         dealerOn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 onDealerOnClicked();
             }
         });
-        dealerOff = button("Выключено");
+        dealerOff = button("Выключить режим дилера");
         dealerOff.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -292,6 +291,29 @@ public class InstallActivity extends Activity {
         });
         column.addView(dealerOn, extraParams);
         column.addView(dealerOff, extraParams);
+
+        column.addView(heading("Откат"));
+        restoreStock = button("Удалить DCL и вернуть штатное");
+        restoreStock.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onRestoreClicked();
+            }
+        });
+        column.addView(restoreStock, extraParams);
+        uninstallUsb = button("Удалить программу флешек");
+        uninstallUsb.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onUninstallUsbClicked();
+            }
+        });
+        column.addView(uninstallUsb, extraParams);
+        column.addView(note(
+                "Возврат удаляет DCL"
+                        + (nativeUnlock ? "" : ", программу флешек")
+                        + " и пустые обои, показывает штатные приложения и снимает режим дилера. "
+                        + "Программа флешек для лаунчера 0.8.2+ не нужна: если она осталась, удалите её отдельной кнопкой."));
 
         log = text("", 20, 0xFFD5DDE4);
         log.setTypeface(Typeface.MONOSPACE);
@@ -302,8 +324,11 @@ public class InstallActivity extends Activity {
         scroll.setBackgroundColor(0xFF121417);
         scroll.addView(column);
         setContentView(scroll);
+        restoreChoices();
         updateWallpaperNote();
         refreshStatus();
+        resumeRunIfNeeded();
+        showLastFailure();
     }
 
     private boolean appOpsProbeStarted;
@@ -311,6 +336,16 @@ public class InstallActivity extends Activity {
     private boolean checklistLoading;
     private String checklistShown;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable rebootWatch = new Runnable() {
+        @Override
+        public void run() {
+            if (!alive()) return;
+            log.append("\nПерезагрузка не произошла — перезагрузите ГУ вручную.");
+            if (progress != null) progress.setText("Перезагрузка не произошла — перезагрузите ГУ вручную.");
+            running = false;
+            refreshStatus();
+        }
+    };
     private final Runnable checklistTick = new Runnable() {
         @Override
         public void run() {
@@ -343,11 +378,12 @@ public class InstallActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                DclStatus.grantSelfAppOps(InstallActivity.this);
+                final boolean ran = DclStatus.grantSelfAppOps(InstallActivity.this);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        showChecklist();
+                        if (!ran) appOpsProbeStarted = false;
+                        if (alive()) showChecklist();
                     }
                 });
             }
@@ -362,20 +398,22 @@ public class InstallActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                final boolean dealer = new File(InstallPlan.DEALER_FLAG).isFile();
                 final List<DclStatus> items = DclStatus.collect(app);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         checklistLoading = false;
-                        if (!isFinishing()) renderChecklist(items);
+                        if (alive()) renderChecklist(items, dealer);
                     }
                 });
             }
         }, "dcl-status").start();
     }
 
-    private void renderChecklist(List<DclStatus> items) {
+    private void renderChecklist(List<DclStatus> items, boolean dealerMode) {
         StringBuilder key = new StringBuilder();
+        key.append(dealerMode).append('\n');
         for (int i = 0; i < items.size(); i++) {
             DclStatus item = items.get(i);
             key.append(item.title).append(item.done).append(item.unknown).append(item.detail).append('\n');
@@ -383,9 +421,6 @@ public class InstallActivity extends Activity {
         if (key.toString().equals(checklistShown)) return;
         checklistShown = key.toString();
         statusList.removeAllViews();
-        boolean dealerMode = items.size() > 0
-                && "Визит к дилеру включён".equals(items.get(0).title)
-                && items.get(0).done;
         int done = 0;
         int required = 0;
         int unknown = 0;
@@ -418,7 +453,7 @@ public class InstallActivity extends Activity {
                 statusList.addView(header);
                 optionalHeader = true;
             }
-            int color = dealerMode && i > 0 ? 0xFFB7C0C8
+            int color = dealerMode ? 0xFFB7C0C8
                     : item.unknown ? 0xFFB7C0C8
                     : item.done ? 0xFF8FCB7A
                     : (item.optional ? 0xFFB7C0C8 : 0xFFE07A7A);
@@ -435,21 +470,50 @@ public class InstallActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == PICK_APK && resultCode == RESULT_OK && data != null) {
             apkPath = data.getStringExtra("path");
-            apkLabel.setText(describeApk(apkPath));
-            refreshStatus();
+            apkLabel.setText("Чтение APK…");
+            final String path = apkPath;
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final String text = describeApk(path);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (!alive() || path == null || !path.equals(apkPath)) return;
+                            apkLabel.setText(text);
+                            refreshStatus();
+                        }
+                    });
+                }
+            }, "dcl-apk-label").start();
         }
         if (requestCode == PICK_IMAGE && resultCode == RESULT_OK && data != null) {
             customImagePath = data.getStringExtra("path");
             customWallpaper.setChecked(true);
+            saveChoices();
             updateWallpaperNote();
             refreshStatus();
         }
     }
 
     @Override
+    public void onBackPressed() {
+        if (running) {
+            String message = expectReboot
+                    ? "Идёт установка, дождитесь перезагрузки."
+                    : "Команда ещё выполняется.";
+            log.setText(message);
+            if (progress != null) progress.setText(message);
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    @Override
     protected void onDestroy() {
         stopPoll = true;
         handler.removeCallbacks(checklistTick);
+        handler.removeCallbacks(rebootWatch);
         super.onDestroy();
     }
 
@@ -472,6 +536,10 @@ public class InstallActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if (!alive()) {
+                            running = false;
+                            return;
+                        }
                         if (check.error != null) {
                             failUi(check.error);
                             return;
@@ -480,30 +548,35 @@ public class InstallActivity extends Activity {
                             confirmReplace(check);
                             return;
                         }
-                        begin(false);
+                        begin(false, check.fileVersion);
                     }
                 });
             }
         }, "dcl-apk-check").start();
     }
 
-    private void confirmReplace(ApkCheck check) {
+    private void confirmReplace(final ApkCheck check) {
+        if (!alive()) {
+            running = false;
+            return;
+        }
         install.setText("Установить и перезагрузить");
         new AlertDialog.Builder(this)
                 .setTitle("Другая подпись")
                 .setMessage("Сейчас установлен DCL " + check.installedVersion
                         + ", в файле " + check.fileVersion
                         + ". Подпись другая, поверх поставить нельзя. Удалить старый DCL и поставить этот? "
-                        + "Настройки лаунчера сотрутся. TBox Monitor не затрагивается.")
-                .setPositiveButton("Удалить и установить", new android.content.DialogInterface.OnClickListener() {
+                        + "Настройки лаунчера сотрутся. Если установка нового файла не удастся, "
+                        + "штатный лаунчер и System UI будут возвращены. TBox Monitor не затрагивается.")
+                .setPositiveButton("Удалить и установить", new DialogInterface.OnClickListener() {
                     @Override
-                    public void onClick(android.content.DialogInterface dialog, int which) {
-                        begin(true);
+                    public void onClick(DialogInterface dialog, int which) {
+                        begin(true, check.fileVersion);
                     }
                 })
-                .setNegativeButton("Остановить", new android.content.DialogInterface.OnClickListener() {
+                .setNegativeButton("Остановить", new DialogInterface.OnClickListener() {
                     @Override
-                    public void onClick(android.content.DialogInterface dialog, int which) {
+                    public void onClick(DialogInterface dialog, int which) {
                         running = false;
                         refreshStatus();
                         log.setText("Остановлено. Старый DCL на месте.");
@@ -519,10 +592,11 @@ public class InstallActivity extends Activity {
             log.setText("DCL ещё не установлен.");
             return;
         }
+        saveChoices();
         expectReboot = false;
         setBusy(true);
         grantPermissions.setText("Выдача разрешений…");
-        startRoot(currentPlan(false).toGrantScript());
+        startRoot(currentPlan(false).toGrantScript(), false);
     }
 
     private void onSetupClicked() {
@@ -531,40 +605,26 @@ public class InstallActivity extends Activity {
             log.setText("DCL ещё не установлен.");
             return;
         }
-        expectReboot = true;
-        setBusy(true);
-        setupInstalled.setText("Настройка… ГУ перезагрузится");
-        log.setText("Подготовка…");
-        final boolean black = blackWallpaper.isChecked();
-        final boolean custom = customWallpaper.isChecked();
-        final String imagePath = customImagePath;
-        final boolean planUsb = launcherHasNativeUnlock();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
-                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
-                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
-                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                    if (!dir.exists() && !dir.mkdirs()) {
-                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+        if (!wallpaperChosen()) {
+            log.setText("Выберите картинку обоев: по умолчанию, чёрный фон или свой файл.");
+            return;
+        }
+        final String usb = nativeUnlock ? "" : " Будет установлена программа флешек.";
+        confirm("Настроить установленный DCL",
+                "Выдать разрешения, назначить DCL кнопкой HOME, поставить обои и скрыть "
+                        + hideList() + "." + usb + " Головное устройство перезагрузится.",
+                "Настроить",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        saveChoices();
+                        expectReboot = true;
+                        setBusy(true);
+                        setupInstalled.setText("Настройка… ГУ перезагрузится");
+                        InstallPlan plan = currentPlan(false);
+                        startPrepared(plan.toSetupScript(), true, !plan.launcherHasNativeUnlock, true, false);
                     }
-                    if (!planUsb) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
-                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                    arm(currentPlan(false).toSetupScript());
-                    poll();
-                } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
-                }
-            }
-        }, "dcl-setup").start();
+                });
     }
 
     private void onHideClicked() {
@@ -573,10 +633,23 @@ public class InstallActivity extends Activity {
             log.setText("Сначала установите DCL. Штатный лаунчер скрывается всегда, без DCL не останется рабочего стола.");
             return;
         }
-        expectReboot = true;
-        setBusy(true);
-        hideSelected.setText("Скрытие… ГУ перезагрузится");
-        startRoot(currentPlan(false).toHideScript());
+        final boolean wallpaper = systemUi.isChecked();
+        confirm("Скрыть приложения",
+                "Скрыть " + hideList() + " и назначить DCL кнопкой HOME."
+                        + (wallpaper ? " Будут поставлены выбранные обои." : "")
+                        + " Головное устройство перезагрузится.",
+                "Скрыть",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        saveChoices();
+                        expectReboot = true;
+                        setBusy(true);
+                        hideSelected.setText("Скрытие… ГУ перезагрузится");
+                        InstallPlan plan = currentPlan(false);
+                        startPrepared(plan.toHideScript(), plan.hideSystemUi, false, plan.hideSystemUi, false);
+                    }
+                });
     }
 
     private void onCompileClicked() {
@@ -588,53 +661,31 @@ public class InstallActivity extends Activity {
         expectReboot = false;
         setBusy(true);
         compileDcl.setText("Компиляция… несколько минут");
-        startRoot(currentPlan(false).toCompileScript());
+        startRoot(currentPlan(false).toCompileScript(), false);
     }
 
     private void onRestoreClicked() {
         if (running || !isA9()) return;
-        new AlertDialog.Builder(this)
-                .setTitle("Вернуть штатное состояние")
-                .setMessage("Удалить DCL"
+        confirm("Вернуть штатное состояние",
+                "Удалить DCL"
                         + (nativeUnlock ? "" : ", программу флешек")
                         + " и пустые обои? "
-                        + "Штатный лаунчер, System UI, системный обработчик USB, "
-                        + "голосовой помощник, IoT Tube и руководство снова появятся. "
+                        + "Штатный лаунчер, System UI, обработчик USB, голосовой помощник, "
+                        + "IoT Tube и руководство снова появятся. Режим дилера снимется. "
                         + "Головное устройство перезагрузится. "
-                        + "TBox Monitor и эта программа установки останутся.")
-                .setPositiveButton("Удалить и вернуть", new android.content.DialogInterface.OnClickListener() {
+                        + "TBox Monitor и эта программа установки останутся.",
+                "Удалить и вернуть",
+                new Runnable() {
                     @Override
-                    public void onClick(android.content.DialogInterface dialog, int which) {
+                    public void run() {
+                        saveChoices();
                         expectReboot = true;
+                        clearModeOnOk = true;
                         setBusy(true);
                         restoreStock.setText("Возврат… ГУ перезагрузится");
-                        log.setText("Подготовка…");
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                try {
-                                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                                    if (!dir.exists() && !dir.mkdirs()) {
-                                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
-                                    }
-                                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                                    arm(currentPlan(false).toRestoreScript());
-                                    poll();
-                                } catch (Exception e) {
-                                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                                    runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            failUi(message);
-                                        }
-                                    });
-                                }
-                            }
-                        }, "dcl-restore").start();
+                        startPrepared(currentPlan(false).toRestoreScript(), false, false, true, false);
                     }
-                })
-                .setNegativeButton("Отмена", null)
-                .show();
+                });
     }
 
     private void onDealerOnClicked() {
@@ -647,32 +698,23 @@ public class InstallActivity extends Activity {
             log.setText("DCL ещё не установлен.");
             return;
         }
-        expectReboot = true;
-        setBusy(true);
-        dealerOn.setText("Включение… ГУ перезагрузится");
-        log.setText("Подготовка…");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                    if (!dir.exists() && !dir.mkdirs()) {
-                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+        confirm("Включить режим дилера",
+                "Вернуть штатный лаунчер, System UI, штатные обои и обработчик USB. "
+                        + "Скрытые приложения из списка по желанию снова появятся; "
+                        + "установщик запомнит их и спрячет обратно после визита. "
+                        + "DCL будет скрыт. Другие службы специальных возможностей останутся, если они включены. "
+                        + "Головное устройство перезагрузится.",
+                "Включить",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        saveChoices();
+                        expectReboot = true;
+                        setBusy(true);
+                        dealerOn.setText("Включение… ГУ перезагрузится");
+                        startPrepared(currentPlan(false).toDealerOnScript(), false, false, true, false);
                     }
-                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                    arm(currentPlan(false).toDealerOnScript());
-                    poll();
-                } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
-                }
-            }
-        }, "dcl-dealer-on").start();
+                });
     }
 
     private void onDealerOffClicked() {
@@ -685,84 +727,50 @@ public class InstallActivity extends Activity {
             log.setText("Выберите картинку обоев: по умолчанию, чёрный фон или свой файл.");
             return;
         }
-        expectReboot = true;
-        setBusy(true);
-        dealerOff.setText("Выключение… ГУ перезагрузится");
-        log.setText("Подготовка…");
-        final boolean black = blackWallpaper.isChecked();
-        final boolean custom = customWallpaper.isChecked();
-        final String imagePath = customImagePath;
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
-                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
-                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
-                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                    if (!dir.exists() && !dir.mkdirs()) {
-                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+        confirm("Выключить режим дилера",
+                "Вернуть DCL домашним экраном, заново скрыть то, что было скрыто до визита, "
+                        + "и поставить выбранные обои. Головное устройство перезагрузится.",
+                "Выключить",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        saveChoices();
+                        expectReboot = true;
+                        setBusy(true);
+                        dealerOff.setText("Выключение… ГУ перезагрузится");
+                        startPrepared(currentPlan(false).toDealerOffScript(), true, false, true, false);
                     }
-                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                    arm(currentPlan(false).toDealerOffScript());
-                    poll();
-                } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
-                }
-            }
-        }, "dcl-dealer-off").start();
+                });
     }
 
     private void onWallpaperClicked() {
         if (running || !isA9()) return;
         if (customWallpaper.isChecked() && customImagePath == null) {
-            log.setText("Выберите jpg или png.");
+            log.setText("Выберите jpg, png или webp.");
             return;
         }
+        saveChoices();
         expectReboot = false;
         setBusy(true);
         changeWallpaper.setText("Смена обоев…");
-        final boolean black = blackWallpaper.isChecked();
-        final boolean custom = customWallpaper.isChecked();
-        final String imagePath = customImagePath;
-        log.setText("Подготовка…");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
-                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
-                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
-                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                    if (!dir.exists() && !dir.mkdirs()) {
-                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+        startPrepared(currentPlan(false).toWallpaperScript(), true, false, true, true);
+    }
+
+    private void onUninstallUsbClicked() {
+        if (running || !isA9()) return;
+        confirm("Удалить программу флешек",
+                "Удалить vad.dashing.usbmount? Лаунчер 0.8.2 и новее подключает флешки сам. "
+                        + "Для более старого лаунчера без этой программы флешки NTFS и exFAT не появятся.",
+                "Удалить",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        expectReboot = false;
+                        setBusy(true);
+                        uninstallUsb.setText("Удаление…");
+                        startRoot(currentPlan(false).toUninstallUsbScript(), false);
                     }
-                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                    arm(currentPlan(false).toWallpaperScript());
-                    poll();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            BootWallpaperService.reload();
-                        }
-                    });
-                } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
-                }
-            }
-        }, "dcl-wallpaper").start();
+                });
     }
 
     private InstallPlan currentPlan(boolean uninstallExisting) {
@@ -777,14 +785,9 @@ public class InstallActivity extends Activity {
                 launcherHasNativeUnlock());
     }
 
-    /** Launcher 0.8.2+ unlocks USB volumes itself, so the installer skips its own sticks program. */
+    /** Installed launcher, including one hidden for a dealer visit. */
     private boolean launcherHasNativeUnlock() {
-        try {
-            PackageInfo info = getPackageManager().getPackageInfo(InstallPlan.DCL_PACKAGE, 0);
-            return InstallPlan.hasNativeUnlock(info == null ? null : info.versionName);
-        } catch (PackageManager.NameNotFoundException e) {
-            return false;
-        }
+        return InstallPlan.hasNativeUnlock(installedDcl());
     }
 
     private void setBusy(boolean busy) {
@@ -792,97 +795,162 @@ public class InstallActivity extends Activity {
         refreshStatus();
     }
 
-    private void begin(boolean uninstallExisting) {
+    private void begin(boolean uninstallExisting, String fileVersion) {
+        saveChoices();
         expectReboot = true;
         setBusy(true);
         install.setText("Установка… ГУ перезагрузится");
-        final InstallPlan plan = currentPlan(uninstallExisting);
-        final boolean black = blackWallpaper.isChecked();
-        final boolean custom = customWallpaper.isChecked();
-        final String imagePath = customImagePath;
-        log.setText("Подготовка…");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
-                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
-                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
-                    File dir = new File(InstallPlan.PAYLOAD_DIR);
-                    if (!dir.exists() && !dir.mkdirs()) {
-                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
-                    }
-                    if (!plan.launcherHasNativeUnlock) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
-                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
-                    arm(plan.toScript());
-                    poll();
-                } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
-                }
-            }
-        }, "dcl-install").start();
+        final InstallPlan plan = InstallPlan.forApk(
+                apkPath == null ? "" : apkPath,
+                uninstallExisting,
+                systemUi.isChecked(),
+                iottube.isChecked(),
+                voice.isChecked(),
+                speechClient.isChecked(),
+                manual.isChecked(),
+                fileVersion);
+        startPrepared(plan.toScript(), true, !plan.launcherHasNativeUnlock, true, false);
     }
 
-    private void startRoot(final String script) {
-        log.setText("Подготовка…");
+    private void startRoot(final String script, final boolean reloadWallpaper) {
+        showProgress("Подготовка…");
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     arm(script);
                     poll();
+                    if (reloadWallpaper) reloadWallpaper();
                 } catch (Exception e) {
-                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            failUi(message);
-                        }
-                    });
+                    postFail(e);
                 }
             }
         }, "dcl-root").start();
     }
 
+    private void startPrepared(
+            final String script,
+            final boolean wallpaper,
+            final boolean usb,
+            final boolean dex,
+            final boolean reloadWallpaper) {
+        final boolean black = blackWallpaper.isChecked();
+        final boolean custom = customWallpaper.isChecked();
+        final String imagePath = customImagePath;
+        showProgress("Подготовка…");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (wallpaper) writeWallpaper(black, custom, imagePath);
+                    if (usb || dex) {
+                        File dir = new File(InstallPlan.PAYLOAD_DIR);
+                        if (!dir.exists() && !dir.mkdirs()) {
+                            throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+                        }
+                        if (usb) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
+                        if (dex) copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
+                    }
+                    arm(script);
+                    poll();
+                    if (reloadWallpaper) reloadWallpaper();
+                } catch (Exception e) {
+                    postFail(e);
+                }
+            }
+        }, "dcl-root").start();
+    }
+
+    private void writeWallpaper(boolean black, boolean custom, String imagePath) throws Exception {
+        if (black) WallpaperStore.writeBlack(InstallActivity.this);
+        else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
+        else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
+    }
+
+    private void reloadWallpaper() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (alive()) BootWallpaperService.reload();
+            }
+        });
+    }
+
+    private long bootId() {
+        return BootReceiver.currentBootId(this);
+    }
+
+    private boolean runInProgress() {
+        return RootRun.inProgress(new File(InstallPlan.LOCK_FILE), SystemClock.elapsedRealtime(), bootId());
+    }
+
     private void arm(String script) throws Exception {
-        new File(InstallPlan.RESULT_FILE).delete();
-        new File(InstallPlan.LOG_FILE).delete();
-        MbDaemon.run(script, MbDaemon.INSTALL_BODY);
+        if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL, SystemClock.elapsedRealtime(), bootId())) {
+            throw new IllegalStateException("Уже выполняется другая команда");
+        }
+        try {
+            new File(InstallPlan.RESULT_FILE).delete();
+            new File(InstallPlan.LOG_FILE).delete();
+            MbDaemon.run(script, MbDaemon.INSTALL_BODY);
+        } catch (Exception e) {
+            RootRun.release();
+            throw e;
+        }
     }
 
     private void poll() throws Exception {
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
         while (!stopPoll && System.currentTimeMillis() < deadline) {
             final String text = readTail(InstallPlan.LOG_FILE);
-            final String result = readTail(InstallPlan.RESULT_FILE).trim();
+            String result = readTail(InstallPlan.RESULT_FILE).trim();
+            final String shown = text;
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    if (text.length() > 0) log.setText(text);
+                    if (alive() && shown.length() > 0) showLog(shown);
                 }
             });
+            if (!result.startsWith("OK") && !result.startsWith("FAIL") && !runInProgress()) {
+                result = readTail(InstallPlan.RESULT_FILE).trim();
+                if (!result.startsWith("OK") && !result.startsWith("FAIL")) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            failUi("Команда прервалась. Можно начать заново.");
+                        }
+                    });
+                    return;
+                }
+            }
             if (result.startsWith("OK") || result.startsWith("FAIL")) {
                 final String done = result;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if (!alive()) return;
                         if (done.startsWith("OK")) {
+                            if (clearModeOnOk) {
+                                WallpaperStore.clearMode(InstallActivity.this);
+                                clearModeOnOk = false;
+                            }
+                            if (shown.length() > 0) showLog(shown);
+                            if (shown.contains("WARN")) {
+                                log.append("\nЕсть предупреждения, см. строки WARN.");
+                            }
                             if (expectReboot) {
                                 log.append("\nГотово. Перезагрузка.");
+                                if (progress != null) progress.setText("Готово. Перезагрузка.");
+                                handler.removeCallbacks(rebootWatch);
+                                handler.postDelayed(rebootWatch, 60_000L);
                             } else {
                                 log.append("\nГотово.");
+                                if (progress != null) progress.setText("Готово.");
                                 running = false;
                                 refreshStatus();
                                 showChecklist();
                             }
                         } else {
-                            failUi(text.length() == 0 ? done : text);
+                            failUi(shown.length() == 0 ? done : shown);
                         }
                     }
                 });
@@ -893,15 +961,190 @@ public class InstallActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                failUi("Команда не ответила за 15 минут. Журнал: " + InstallPlan.LOG_FILE);
+                failUi("Команда не ответила за 15 минут. Журнал: " + InstallPlan.LOG_FILE
+                        + ". Если команда ещё идёт, закройте программу и откройте снова.");
+            }
+        });
+    }
+
+    private void postFail(Exception e) {
+        final String message = e.getMessage() == null ? e.toString() : e.getMessage();
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                failUi(message);
             }
         });
     }
 
     private void failUi(String message) {
+        handler.removeCallbacks(rebootWatch);
         running = false;
+        clearModeOnOk = false;
+        if (!alive()) return;
         refreshStatus();
-        log.setText(message);
+        showLog(message);
+    }
+
+    private void showLog(String text) {
+        log.setText(text);
+        if (progress == null || text == null) return;
+        int end = text.length();
+        while (end > 0) {
+            char c = text.charAt(end - 1);
+            if (c != '\n' && c != '\r') break;
+            end--;
+        }
+        int start = text.lastIndexOf('\n', end - 1);
+        String line = text.substring(start < 0 ? 0 : start + 1, end).trim();
+        if (line.length() > 0) progress.setText(line);
+    }
+
+    private void showProgress(final String text) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (!alive()) return;
+                log.setText(text);
+                if (progress != null) progress.setText(text);
+            }
+        });
+    }
+
+    private void showLastFailure() {
+        if (running) return;
+        String result = readTail(InstallPlan.RESULT_FILE).trim();
+        if (!result.startsWith("FAIL")) return;
+        String text = readTail(InstallPlan.LOG_FILE);
+        showLog(text.length() == 0 ? result : text);
+    }
+
+    private void resumeRunIfNeeded() {
+        File lock = new File(InstallPlan.LOCK_FILE);
+        if (!runInProgress()) return;
+        final String owner = RootRun.owner(lock);
+        running = true;
+        expectReboot = RootRun.OWNER_INSTALL.equals(owner);
+        refreshStatus();
+        showProgress(RootRun.OWNER_INSTALL.equals(owner)
+                ? "Команда ещё выполняется…"
+                : "Выполняется служебная команда…");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (RootRun.OWNER_INSTALL.equals(owner)) {
+                        poll();
+                    } else {
+                        long deadline = System.currentTimeMillis() + 60_000L;
+                        while (!stopPoll
+                                && System.currentTimeMillis() < deadline
+                                && runInProgress()) {
+                            Thread.sleep(300);
+                        }
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (!alive()) return;
+                                running = false;
+                                refreshStatus();
+                                showChecklist();
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    postFail(e);
+                }
+            }
+        }, "dcl-resume").start();
+    }
+
+    private void confirm(String title, String message, String positive, final Runnable action) {
+        if (running || !alive()) return;
+        running = true;
+        refreshStatus();
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(positive, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        action.run();
+                    }
+                })
+                .setNegativeButton("Отмена", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        running = false;
+                        refreshStatus();
+                    }
+                })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @Override
+                    public void onCancel(DialogInterface dialog) {
+                        running = false;
+                        if (alive()) refreshStatus();
+                    }
+                })
+                .show();
+    }
+
+    private String hideList() {
+        StringBuilder list = new StringBuilder("штатный лаунчер и обработчик USB");
+        if (systemUi.isChecked()) list.append(", System UI");
+        if (iottube.isChecked()) list.append(", IoT Tube");
+        if (voice.isChecked()) list.append(", голосовой помощник");
+        if (speechClient.isChecked()) list.append(", клиент голоса");
+        if (manual.isChecked()) list.append(", электронное руководство");
+        return list.toString();
+    }
+
+    private void watch(CheckBox box) {
+        box.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton button, boolean checked) {
+                saveChoices();
+            }
+        });
+    }
+
+    private SharedPreferences prefs() {
+        return createDeviceProtectedStorageContext().getSharedPreferences("dclinstall", MODE_PRIVATE);
+    }
+
+    private void restoreChoices() {
+        restoring = true;
+        SharedPreferences stored = prefs();
+        systemUi.setChecked(stored.getBoolean("hideSystemUi", true));
+        iottube.setChecked(stored.getBoolean("hideIottube", true));
+        voice.setChecked(stored.getBoolean("hideVoice", false));
+        speechClient.setChecked(stored.getBoolean("hideSpeechClient", false));
+        manual.setChecked(stored.getBoolean("hideManual", false));
+        String image = stored.getString("customImage", "");
+        customImagePath = image == null || image.length() == 0 ? null : image;
+        String mode = stored.getString("wallpaper", "picture");
+        if ("black".equals(mode)) blackWallpaper.setChecked(true);
+        else if ("custom".equals(mode)) customWallpaper.setChecked(true);
+        else pictureWallpaper.setChecked(true);
+        restoring = false;
+    }
+
+    private void saveChoices() {
+        if (restoring || systemUi == null) return;
+        String mode = blackWallpaper.isChecked() ? "black" : customWallpaper.isChecked() ? "custom" : "picture";
+        prefs().edit()
+                .putBoolean("hideSystemUi", systemUi.isChecked())
+                .putBoolean("hideIottube", iottube.isChecked())
+                .putBoolean("hideVoice", voice.isChecked())
+                .putBoolean("hideSpeechClient", speechClient.isChecked())
+                .putBoolean("hideManual", manual.isChecked())
+                .putString("wallpaper", mode)
+                .putString("customImage", customImagePath == null ? "" : customImagePath)
+                .apply();
+    }
+
+    private boolean alive() {
+        return !isFinishing() && !isDestroyed();
     }
 
     private void refreshStatus() {
@@ -918,13 +1161,15 @@ public class InstallActivity extends Activity {
             if (restoreStock != null) restoreStock.setEnabled(false);
             if (dealerOn != null) dealerOn.setEnabled(false);
             if (dealerOff != null) dealerOff.setEnabled(false);
+            if (uninstallUsb != null) uninstallUsb.setEnabled(false);
+            setChoicesEnabled(false);
             return;
         }
         status.setTextColor(0xFFB7C0C8);
         String installed = installedDcl();
         if (dealer) {
-            status.setText("ГУ A9. Визит к дилеру включён: DCL"
-                    + (nativeUnlock ? "" : " и программа флешек") + " скрыты, работает штатный лаунчер.");
+            status.setText("ГУ A9. Сейчас: штатный вид для дилера. DCL"
+                    + (nativeUnlock ? "" : " и программа флешек") + " скрыты.");
         } else if (installed == null) {
             status.setText("ГУ A9. DCL ещё не установлен.");
         } else {
@@ -958,12 +1203,28 @@ public class InstallActivity extends Activity {
         }
         if (dealerOn != null) {
             dealerOn.setEnabled(!running && !dealer && installed != null);
-            dealerOn.setText("Включено");
+            dealerOn.setText("Включить режим дилера");
         }
         if (dealerOff != null) {
             dealerOff.setEnabled(!running && dealer);
-            dealerOff.setText(dealer ? "Выключено (визит идёт)" : "Выключено");
+            dealerOff.setText("Выключить режим дилера");
         }
+        if (uninstallUsb != null) {
+            uninstallUsb.setEnabled(!running);
+            uninstallUsb.setText("Удалить программу флешек");
+        }
+        setChoicesEnabled(!running);
+    }
+
+    private void setChoicesEnabled(boolean enabled) {
+        if (systemUi != null) systemUi.setEnabled(enabled);
+        if (iottube != null) iottube.setEnabled(enabled);
+        if (voice != null) voice.setEnabled(enabled);
+        if (speechClient != null) speechClient.setEnabled(enabled);
+        if (manual != null) manual.setEnabled(enabled);
+        if (pictureWallpaper != null) pictureWallpaper.setEnabled(enabled);
+        if (blackWallpaper != null) blackWallpaper.setEnabled(enabled);
+        if (customWallpaper != null) customWallpaper.setEnabled(enabled);
     }
 
     private boolean wallpaperChosen() {
@@ -980,7 +1241,7 @@ public class InstallActivity extends Activity {
             wallpaperNote.setText("Чёрный фон.");
         } else if (customWallpaper.isChecked()) {
             wallpaperNote.setText(customImagePath == null
-                    ? "Выберите jpg или png."
+                    ? "Выберите jpg, png или webp."
                     : customImagePath);
         } else {
             wallpaperNote.setText("Встроенная картинка.");
@@ -1013,7 +1274,8 @@ public class InstallActivity extends Activity {
             return check;
         }
         try {
-            PackageInfo installed = getPackageManager().getPackageInfo(InstallPlan.DCL_PACKAGE, flags);
+            PackageInfo installed = getPackageManager().getPackageInfo(
+                    InstallPlan.DCL_PACKAGE, flags | PackageManager.MATCH_UNINSTALLED_PACKAGES);
             check.installedVersion = installed.versionName == null ? "?" : installed.versionName;
             Signature[] installedSigns = signatures(installed);
             check.signatureDiffers = !sameSignatures(archiveSigns, installedSigns);
@@ -1044,11 +1306,9 @@ public class InstallActivity extends Activity {
     }
 
     private String installedDcl() {
-        try {
-            return getPackageManager().getPackageInfo(InstallPlan.DCL_PACKAGE, 0).versionName;
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
+        String version = DclPackages.dclVersion(getPackageManager());
+        if (version == null || version.length() == 0) return null;
+        return version;
     }
 
     /** True while the dealer visit lasts; the script writes the flag, the installer only reads it. */
@@ -1057,7 +1317,11 @@ public class InstallActivity extends Activity {
     }
 
     private boolean isA9() {
-        return "9".equals(Build.VERSION.RELEASE) && "MB".equals(prop("ro.wt.solution.provider"));
+        if (!a9Known) {
+            a9 = "9".equals(Build.VERSION.RELEASE) && "MB".equals(prop("ro.wt.solution.provider"));
+            a9Known = true;
+        }
+        return a9;
     }
 
     private void copyAsset(String name, File dest) throws Exception {

@@ -65,3 +65,12 @@ jobs:
       - name: Tool tests
         working-directory: tools
         run: python -m unittest -v test_check_app_versions test_build_app_release test_build_ota_release test_appstore_catalog
+
+      - name: Set up JDK for DclInstall
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: DclInstall plan tests
+        run: bash tools/dcl_install/test.sh

@@ -82,13 +82,15 @@ final class WallpaperStore {
             out.close();
         }
         File image = imageFile(context);
-        if (image.exists() && !image.delete()) {
-            throw new IllegalStateException("Не удалось заменить картинку обоев");
-        }
         if (!tmp.renameTo(image)) {
             throw new IllegalStateException("Не удалось записать картинку обоев");
         }
         writeMode(dir, MODE_IMAGE);
+    }
+
+    /** Drop the mode file so a later boot does not put these wallpapers back. */
+    static void clearMode(Context context) {
+        modeFile(context).delete();
     }
 
     private static File directory(Context context) {
