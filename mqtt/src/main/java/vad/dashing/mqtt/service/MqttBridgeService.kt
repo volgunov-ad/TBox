@@ -203,6 +203,9 @@ class MqttBridgeService : Service() {
         if (!stillMine()) return
         if (store.storageError != null) {
             store = MqttSettingsStore.get(this)
+            if (publishedTopicsNeedReload(hadStorageError = true, storageError = store.storageError)) {
+                cleanup.commit(store.loadPublishedTopics())
+            }
         }
         if (store.storageError != null) {
             lastError = store.storageError ?: MqttSettingsStore.STORAGE_UNAVAILABLE
