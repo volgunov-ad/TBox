@@ -53,6 +53,10 @@ import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.esp.ESP_BLE_RELAY_UNSET_VALUE_KEY
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
+import vad.dashing.tbox.esp.espBleRelayValueKey
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_KEEP_AVM_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_RECORDER_SOS_WIDGET_DATA_KEY
@@ -2455,45 +2459,23 @@ fun DashboardWidgetRenderer(
 
         "espBleRelay0", "espBleRelay1" -> {
             val context = androidx.compose.ui.platform.LocalContext.current
-            val index = if (widget.dataKey == "espBleRelay0") 0 else 1
-            val relayId = widgetConfig.espBleRelayId.trim().lowercase()
+            val relayId = EspBleRelayIds.normalize(widgetConfig.espBleRelayId)
+            val channel = widgetConfig.espBleRelayChannel
             val relayMode = widgetConfig.espRelayMode
-            fun startRelayToggle() {
+            fun startRelay(action: String, pulse: Boolean) {
+                if (relayId.isEmpty() || !EspBleRelayChannel.inRange(channel)) return
                 context.startService(
-                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
-                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_TOGGLE
-                        putExtra(
-                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
-                            index,
-                        )
-                        if (relayId.isNotEmpty()) {
+                    Intent(context, BackgroundService::class.java).apply {
+                        this.action = action
+                        putExtra(BackgroundService.EXTRA_ESP_BLE_RELAY_ID, relayId)
+                        putExtra(BackgroundService.EXTRA_ESP_BLE_RELAY_CHANNEL, channel)
+                        if (pulse) {
                             putExtra(
-                                vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_ID,
-                                relayId,
+                                BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
+                                EspRelayWidgetMode.BUTTON_PULSE_MS,
                             )
                         }
-                    }
-                )
-            }
-            fun startRelayPulse() {
-                context.startService(
-                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
-                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_PULSE
-                        putExtra(
-                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
-                            index,
-                        )
-                        if (relayId.isNotEmpty()) {
-                            putExtra(
-                                vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_ID,
-                                relayId,
-                            )
-                        }
-                        putExtra(
-                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
-                            EspRelayWidgetMode.BUTTON_PULSE_MS,
-                        )
-                    }
+                    },
                 )
             }
             DashboardWidgetItem(
@@ -2502,15 +2484,26 @@ fun DashboardWidgetRenderer(
                 onClick = {
                     if (enableInnerInteractions && !isEditMode) {
                         when (relayMode) {
-                            EspRelayWidgetMode.BUTTON -> startRelayPulse()
-                            EspRelayWidgetMode.RELAY -> startRelayToggle()
+                            EspRelayWidgetMode.BUTTON -> startRelay(
+                                BackgroundService.ACTION_ESP_BLE_RELAY_PULSE,
+                                pulse = true,
+                            )
+                            EspRelayWidgetMode.RELAY -> startRelay(
+                                BackgroundService.ACTION_ESP_BLE_RELAY_TOGGLE,
+                                pulse = false,
+                            )
                         }
                     } else {
                         onClick()
                     }
                 },
                 onDoubleClick = if (enableInnerInteractions && !isEditMode) {
-                    { startRelayToggle() }
+                    {
+                        startRelay(
+                            BackgroundService.ACTION_ESP_BLE_RELAY_TOGGLE,
+                            pulse = false,
+                        )
+                    }
                 } else {
                     {}
                 },
@@ -2524,7 +2517,11 @@ fun DashboardWidgetRenderer(
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor,
-                valueKey = if (relayId.isNotEmpty()) "espBleRelayId:$relayId" else widget.dataKey,
+                valueKey = if (relayId.isEmpty()) {
+                    ESP_BLE_RELAY_UNSET_VALUE_KEY
+                } else {
+                    espBleRelayValueKey(relayId, channel)
+                },
             )
         }
 

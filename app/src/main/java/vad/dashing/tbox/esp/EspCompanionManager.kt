@@ -851,59 +851,65 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodePhoneForget(id))
     }
 
-    /** Channel count of the X1 single-channel relay board family. */
-    private val bleRelayChannelBit = 1
-
-    private fun bleRelayTargetId(index: Int): String? {
-        val relays = EspCompanionRepository.bleRelays.value
-        return relays.getOrNull(index)?.id
+    /**
+     * Latch one mask bit. Channel 0 is bit 0 (value 1), the only coil X1 firmware applies.
+     * The current mask has to be known: a missing report is not 0, or the write would clear other bits.
+     * UI writes go through [enqueueRelayDevSet] so they wait out an automation ack.
+     */
+    fun setBleRelayState(id: String, on: Boolean, channel: Int = EspBleRelayChannel.DEFAULT) {
+        if (EspCompanionRepository.otaBusy.value) return
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) return
+        val next = EspBleRelayChannel.nextLatchMask(
+            EspCompanionRepository.bleRelayMaskOrNull(key),
+            channel,
+            on,
+        ) ?: run {
+            Log.i(TAG, "relayDevSet skipped, mask unknown id=$key ch=$channel")
+            return
+        }
+        Log.i(TAG, "relayDevSet id=$key ch=$channel mask=$next")
+        enqueueRelayDevSet(key, next, 0)
     }
 
-    /** Relay boards keep the commanded state on the companion after link loss. */
-    fun setBleRelayState(idOrIndex: Any, on: Boolean) {
+    fun toggleBleRelay(id: String, channel: Int = EspBleRelayChannel.DEFAULT) {
         if (EspCompanionRepository.otaBusy.value) return
-        val id = when (idOrIndex) {
-            is String -> idOrIndex.trim().lowercase()
-            is Int -> bleRelayTargetId(idOrIndex) ?: return
-            else -> return
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) return
+        val current = EspCompanionRepository.bleRelayMaskOrNull(key) ?: run {
+            Log.i(TAG, "relayDevSet toggle skipped, mask unknown id=$key ch=$channel")
+            return
         }
-        if (id.isEmpty()) return
-        val bit = bleRelayChannelBit
-        val cur = EspCompanionRepository.bleRelayMask(id)
-        val next = if (on) cur or bit else cur and bit.inv()
-        Log.i(TAG, "relayDevSet id=$id mask=$next")
-        enqueueRelayDevSet(id, next, 0)
-    }
-
-    fun toggleBleRelay(idOrIndex: Any) {
-        if (EspCompanionRepository.otaBusy.value) return
-        val id = when (idOrIndex) {
-            is String -> idOrIndex.trim().lowercase()
-            is Int -> bleRelayTargetId(idOrIndex) ?: return
-            else -> return
-        }
-        if (id.isEmpty()) return
-        if (!EspCompanionRepository.bleRelayMaskKnown(id)) return
-        setBleRelayState(id, (EspCompanionRepository.bleRelayMask(id) and 1) == 0)
+        setBleRelayState(key, !EspBleRelayChannel.isClosed(current, channel), channel)
     }
 
     /** Wait for the companion's relayDevSet ack. UI clicks stay fire-and-forget. */
-    suspend fun setBleRelayAwait(id: String, on: Boolean): BleRelaySendResult {
+    suspend fun setBleRelayAwait(
+        id: String,
+        on: Boolean,
+        channel: Int = EspBleRelayChannel.DEFAULT,
+    ): BleRelaySendResult {
         if (EspCompanionRepository.otaBusy.value) return BleRelaySendResult.Failed
-        val key = id.trim().lowercase()
-        if (key.isEmpty()) return BleRelaySendResult.NoRelay
-        val bit = bleRelayChannelBit
-        val cur = EspCompanionRepository.bleRelayMask(key)
-        val next = if (on) cur or bit else cur and bit.inv()
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) return BleRelaySendResult.NoRelay
+        val next = EspBleRelayChannel.nextLatchMask(
+            EspCompanionRepository.bleRelayMaskOrNull(key),
+            channel,
+            on,
+        ) ?: return BleRelaySendResult.Failed
         return awaitRelayDevAck(key, next, 0)
     }
 
-    suspend fun pulseBleRelayAwait(id: String, durationMs: Long): BleRelaySendResult {
+    suspend fun pulseBleRelayAwait(
+        id: String,
+        durationMs: Long,
+        channel: Int = EspBleRelayChannel.DEFAULT,
+    ): BleRelaySendResult {
         if (EspCompanionRepository.otaBusy.value) return BleRelaySendResult.Failed
-        val key = id.trim().lowercase()
-        if (key.isEmpty()) return BleRelaySendResult.NoRelay
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) return BleRelaySendResult.NoRelay
         val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
-        return awaitRelayDevAck(key, 1, pulse)
+        return awaitRelayDevAck(key, EspBleRelayChannel.maskBit(channel), pulse)
     }
 
     private fun nextRelayReq(): Int {
@@ -939,17 +945,18 @@ class EspCompanionManager(
         }
     }
 
-    fun pulseBleRelay(idOrIndex: Any, durationMs: Long = EspRelayWidgetMode.BUTTON_PULSE_MS) {
+    fun pulseBleRelay(
+        id: String,
+        durationMs: Long = EspRelayWidgetMode.BUTTON_PULSE_MS,
+        channel: Int = EspBleRelayChannel.DEFAULT,
+    ) {
         if (EspCompanionRepository.otaBusy.value) return
-        val id = when (idOrIndex) {
-            is String -> idOrIndex.trim().lowercase()
-            is Int -> bleRelayTargetId(idOrIndex) ?: return
-            else -> return
-        }
-        if (id.isEmpty()) return
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) return
         val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
-        Log.i(TAG, "relayDevSet pulse id=$id ${pulse}ms")
-        enqueueRelayDevSet(id, 1, pulse)
+        val mask = EspBleRelayChannel.maskBit(channel)
+        Log.i(TAG, "relayDevSet pulse id=$key ch=$channel mask=$mask ${pulse}ms")
+        enqueueRelayDevSet(key, mask, pulse)
     }
 
     fun sendPhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot) {

@@ -308,10 +308,15 @@ data class FloatingDashboardWidgetConfig(
      */
     val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
     /**
-     * Paired BLE relay board id for [espBleRelay0]/[espBleRelay1]. Empty keeps the
-     * index in the data key as a fallback for tiles saved before the id was stored.
+     * Paired BLE relay id for [espBleRelay0]/[espBleRelay1]. Empty means the tile
+     * has not been migrated off the old slot in the data key.
      */
     val espBleRelayId: String = "",
+    /**
+     * 0-based mask bit on [espBleRelayId]. 0 is the only coil on current boards
+     * (the picker shows it as channel 1).
+     */
+    val espBleRelayChannel: Int = 0,
     /**
      * Cruise path for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY]:
      * [CruiseControlType.AUTO] / [CruiseControlType.ACC] / [CruiseControlType.CCS].

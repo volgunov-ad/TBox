@@ -59,6 +59,7 @@ import vad.dashing.tbox.automation.AutomationUiState
 import vad.dashing.tbox.automation.AUTOMATION_MAX_CONDITION_DEPTH
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
+import vad.dashing.tbox.automation.isBleRelaySignal
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
@@ -519,42 +520,6 @@ private fun NumericConditionFields(
     }
 }
 
-internal fun bleRelayIdForSignal(signal: AutomationSignalId): String {
-    val index = when (signal) {
-        AutomationSignalId.ESP_BLE_RELAY_0 -> 0
-        AutomationSignalId.ESP_BLE_RELAY_1 -> 1
-        else -> return ""
-    }
-    return EspCompanionRepository.bleRelays.value.getOrNull(index)?.id.orEmpty()
-}
-
-@Composable
-internal fun BleRelaySignalIdField(
-    signal: AutomationSignalId,
-    relayId: String,
-    onRelayId: (String) -> Unit,
-) {
-    val index = when (signal) {
-        AutomationSignalId.ESP_BLE_RELAY_0 -> 0
-        AutomationSignalId.ESP_BLE_RELAY_1 -> 1
-        else -> return
-    }
-    val bleRelays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
-    LaunchedEffect(signal, bleRelays) {
-        if (relayId.isNotBlank()) return@LaunchedEffect
-        val id = bleRelays.getOrNull(index)?.id.orEmpty()
-        if (id.isNotEmpty()) onRelayId(id)
-    }
-    AutomationTextField(
-        value = relayId,
-        onValueChange = { raw ->
-            onRelayId(raw.trim().lowercase().filter { it in '0'..'9' || it in 'a'..'f' }.take(8))
-        },
-        label = ruEn("Id платы (пусто = индекс $index)", "Board id (empty = index $index)"),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
 @Composable
 private fun StateConditionFields(
     condition: AutomationCondition.State,
@@ -568,7 +533,8 @@ private fun StateConditionFields(
         value = condition.signal,
         options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
-            onValueChange = { signal ->
+        onValueChange = { signal ->
+            val descriptor = AutomationSignalCatalog.get(signal)
             onChange(
                 condition.copy(
                     signal = signal,
@@ -577,14 +543,21 @@ private fun StateConditionFields(
                         signal,
                         condition.expectedState,
                     ),
-                    relayId = bleRelayIdForSignal(signal),
+                    relayId = if (isBleRelaySignal(signal)) condition.relayId else "",
+                    relayChannel = if (isBleRelaySignal(signal)) condition.relayChannel else 0,
                 ),
             )
         },
     )
     AutomationSignalValueHint(condition.signal)
-    BleRelaySignalIdField(condition.signal, condition.relayId) {
-        onChange(condition.copy(relayId = it))
+    if (isBleRelaySignal(condition.signal)) {
+        BleRelaySignalTargetFields(
+            relayId = condition.relayId,
+            relayChannel = condition.relayChannel,
+            legacyIndex = if (condition.signal == AutomationSignalId.ESP_BLE_RELAY_1) 1 else 0,
+        ) { id, channel ->
+            onChange(condition.copy(relayId = id, relayChannel = channel))
+        }
     }
     val descriptor = AutomationSignalCatalog.get(condition.signal)
     val isForegroundApp = condition.signal == AutomationSignalId.FOREGROUND_APP

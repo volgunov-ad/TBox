@@ -45,11 +45,12 @@ import vad.dashing.tbox.speedcam.SpeedCamUiState
 import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.BleRelaySendResult
 import vad.dashing.tbox.esp.EspCompanionManager
-import vad.dashing.tbox.esp.EspRelayDevice
 import vad.dashing.tbox.hotspot.HuSoftApRouter
 import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdRepository
+import vad.dashing.tbox.esp.EspBleRelayChannel
+import vad.dashing.tbox.esp.EspBleRelayIds
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.PhoneUsbEvent
 import vad.dashing.tbox.phoneble.PhoneDirectServer
@@ -93,6 +94,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -121,6 +123,7 @@ import vad.dashing.tbox.automation.AutomationRoadMatchTracking
 import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
+import vad.dashing.tbox.automation.EspBleRelayTargetMigration
 import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.externalapi.ExternalApiController
 import vad.dashing.tbox.externalapi.ExternalApiControllerHolder
@@ -227,6 +230,7 @@ class BackgroundService : Service() {
     private val udaDtcReadTicket = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
+    private var bleRelayMigrateJob: Job? = null
     private var elm327Manager: Elm327Manager? = null
     private var elm327StartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
@@ -590,6 +594,7 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
         const val EXTRA_ESP_BLE_RELAY_INDEX = "esp_ble_relay_index"
         const val EXTRA_ESP_BLE_RELAY_ID = "esp_ble_relay_id"
+        const val EXTRA_ESP_BLE_RELAY_CHANNEL = "esp_ble_relay_channel"
         const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
@@ -1782,13 +1787,13 @@ class BackgroundService : Service() {
             }
             ACTION_ESP_BLE_RELAY_SET -> {
                 val on = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0) != 0
-                withBleRelayTarget(intent) { target ->
-                    espCompanionManager?.setBleRelayState(target, on)
+                bleRelayCommandTarget(intent)?.let { (id, channel) ->
+                    espCompanionManager?.setBleRelayState(id, on, channel)
                 }
             }
             ACTION_ESP_BLE_RELAY_TOGGLE -> {
-                withBleRelayTarget(intent) { target ->
-                    espCompanionManager?.toggleBleRelay(target)
+                bleRelayCommandTarget(intent)?.let { (id, channel) ->
+                    espCompanionManager?.toggleBleRelay(id, channel)
                 }
             }
             ACTION_ESP_BLE_RELAY_PULSE -> {
@@ -1796,8 +1801,8 @@ class BackgroundService : Service() {
                     EXTRA_ESP_RELAY_DURATION_MS,
                     EspRelayWidgetMode.BUTTON_PULSE_MS,
                 )
-                withBleRelayTarget(intent) { target ->
-                    espCompanionManager?.pulseBleRelay(target, durationMs)
+                bleRelayCommandTarget(intent)?.let { (id, channel) ->
+                    espCompanionManager?.pulseBleRelay(id, durationMs, channel)
                 }
             }
             ACTION_ESP_UM980_CMD -> {
@@ -2132,36 +2137,44 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
+    /**
+     * Board id plus mask bit. A missing id is not filled from [EXTRA_ESP_BLE_RELAY_INDEX]:
+     * that slot moves when a board is forgotten.
+     */
+    private fun bleRelayCommandTarget(intent: Intent): Pair<String, Int>? {
+        val id = EspBleRelayIds.normalize(intent.getStringExtra(EXTRA_ESP_BLE_RELAY_ID))
+        if (id.isEmpty()) return null
+        val channel = intent.getIntExtra(EXTRA_ESP_BLE_RELAY_CHANNEL, EspBleRelayChannel.DEFAULT)
+        if (!EspBleRelayChannel.inRange(channel)) return null
+        return id to channel
+    }
+
     private suspend fun runBleRelayCommand(
         id: String,
-        index: Int,
+        channel: Int,
         needKnownMask: Boolean,
-        send: suspend (EspRelayDevice, EspCompanionManager) -> Pair<BleRelaySendResult, String>,
+        send: suspend (String, EspCompanionManager) -> Pair<BleRelaySendResult, String>,
     ): AutomationActionResult {
         val manager = espCompanionManager
             ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
-        val stored = id.trim().lowercase()
-        val relays = EspCompanionRepository.bleRelays.value
-        val relay = if (stored.isNotEmpty()) {
-            relays.firstOrNull { it.id == stored }
-        } else {
-            relays.getOrNull(index)
-        } ?: return AutomationActionResult.failure(
-            if (stored.isNotEmpty()) {
-                ruEn("BLE-реле не найдено", "BLE relay is missing")
-            } else {
-                ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired")
-            },
-        )
-        if (!EspCompanionRepository.bleRelayOnline(relay.id)) {
+        val key = EspBleRelayIds.normalize(id)
+        if (key.isEmpty() || !EspBleRelayChannel.inRange(channel)) {
+            return AutomationActionResult.failure(
+                ruEn("Выберите плату и канал BLE-реле", "Choose a BLE relay board and channel"),
+            )
+        }
+        if (EspCompanionRepository.bleRelays.value.none { it.id == key }) {
+            return AutomationActionResult.failure(ruEn("BLE-реле не найдено", "BLE relay is missing"))
+        }
+        if (!EspCompanionRepository.bleRelayOnline(key)) {
             return AutomationActionResult.failure(ruEn("BLE-реле не на связи", "BLE relay is offline"))
         }
-        if (needKnownMask && !EspCompanionRepository.bleRelayMaskKnown(relay.id)) {
+        if (needKnownMask && !EspCompanionRepository.bleRelayMaskKnown(key)) {
             return AutomationActionResult.failure(
                 ruEn("Состояние BLE-реле неизвестно", "BLE relay state is unknown"),
             )
         }
-        val (result, queued) = send(relay, manager)
+        val (result, queued) = send(key, manager)
         return when (result) {
             BleRelaySendResult.Queued -> AutomationActionResult.ok(queued)
             BleRelaySendResult.Offline -> AutomationActionResult.failure(
@@ -2173,19 +2186,6 @@ class BackgroundService : Service() {
             BleRelaySendResult.Failed -> AutomationActionResult.failure(
                 ruEn("Команда BLE-реле не принята", "BLE relay command was rejected"),
             )
-        }
-    }
-
-    /** BLE relay target: board id string or 0-based index into the paired list. */
-    private fun withBleRelayTarget(intent: Intent, block: (Any) -> Unit) {
-        val id = intent.getStringExtra(EXTRA_ESP_BLE_RELAY_ID)?.trim().orEmpty()
-        if (id.isNotEmpty()) {
-            block(id)
-            return
-        }
-        val index = intent.getIntExtra(EXTRA_ESP_BLE_RELAY_INDEX, -1)
-        if (index >= 0) {
-            block(index)
         }
     }
 
@@ -2336,11 +2336,11 @@ class BackgroundService : Service() {
             }
 
             override suspend fun setEspBleRelayState(
-                index: Int,
-                on: Boolean,
                 id: String,
-            ): AutomationActionResult = runBleRelayCommand(id, index, needKnownMask = false) { relay, manager ->
-                val result = manager.setBleRelayAwait(relay.id, on)
+                channel: Int,
+                on: Boolean,
+            ): AutomationActionResult = runBleRelayCommand(id, channel, needKnownMask = true) { key, manager ->
+                val result = manager.setBleRelayAwait(key, on, channel)
                 result to if (on) {
                     ruEn("Команда замыкания поставлена в очередь", "Close command queued")
                 } else {
@@ -2348,21 +2348,26 @@ class BackgroundService : Service() {
                 }
             }
 
-            override suspend fun toggleEspBleRelay(index: Int, id: String): AutomationActionResult =
-                runBleRelayCommand(id, index, needKnownMask = true) { relay, manager ->
-                    val closed = (EspCompanionRepository.bleRelayMask(relay.id) and 1) != 0
-                    manager.setBleRelayAwait(relay.id, !closed) to
-                        ruEn("Команда переключения поставлена в очередь", "Toggle command queued")
+            override suspend fun toggleEspBleRelay(id: String, channel: Int): AutomationActionResult =
+                runBleRelayCommand(id, channel, needKnownMask = true) { key, manager ->
+                    val mask = EspCompanionRepository.bleRelayMaskOrNull(key)
+                        ?: return@runBleRelayCommand BleRelaySendResult.Failed to ""
+                    manager.setBleRelayAwait(
+                        key,
+                        !EspBleRelayChannel.isClosed(mask, channel),
+                        channel,
+                    ) to ruEn("Команда переключения поставлена в очередь", "Toggle command queued")
                 }
 
             override suspend fun pulseEspBleRelay(
-                index: Int,
-                durationMillis: Long?,
                 id: String,
-            ): AutomationActionResult = runBleRelayCommand(id, index, needKnownMask = false) { relay, manager ->
+                channel: Int,
+                durationMillis: Long?,
+            ): AutomationActionResult = runBleRelayCommand(id, channel, needKnownMask = false) { key, manager ->
                 manager.pulseBleRelayAwait(
-                    relay.id,
+                    key,
                     durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
+                    channel,
                 ) to ruEn("Импульс поставлен в очередь", "Pulse queued")
             }
 
@@ -4643,12 +4648,41 @@ class BackgroundService : Service() {
             manager.setCompanionAp(ssid, psk)
             manager.start()
             espCompanionManager = manager
+            startBleRelayTargetMigration()
+        }
+    }
+
+    private fun startBleRelayTargetMigration() {
+        if (bleRelayMigrateJob?.isActive == true) return
+        bleRelayMigrateJob = scope.launch {
+            EspCompanionRepository.bleRelays.collect { relays ->
+                if (relays.isEmpty()) return@collect
+                val ids = relays.map { it.id }
+                val floating = settingsManager.floatingDashboardsFlow.first()
+                val migratedFloating = EspBleRelayTargetMigration.floatingDashboards(floating, ids)
+                if (migratedFloating !== floating) {
+                    settingsManager.saveFloatingDashboards(migratedFloating)
+                }
+                val main = settingsManager.mainScreenDashboardsFlow.first()
+                val migratedMain = EspBleRelayTargetMigration.mainScreenDashboards(main, ids)
+                if (migratedMain !== main) {
+                    settingsManager.saveMainScreenDashboards(migratedMain)
+                }
+                val store = AutomationStore(this@BackgroundService)
+                val document = store.snapshots.first().document
+                val migrated = EspBleRelayTargetMigration.document(document, ids)
+                if (migrated !== document) {
+                    store.save(migrated)
+                }
+            }
         }
     }
 
     private fun stopEspCompanion() {
         espCompanionStartJob?.cancel()
         espCompanionStartJob = null
+        bleRelayMigrateJob?.cancel()
+        bleRelayMigrateJob = null
         espCompanionManager?.stop()
         espCompanionManager = null
     }

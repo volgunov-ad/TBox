@@ -407,7 +407,14 @@ object EspCompanionRepository {
         touchMessage()
     }
 
-    fun bleRelayMask(id: String): Int = _bleRelayMasks.value[id.trim().lowercase(java.util.Locale.US)] ?: 0
+    fun bleRelayMask(id: String): Int = bleRelayMaskOrNull(id) ?: 0
+
+    /** Null until this link has a `relayDev` report. Not the same as mask 0. */
+    fun bleRelayMaskOrNull(id: String): Int? {
+        val key = id.trim().lowercase(java.util.Locale.US)
+        val masks = _bleRelayMasks.value
+        return if (masks.containsKey(key)) masks.getValue(key) else null
+    }
 
     fun bleRelayMaskKnown(id: String): Boolean =
         _bleRelayMasks.value.containsKey(id.trim().lowercase(java.util.Locale.US))
