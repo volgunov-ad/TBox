@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import vad.dashing.tbox.phoneble.PhoneBleCodec
+import vad.dashing.tbox.phoneble.PhoneBleLinkPolicy
 import java.util.concurrent.Executors
 
 /** Which way the phone reaches the car; chosen on the Connect page. */
@@ -134,38 +135,23 @@ class PhoneLinkRouter(
     override fun start() {
         running = true
         keepDirectForTelemetry = store.anyTelemetryEnabled
-        when (path) {
-            PhonePath.DIRECT -> {
-                setRadio(false)
-                setDirect(true)
-            }
-            PhonePath.COMPANION -> {
-                setDirect(false)
-                setRadio(true)
-            }
-            PhonePath.AUTO -> when {
-                direct.confirmed -> {
-                    searchSince = 0L
-                    setRadio(false)
-                    setDirect(true)
-                }
-                radio.confirmed -> {
-                    searchSince = 0L
-                    setDirect(keepDirectForTelemetry)
-                    setRadio(foreground)
-                }
-                else -> {
-                    val now = SystemClock.elapsedRealtime()
-                    if (searchSince == 0L) searchSince = now
-                    setDirect(true)
-                    if (!foreground) {
-                        setRadio(false)
-                    } else if (radioOn || now - searchSince >= DIRECT_FIRST_MS || direct.passesWithoutLink > 0) {
-                        setRadio(true)
-                    }
-                }
-            }
-        }
+        val now = SystemClock.elapsedRealtime()
+        val plan = transportPlan(
+            path = path,
+            foreground = foreground,
+            directConfirmed = direct.confirmed,
+            radioConfirmed = radio.confirmed,
+            keepDirectForTelemetry = keepDirectForTelemetry,
+            radioOn = radioOn,
+            searchSince = searchSince,
+            now = now,
+            passesWithoutLink = direct.passesWithoutLink,
+        )
+        searchSince = plan.searchSince
+        if (!plan.direct) setDirect(false)
+        if (!plan.radio) setRadio(false)
+        if (plan.direct) setDirect(true)
+        if (plan.radio) setRadio(true)
     }
 
     override fun stop() {
@@ -214,8 +200,14 @@ class PhoneLinkRouter(
         }
         sealExecutor.execute {
             val counter = store.nextCounter()
-            if (resetAcceptRange) acceptFromCounter = counter
-            if (updateWaitingCounter) waitingCounter = counter
+            val window = PhoneBleLinkPolicy.acceptWindowAfterSend(
+                previous = PhoneBleLinkPolicy.AcceptWindow(acceptFromCounter, waitingCounter),
+                counter = counter,
+                resetAcceptRange = resetAcceptRange,
+                updateWaiting = updateWaitingCounter,
+            )
+            acceptFromCounter = window.acceptFrom
+            waitingCounter = window.waiting
             val payload = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
             main.post { write(payload) }
         }
@@ -248,9 +240,5 @@ class PhoneLinkRouter(
     private fun setDirect(on: Boolean) {
         if (on) direct.start() else if (directOn) direct.stop()
         directOn = on
-    }
-
-    private companion object {
-        const val DIRECT_FIRST_MS = 8_000L
     }
 }
