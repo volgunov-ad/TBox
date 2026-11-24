@@ -21,6 +21,7 @@ from tkinter import (
     END,
     LEFT,
     MULTIPLE,
+    Listbox,
     NORMAL,
     RIGHT,
     StringVar,
@@ -208,8 +209,6 @@ class AppStoreManagerApp:
         ttk.Label(sections_row, text="Разделы магазина", width=36).pack(side=LEFT, anchor="n")
         sections_col = ttk.Frame(sections_row)
         sections_col.pack(side=LEFT, fill=X, expand=True)
-        from tkinter import Listbox
-
         self.sections_list = Listbox(
             sections_col,
             selectmode=MULTIPLE,

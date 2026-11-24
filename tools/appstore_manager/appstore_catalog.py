@@ -193,6 +193,7 @@ class MigrationReport:
     category_sections: dict[str, list[str]] = field(default_factory=dict)
     unverified_ids: list[str] = field(default_factory=list)
     sidecar_files: dict[str, list[str]] = field(default_factory=dict)
+    sidecar_sources: dict[str, str] = field(default_factory=dict)
     sidecar_missing: dict[str, str] = field(default_factory=dict)
     changelog_files: list[str] = field(default_factory=list)
     version_json_stripped: list[str] = field(default_factory=list)
@@ -208,13 +209,14 @@ class MigrationReport:
         if self.removed_keys:
             parts = [f"{k}×{n}" for k, n in sorted(self.removed_keys.items())]
             lines.append("Удалены устаревшие поля: " + ", ".join(parts))
-        if self.category_sections:
-            for sid, app_ids in self.category_sections.items():
-                lines.append(f"Раздел «{sid}»: {', '.join(app_ids)}")
+        titles = {sid: title for sid, title, _ in _CATEGORY_SECTION_DEFS}
+        for sid, app_ids in self.category_sections.items():
+            lines.append(f"Раздел «{titles.get(sid, sid)}»: {', '.join(app_ids)}")
         for app_id, names in self.sidecar_files.items():
+            source = self.sidecar_sources.get(app_id, "источника")
             lines.append(
                 f"Скопированы файлы в {app_id}/files/: {', '.join(names)}. "
-                f"Это копии; после обновления источника прикрепите новый APK",
+                f"Это копии; после обновления {source} прикрепите новый APK",
             )
         for app_id, target in self.sidecar_missing.items():
             lines.append(f"Не найдены APK источника «{target}» для карточки {app_id}")
@@ -723,8 +725,6 @@ def remove_download_files(apps_dir: Path, app_id: str, names: list[str]) -> None
         else:
             kept.append(entry)
     meta.downloadFiles = kept
-    if not meta.downloadFiles and not meta.downloadsFolder.strip():
-        meta.downloadsFolder = ""
     metas[app_id] = meta
     save_meta_map(apps_dir, metas)
     write_catalog(apps_dir)
@@ -740,8 +740,7 @@ def _verified_download_files(record: AppRecord) -> tuple[list[DownloadFile], lis
         if not path.is_file():
             problems.append(f"нет файла {entry.name}")
             continue
-        size = path.stat().st_size
-        if entry.sizeBytes and size != int(entry.sizeBytes):
+        if path.stat().st_size != int(entry.sizeBytes):
             problems.append(f"файл {entry.name} изменён")
             continue
         ok.append(entry)
@@ -997,12 +996,6 @@ def upsert_meta(apps_dir: Path, meta: AppMeta) -> None:
     meta.sections = [sid for sid in meta.sections if sid in defined]
     meta.hu = normalize_hu(meta.hu)
     metas = load_meta_map(apps_dir)
-    # Preserve downloadFiles when caller didn't carry them (shouldn't happen with deepcopy).
-    existing = metas.get(meta.id)
-    if existing is not None and not meta.downloadFiles and existing.downloadFiles:
-        # Only keep existing files when the new meta explicitly has an empty list
-        # that came from a form that forgot them — caller should pass them.
-        pass
     metas[meta.id] = meta
     (apps_dir / meta.id).mkdir(parents=True, exist_ok=True)
     save_meta_map(apps_dir, metas, sections=sections)
@@ -1352,6 +1345,7 @@ def migrate_legacy_catalog(apps_dir: Path) -> MigrationReport:
         save_meta_map(apps_dir, metas)
         added = add_download_files(apps_dir, app_id, sources, replace=True)
         report.sidecar_files[app_id] = [f.name for f in added]
+        report.sidecar_sources[app_id] = target_id
         report.changed = True
         metas = load_meta_map(apps_dir)
 

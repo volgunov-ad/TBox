@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import sys
 import tempfile
 import unittest
@@ -18,7 +17,6 @@ from apk_manifest import extract_apk_icon, read_apk_info  # noqa: E402
 from appstore_catalog import (  # noqa: E402
     AppMeta,
     CertPinMismatchError,
-    DownloadFile,
     _meta_from_dict,
     add_app,
     add_download_files,
@@ -455,6 +453,12 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.assertEqual(["s1", "s2"], loaded.sections)
 
             catalog = build_catalog(apps)
+            self.assertEqual(
+                ["schemaVersion", "publishedAt", "sections", "apps"],
+                list(catalog.keys()),
+            )
+            meta_raw = json.loads((apps / "catalog.meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(["sections", "apps"], list(meta_raw.keys()))
             self.assertEqual(["s2", "s1"], [s["id"] for s in catalog["sections"]])
             self.assertEqual(["s1", "s2"], catalog["apps"][0]["sections"])
 
@@ -494,12 +498,26 @@ class AppStoreCatalogTest(unittest.TestCase):
 
             with self.assertRaises(FileExistsError):
                 add_download_files(apps, "demo", [f1], replace=False)
-            f1b = Path(tmp) / "readme.txt"
-            f1b.write_text("hello2", encoding="utf-8")
-            replaced = add_download_files(apps, "demo", [f1b], replace=True)
+            upper_dir = Path(tmp) / "upper"
+            upper_dir.mkdir()
+            f1_upper = upper_dir / "README.TXT"
+            f1_upper.write_text("other", encoding="utf-8")
+            with self.assertRaises(FileExistsError) as clash:
+                add_download_files(apps, "demo", [f1_upper], replace=False)
+            self.assertIn("README.TXT", str(clash.exception))
+            old_sha = next(f.sha256 for f in meta.downloadFiles if f.name == "readme.txt")
+            f1.write_text("hello2", encoding="utf-8")
+            replaced = add_download_files(apps, "demo", [f1], replace=True)
             self.assertEqual(1, len(replaced))
             meta = load_meta_map(apps)["demo"]
             self.assertEqual(2, len(meta.downloadFiles))
+            readme_entry = next(f for f in meta.downloadFiles if f.name == "readme.txt")
+            self.assertNotEqual(old_sha, readme_entry.sha256)
+            self.assertEqual(6, readme_entry.sizeBytes)
+            with self.assertRaises(ValueError):
+                validate_downloads_folder("a:b")
+            with self.assertRaises(ValueError):
+                validate_downloads_folder("name.")
 
             with self.assertRaises(ValueError):
                 validate_download_file_name("../x")
@@ -539,7 +557,6 @@ class AppStoreCatalogTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             apps = Path(tmp) / "apps"
             apps.mkdir()
-            seed = ROOT / "store" / "src" / "test" / "resources" / "sample_catalog.meta.json"
             # Build a legacy meta from the old shape (reintroduce legacy keys).
             legacy_apps = [
                 {
@@ -657,6 +674,11 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.assertIn("dclinstall", report.sidecar_files)
             self.assertTrue(any("changelog.ru.txt" in p for p in report.changelog_files))
             self.assertIn("dcl-launcher", report.version_json_stripped)
+            summary = report.summary_lines()
+            self.assertTrue(summary[0].startswith("Были скрыты (Проверено = нет)"))
+            self.assertIn("hidden", summary[0])
+            self.assertTrue(any("после обновления dcl-launcher" in line for line in summary))
+            self.assertTrue((apps / "dcl-launcher" / "changelog.en.txt").is_file())
 
             meta_raw = json.loads((apps / "catalog.meta.json").read_text(encoding="utf-8"))
             self.assertEqual(
@@ -693,11 +715,10 @@ class AppStoreCatalogTest(unittest.TestCase):
             self.assertIn("dcl-launcher", report2.version_json_stripped)
             self.assertEqual("keep me", read_changelog(apps / "dcl-launcher", "ru").strip())
 
+            meta_before = (apps / "catalog.meta.json").read_bytes()
             report3 = migrate_legacy_catalog(apps)
             self.assertFalse(report3.changed)
-
-            # seed path unused but keep reference for clarity that seed exists
-            self.assertTrue(seed.is_file())
+            self.assertEqual(meta_before, (apps / "catalog.meta.json").read_bytes())
 
     def test_upsert_meta_keeps_download_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
