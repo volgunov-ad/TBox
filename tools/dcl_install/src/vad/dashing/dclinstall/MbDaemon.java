@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 final class MbDaemon {
     static final String INSTALL_BODY = "/sdcard/dcl_install.sh";
     static final String BOOT_BODY = "/sdcard/dcl_boot.sh";
+    static final String APPOPS_BODY = "/sdcard/dcl_appops.sh";
     /** Both bodies live under this prefix: an autorun.sh naming it is our own leftover. */
     private static final String OWN_MARKER = "/sdcard/dcl_";
     /**

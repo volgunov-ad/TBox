@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** What is already in place for DCL, read from the head unit without root. */
 final class DclStatus {
@@ -36,18 +37,18 @@ final class DclStatus {
         this.detail = detail;
     }
 
+    private static String logged;
+
     static List<DclStatus> collect(Context context) {
         PackageManager packages = context.getPackageManager();
         List<DclStatus> rows = new ArrayList<DclStatus>();
-        boolean dealer = new File(InstallPlan.DEALER_FLAG).isFile();
-        rows.add(row("Визит к дилеру включён", dealer, false,
-                dealer ? "работает штатный лаунчер; выключите режим здесь же" : ""));
-        String version = versionName(packages, InstallPlan.DCL_PACKAGE);
+        String version = DclPackages.dclVersion(packages);
         boolean installed = version != null;
         boolean nativeUnlock = InstallPlan.hasNativeUnlock(version);
         rows.add(row("Лаунчер DCL установлен", installed, false, installed ? version : "файл ещё не выбран или не поставлен"));
-        rows.add(row("Лаунчер сам подключает флешки", nativeUnlock && installed, false,
-                nativeUnlock ? "" : "нужен лаунчер 0.8.2+, отдельная программа берётся с галочки ниже"));
+        if (nativeUnlock) {
+            rows.add(row("Лаунчер сам подключает флешки", true, false, ""));
+        }
         rows.add(row("Кнопка HOME открывает DCL", isHome(packages), false, ""));
         rows.add(row("Геолокация", permission(packages, "android.permission.ACCESS_FINE_LOCATION")
                 && permission(packages, "android.permission.ACCESS_COARSE_LOCATION"), false, ""));
@@ -69,13 +70,29 @@ final class DclStatus {
         rows.add(wallpaperRow(context));
         rows.add(usbRow(packages, nativeUnlock));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
+        rows.add(row("Обработчик USB скрыт", hidden(packages, InstallPlan.USB_HANDLER), false, ""));
         rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
         rows.add(row("IoT Tube скрыт", hidden(packages, InstallPlan.IOTTUBE), true, ""));
         rows.add(row("Голосовой помощник скрыт", hidden(packages, InstallPlan.VOICE), true, ""));
         rows.add(row("Клиент голоса скрыт", hidden(packages, InstallPlan.SPEECH_CLIENT), true, ""));
         rows.add(row("Электронное руководство скрыто", hidden(packages, InstallPlan.MANUAL), true, ""));
-        rows.add(row("Обработчик USB скрыт", hidden(packages, InstallPlan.USB_HANDLER), true, ""));
+        logIfChanged(rows);
         return rows;
+    }
+
+    private static void logIfChanged(List<DclStatus> rows) {
+        StringBuilder key = new StringBuilder();
+        for (int i = 0; i < rows.size(); i++) {
+            DclStatus item = rows.get(i);
+            key.append(item.title).append(item.done).append(item.unknown).append(item.detail).append('\n');
+        }
+        String text = key.toString();
+        if (text.equals(logged)) return;
+        logged = text;
+        for (int i = 0; i < rows.size(); i++) {
+            DclStatus item = rows.get(i);
+            Log.i(TAG, (item.unknown ? "unknown " : item.done ? "ok " : "no ") + item.title);
+        }
     }
 
     /** With launcher 0.8.2+ the sticks program is a spare for old launchers only, so it is optional. */
@@ -83,8 +100,8 @@ final class DclStatus {
         if (nativeUnlock) {
             boolean present = usbPackage(packages) != null;
             return row("Программа флешек (запасная)", !present, true,
-                    present ? "установлена, можно снести: `adb uninstall vad.dashing.usbmount`"
-                            : "не нужна: подключает лаунчер 0.8.2+");
+                    present ? "установлена; кнопка «Удалить программу флешек» внизу экрана"
+                            : "не нужна: флешки подключает лаунчер");
         }
         return row("Программа флешек", usbReady(packages), false, usbDetail(packages));
     }
@@ -114,25 +131,14 @@ final class DclStatus {
     }
 
     private static DclStatus row(String title, boolean done, boolean optional, String detail) {
-        Log.i(TAG, (done ? "ok " : "no ") + title);
         return new DclStatus(title, done, false, optional, detail);
     }
 
     private static DclStatus state(String title, Boolean done) {
         if (done == null) {
-            Log.i(TAG, "unknown " + title);
             return new DclStatus(title, false, true, false, "не удалось проверить");
         }
         return row(title, done.booleanValue(), false, "");
-    }
-
-    private static String versionName(PackageManager packages, String packageName) {
-        try {
-            PackageInfo info = packages.getPackageInfo(packageName, 0);
-            return info.versionName == null ? "" : info.versionName;
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
     }
 
     private static boolean isHome(PackageManager packages) {
@@ -156,15 +162,27 @@ final class DclStatus {
                 == PackageManager.PERMISSION_GRANTED) {
             return false;
         }
-        String script = "#!/system/bin/sh\n"
-                + "pm grant " + context.getPackageName() + " " + OP_READ
-                + " > /sdcard/dcl_appops_grant.txt 2>&1\n"
-                + "echo EXIT:$? >> /sdcard/dcl_appops_grant.txt\n"
-                + "rm -f \"$0\" " + InstallPlan.AUTORUN + " " + InstallPlan.FLAG + "\n"
-                + "setprop " + InstallPlan.PROP + " ''\n";
+        long waitLock = System.currentTimeMillis() + 20_000L;
+        boolean acquired = false;
+        while (System.currentTimeMillis() < waitLock) {
+            if (RootRun.tryAcquire(RootRun.OWNER_APPOPS)) {
+                acquired = true;
+                break;
+            }
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException interrupted) {
+                return false;
+            }
+        }
+        if (!acquired) {
+            Log.i(TAG, "appops grant skipped, root busy");
+            return false;
+        }
+        String script = InstallPlan.appOpsGrantScript(context.getPackageName());
         try {
             new File("/sdcard/dcl_appops_grant.txt").delete();
-            MbDaemon.run(script, MbDaemon.INSTALL_BODY);
+            MbDaemon.run(script, MbDaemon.APPOPS_BODY);
             long deadline = System.currentTimeMillis() + 15000L;
             File result = new File("/sdcard/dcl_appops_grant.txt");
             while (System.currentTimeMillis() < deadline && !result.isFile()) {
@@ -172,6 +190,7 @@ final class DclStatus {
             }
             Log.i(TAG, "appops grant " + (result.isFile() ? "done" : "timeout"));
         } catch (Exception e) {
+            RootRun.release();
             Log.i(TAG, "appops grant " + e);
         }
         return true;
@@ -179,9 +198,6 @@ final class DclStatus {
 
     private static Boolean appOp(String name) {
         String text = command("appops", "get", "--user", "0", InstallPlan.DCL_PACKAGE, name);
-        String flat = text.replace('\n', ' ');
-        if (flat.length() > 180) flat = flat.substring(0, 180);
-        Log.i(TAG, name + " [" + flat + "]");
         if (text.contains("Security") || text.length() == 0) return null;
         if (text.contains("allow")) return Boolean.TRUE;
         return Boolean.FALSE;
@@ -189,13 +205,27 @@ final class DclStatus {
 
     private static String command(String... args) {
         try {
-            Process process = new ProcessBuilder(args).redirectErrorStream(true).start();
-            InputStream in = process.getInputStream();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[256];
-            int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-            process.waitFor();
+            final Process process = new ProcessBuilder(args).redirectErrorStream(true).start();
+            final ByteArrayOutputStream out = new ByteArrayOutputStream();
+            Thread reader = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        InputStream in = process.getInputStream();
+                        byte[] buf = new byte[256];
+                        int n;
+                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }, "dcl-cmd");
+            reader.setDaemon(true);
+            reader.start();
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroy();
+                return "";
+            }
+            reader.join(1000);
             return new String(out.toByteArray(), "UTF-8");
         } catch (Exception e) {
             return "";
@@ -261,6 +291,6 @@ final class DclStatus {
      * These packages are part of the A9 firmware and are not uninstalled.
      */
     private static boolean hidden(PackageManager packages, String packageName) {
-        return versionName(packages, packageName) == null;
+        return DclPackages.hidden(packages, packageName);
     }
 }
