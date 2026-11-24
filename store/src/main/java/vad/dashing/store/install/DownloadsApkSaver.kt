@@ -13,18 +13,16 @@ import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.IOException
 import kotlin.coroutines.resume
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import vad.dashing.store.StoreErrors
 
 /**
  * Writes an APK into the shared Downloads folder so other apps (e.g. DCLInstall)
  * can pick it from `/sdcard/Download` / the system Downloads UI.
  *
  * On API ≤ P (Jetour HUs) this matches Monitor’s Downloads helpers:
- * `getExternalStorageDirectory()+" /Download"`, then [MediaScannerConnection]
- * so «Загрузки» indexes the file.
+ * `getExternalStorageDirectory() + "/Download"`, then [MediaScannerConnection].
  */
 object DownloadsApkSaver {
     /** True when a runtime WRITE_EXTERNAL_STORAGE grant is needed before [save]. */
@@ -54,10 +52,10 @@ object DownloadsApkSaver {
 
     suspend fun save(context: Context, sourceApk: File, displayName: String): File {
         if (needsWritePermission() && !hasWritePermission(context)) {
-            throw IOException("WRITE_EXTERNAL_STORAGE not granted")
+            throw IOException(StoreErrors.DOWNLOADS_PERMISSION)
         }
         if (!sourceApk.isFile || sourceApk.length() <= 0L) {
-            throw IOException("Source APK missing")
+            throw IOException(StoreErrors.APK_MISSING)
         }
         val safeName = displayName.trim().ifBlank { sourceApk.name }
             .replace(Regex("""[^\w.\-]+"""), "_")
@@ -75,16 +73,16 @@ object DownloadsApkSaver {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, displayName)
-            put(MediaStore.Downloads.MIME_TYPE, "application/vnd.android.package-archive")
+            put(MediaStore.Downloads.MIME_TYPE, APK_MIME_TYPE)
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val uri = resolver.insert(collection, values)
-            ?: throw IOException("MediaStore insert failed for Downloads")
+            ?: throw IOException(StoreErrors.DOWNLOADS_WRITE_FAILED)
         try {
             resolver.openOutputStream(uri)?.use { output ->
                 sourceApk.inputStream().use { input -> input.copyTo(output) }
-            } ?: throw IOException("Cannot open Downloads output stream")
+            } ?: throw IOException(StoreErrors.DOWNLOADS_WRITE_FAILED)
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
@@ -107,37 +105,36 @@ object DownloadsApkSaver {
     ): File {
         val downloads = downloadsDirectory()
         if (!downloads.exists() && !downloads.mkdirs()) {
-            throw IOException("Cannot create Downloads directory")
+            throw IOException(StoreErrors.DOWNLOADS_WRITE_FAILED)
         }
         val dest = File(downloads, displayName)
         sourceApk.copyTo(dest, overwrite = true)
         if (!dest.isFile || dest.length() != sourceApk.length()) {
             dest.delete()
-            throw IOException("Downloads write incomplete")
+            throw IOException(StoreErrors.DOWNLOADS_WRITE_FAILED)
         }
         scanPublicFile(context, dest)
         return dest
     }
 
     /**
-     * Makes the file visible in the system Downloads / Files UI on API ≤ P.
-     * Waits briefly for the scanner callback; proceeds if the callback never fires.
+     * Indexes the file for MediaStore-based file managers on API ≤ P (stock «Загрузки» lists
+     * the folder itself). Waits briefly for the scanner callback; proceeds if it never fires.
      */
     private suspend fun scanPublicFile(context: Context, file: File) {
-        withContext(Dispatchers.Main.immediate) {
-            withTimeoutOrNull(SCAN_TIMEOUT_MS) {
-                suspendCancellableCoroutine { cont ->
-                    MediaScannerConnection.scanFile(
-                        context.applicationContext,
-                        arrayOf(file.absolutePath),
-                        arrayOf("application/vnd.android.package-archive"),
-                    ) { _, _ ->
-                        if (cont.isActive) cont.resume(Unit)
-                    }
+        withTimeoutOrNull(SCAN_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                MediaScannerConnection.scanFile(
+                    context.applicationContext,
+                    arrayOf(file.absolutePath),
+                    arrayOf(APK_MIME_TYPE),
+                ) { _, _ ->
+                    if (cont.isActive) cont.resume(Unit)
                 }
             }
         }
     }
 
+    private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     private const val SCAN_TIMEOUT_MS = 3_000L
 }

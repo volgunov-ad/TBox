@@ -60,17 +60,16 @@ class StoreAdbShell private constructor(private val connection: AdbConnection) :
         }
 
         /**
-         * Turns ADB over TCP on (same props as TBox Monitor; adbd restarts).
-         * Returns true when this call changed the state, so the caller restores it.
+         * Turns ADB over TCP on (same props as TBox Monitor; adbd restarts) and waits for the port.
+         * The props stay changed when this throws, so the caller restores them either way.
          */
-        fun enableTcpIfNeeded(): Boolean {
-            if (isPortOpen()) return false
+        fun enableTcp() {
             setTcpPort(PORT)
             repeat(40) {
-                if (isPortOpen()) return true
+                if (isPortOpen()) return
                 Thread.sleep(300)
             }
-            throw IOException("ADB по сети не включился ($HOST:$PORT)")
+            throw IOException("ADB over TCP did not come up ($HOST:$PORT)")
         }
 
         /** Closes the TCP port again; detached dex2oat in installd keeps running. */

@@ -704,18 +704,25 @@ private fun ListActionResult(
 }
 
 @Composable
-private fun actionErrorText(message: String): String = when (message) {
+private fun actionErrorText(message: String): String =
+    knownErrorText(message) ?: stringResource(R.string.store_error, message)
+
+/** Localized text for a [StoreErrors] key; null for a raw exception message. */
+@Composable
+private fun knownErrorText(message: String): String? = when (message) {
     StoreErrors.NETWORK_UNAVAILABLE -> stringResource(R.string.store_error_network)
     StoreErrors.PHONE_APK_NOT_FOR_HU -> stringResource(R.string.store_error_phone_not_for_hu)
     StoreErrors.DOWNLOADS_PERMISSION -> stringResource(R.string.store_error_downloads_permission)
+    StoreErrors.DOWNLOADS_WRITE_FAILED -> stringResource(R.string.store_error_downloads_write_failed)
     StoreErrors.NO_ACTIVITY -> stringResource(R.string.store_error_no_activity)
+    StoreErrors.APK_MISSING -> stringResource(R.string.store_error_apk_missing)
     StoreErrors.CHECKSUM_MISMATCH -> stringResource(R.string.store_error_checksum_mismatch)
     StoreErrors.PACKAGE_MISMATCH -> stringResource(R.string.store_error_package_mismatch)
     StoreErrors.CERT_MISMATCH -> stringResource(R.string.store_error_cert_mismatch)
     StoreErrors.CERT_UNREADABLE -> stringResource(R.string.store_error_cert_unreadable)
     StoreErrors.CERT_CONFLICTS_INSTALLED -> stringResource(R.string.store_error_cert_conflicts_installed)
     OPEN_FAILED -> stringResource(R.string.store_error_open_failed)
-    else -> stringResource(R.string.store_error, message)
+    else -> null
 }
 
 // endregion
@@ -1472,7 +1479,10 @@ private fun DetailActions(
                 )
             }
             ready.downloadsSidecarError?.let { err ->
-                MessageBanner(kind = MessageKind.ERROR, text = stringResource(R.string.store_sidecar_error, err))
+                MessageBanner(
+                    kind = MessageKind.ERROR,
+                    text = stringResource(R.string.store_sidecar_error, knownErrorText(err) ?: err),
+                )
             }
         }
         actionState is StoreActionState.SavedToDownloads && actionState.appId == id -> {

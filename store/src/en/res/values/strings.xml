@@ -74,6 +74,8 @@
     <string name="store_error_cert_mismatch">APK signing certificate is not in the catalog whitelist</string>
     <string name="store_error_cert_unreadable">Could not read the APK signing certificate</string>
     <string name="store_error_cert_conflicts_installed">This app is already installed with a different signing key. Uninstall the old version, then install again</string>
+    <string name="store_error_apk_missing">APK file not found — download again</string>
+    <string name="store_error_downloads_write_failed">Could not write the APK to Downloads</string>
     <string name="store_verifying_saving">Verifying and saving…</string>
     <string name="store_ready_to_install">APK downloaded and verified</string>
     <string name="store_retry">Retry</string>

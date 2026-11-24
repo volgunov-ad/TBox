@@ -1,12 +1,21 @@
 package vad.dashing.store.install
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.content.pm.Signature
+import android.content.pm.SigningInfo
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -14,7 +23,10 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowSigningInfo
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -23,8 +35,7 @@ class ApkVerifierTest {
     val tmp = TemporaryFolder()
 
     private lateinit var context: Context
-    private lateinit var signedApk: File
-    private lateinit var certSha256: String
+    private lateinit var debugCert: X509Certificate
 
     @Before
     fun setUp() {
@@ -35,9 +46,7 @@ class ApkVerifierTest {
             File("../../keystore/debug.keystore"),
         ).map { it.canonicalFile }.firstOrNull { it.isFile }
             ?: error("repo keystore/debug.keystore not found from ${File(".").canonicalPath}")
-        signedApk = buildSignedApk(keystore)
-        certSha256 = ApkVerifier.signingCertSha256(context, signedApk)
-            ?: error("expected readable signing cert")
+        debugCert = loadCert(keystore, "androiddebugkey")
     }
 
     @Test
@@ -47,66 +56,107 @@ class ApkVerifierTest {
         val digest = ApkVerifier.sha256Hex(file)
         assertEquals(64, digest.length)
         assertTrue(ApkVerifier.verifySha256(file, digest))
-        assertTrue(ApkVerifier.verifySha256(file, digest.uppercase()))
+        assertTrue(ApkVerifier.verifySha256(file, " ${digest.uppercase()} "))
         assertFalse(ApkVerifier.verifySha256(file, "00".repeat(32)))
     }
 
     @Test
-    fun signingCertSha256IsLowercaseHex64() {
-        assertEquals(64, certSha256.length)
-        assertTrue(certSha256.all { it in '0'..'9' || it in 'a'..'f' })
-        // Repo debug.keystore androiddebugkey SHA-256 (no colons).
-        assertEquals(
-            "50b797117600a81686afe549e01131eb236f60b7d693422b2423805a18a8b2ad",
-            certSha256,
-        )
+    fun archiveQueryAsksForGetSignaturesSoApi28CollectsCertificates() {
+        @Suppress("DEPRECATION")
+        assertNotEquals(0, ApkVerifier.SIGNING_QUERY_FLAGS and PackageManager.GET_SIGNATURES)
+        assertNotEquals(0, ApkVerifier.SIGNING_QUERY_FLAGS and PackageManager.GET_SIGNING_CERTIFICATES)
     }
 
     @Test
-    fun signingCertReadableWhenPackageManagerPathUsed() {
-        // Robolectric + signed jar: either PM or Jar fallback must return the debug cert.
-        assertNotNull(ApkVerifier.signingCertSha256(context, signedApk))
+    fun legacySignaturesGiveTheRepoDebugCertificate() {
+        val info = PackageInfo().apply {
+            @Suppress("DEPRECATION")
+            signatures = arrayOf(Signature(debugCert.encoded))
+        }
+        val signer = ApkVerifier.signerOf(info) ?: error("signer expected")
+        // `apksigner verify --print-certs` digest of keystore/debug.keystore (catalog pin format).
+        assertEquals("50b797117600a81686afe549e01131eb236f60b7d693422b2423805a18a8b2ad", signer.current)
+        assertEquals(setOf(signer.current), signer.lineage)
     }
 
-    private fun buildSignedApk(keystore: File): File {
-        val unsigned = tmp.newFile("unsigned.apk")
-        // Minimal ZIP (APK) with an empty classes.dex placeholder entry name.
-        java.util.zip.ZipOutputStream(unsigned.outputStream()).use { zip ->
-            zip.putNextEntry(java.util.zip.ZipEntry("classes.dex"))
-            zip.write(byteArrayOf(0x64, 0x65, 0x78, 0x0a, 0x30, 0x33, 0x35, 0x00))
-            zip.closeEntry()
-            zip.putNextEntry(java.util.zip.ZipEntry("AndroidManifest.xml"))
-            zip.write(ByteArray(32) { 0 })
-            zip.closeEntry()
+    @Test
+    fun rotatedSignerReportsCurrentCertificateNotTheOldest() {
+        val oldCert = generateCert("old")
+        val info = PackageInfo().apply {
+            signingInfo = rotatedSigningInfo(current = debugCert, history = listOf(oldCert, debugCert))
         }
-        val signed = File(tmp.root, "signed.apk")
-        unsigned.copyTo(signed, overwrite = true)
-        val jarsigner = findJdkBinary("jarsigner")
+        val signer = ApkVerifier.signerOf(info) ?: error("signer expected")
+        assertEquals(sha256(debugCert), signer.current)
+        assertEquals(setOf(sha256(oldCert), sha256(debugCert)), signer.lineage)
+    }
+
+    @Test
+    fun noSigningDataGivesNoSigner() {
+        assertNull(ApkVerifier.signerOf(PackageInfo()))
+    }
+
+    @Test
+    fun lineageDecidesWhetherAnUpdateIsAccepted() {
+        val old = ApkSigner("aa", setOf("aa"))
+        val rotated = ApkSigner("bb", setOf("aa", "bb"))
+        val other = ApkSigner("cc", setOf("cc"))
+        assertTrue(old.sharesLineageWith(ApkSigner("aa", setOf("aa"))))
+        assertTrue(rotated.sharesLineageWith(old))
+        assertTrue(old.sharesLineageWith(rotated))
+        assertFalse(other.sharesLineageWith(old))
+        assertFalse(old.sharesLineageWith(other))
+    }
+
+    @Test
+    fun installedSignerReadsTheInstalledPackage() {
+        val packageName = "vad.dashing.test.signed"
+        val info = PackageInfo().apply {
+            this.packageName = packageName
+            applicationInfo = ApplicationInfo().also { it.packageName = packageName }
+            @Suppress("DEPRECATION")
+            signatures = arrayOf(Signature(debugCert.encoded))
+        }
+        shadowOf(context.packageManager).installPackage(info)
+        assertEquals(sha256(debugCert), ApkVerifier.installedSigner(context, packageName)?.current)
+        assertNull(ApkVerifier.installedSigner(context, "vad.dashing.test.absent"))
+        assertNull(ApkVerifier.installedSigner(context, ""))
+    }
+
+    private fun sha256(cert: X509Certificate): String =
+        MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
+
+    private fun loadCert(keystore: File, alias: String): X509Certificate {
+        val store = KeyStore.getInstance("PKCS12")
+        keystore.inputStream().use { store.load(it, "android".toCharArray()) }
+        return store.getCertificate(alias) as X509Certificate
+    }
+
+    private fun generateCert(alias: String): X509Certificate {
+        val keystore = File(tmp.root, "$alias.p12")
+        val keytool = File(System.getProperty("java.home"), "bin/keytool")
+            .takeIf { it.isFile }?.absolutePath ?: "keytool"
         val proc = ProcessBuilder(
-            jarsigner,
-            "-keystore", keystore.absolutePath,
-            "-storepass", "android",
-            "-keypass", "android",
-            signed.absolutePath,
-            "androiddebugkey",
+            keytool, "-genkeypair",
+            "-keystore", keystore.absolutePath, "-storetype", "PKCS12",
+            "-storepass", "android", "-keypass", "android",
+            "-alias", alias, "-keyalg", "EC", "-validity", "1", "-dname", "CN=$alias",
         ).redirectErrorStream(true).start()
-        val finished = proc.waitFor(60, TimeUnit.SECONDS)
-        assertTrue("jarsigner timed out", finished)
+        assertTrue("keytool timed out", proc.waitFor(60, TimeUnit.SECONDS))
         assertEquals(
-            "jarsigner failed: ${proc.inputStream.bufferedReader().readText()}",
+            "keytool failed: ${proc.inputStream.bufferedReader().readText()}",
             0,
             proc.exitValue(),
         )
-        return signed
+        return loadCert(keystore, alias)
     }
 
-    private fun findJdkBinary(name: String): String {
-        val javaHome = System.getProperty("java.home")
-        val candidates = listOf(
-            File(javaHome, "bin/$name"),
-            File(javaHome, "../bin/$name"),
-        )
-        return candidates.firstOrNull { it.isFile }?.absolutePath
-            ?: name
+    /** History is oldest first, like `signingCertificateHistory` under v3 key rotation. */
+    private fun rotatedSigningInfo(current: X509Certificate, history: List<X509Certificate>): SigningInfo {
+        val signingInfo = Shadow.newInstanceOf(SigningInfo::class.java)
+        Shadow.extract<ShadowSigningInfo>(signingInfo).apply {
+            setSignatures(arrayOf(Signature(current.encoded)))
+            setPastSigningCertificates(history.map { Signature(it.encoded) }.toTypedArray())
+        }
+        return signingInfo
     }
 }
