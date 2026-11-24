@@ -154,6 +154,10 @@ class EspCompanionManager(
     private var bleRelayRebootsThisSession = 0
     /** Last wired mask the user asked for. Re-sent after hello; the echo updates the UI. */
     @Volatile private var desiredWiredMask: Int? = null
+    /** False until a `relay` line arrives. Read-modify-write would start from 0. */
+    @Volatile private var wiredRelaySeen = false
+    /** Phase the in-flight bridge waiter is for. A late end ack must not finish begin. */
+    @Volatile private var bridgeAckPhase: String? = null
     private val phoneLearnDeadlineMs = AtomicLong(0L)
 
     private fun currentReopenIntervalMs(): Long {
@@ -283,6 +287,7 @@ class EspCompanionManager(
         session?.close(force = true)
         session = null
         desiredWiredMask = null
+        wiredRelaySeen = false
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
         lastHelloRetryMs = 0L
@@ -310,15 +315,17 @@ class EspCompanionManager(
     private fun latchedWiredMask(): Int =
         desiredWiredMask ?: EspCompanionRepository.relayMask.value
 
+    private fun wiredLatchKnown(): Boolean = desiredWiredMask != null || wiredRelaySeen
+
     fun toggleRelay(channel: Int) {
-        if (channel !in 0..7) return
+        if (channel !in 0..7 || !wiredLatchKnown()) return
         cancelRelayPulse(channel)
         val bit = 1 shl channel
         setRelayMask(latchedWiredMask() xor bit)
     }
 
     fun setRelayChannel(channel: Int, on: Boolean) {
-        if (channel !in 0..7) return
+        if (channel !in 0..7 || !wiredLatchKnown()) return
         cancelRelayPulse(channel)
         val bit = 1 shl channel
         val cur = latchedWiredMask()
@@ -342,6 +349,7 @@ class EspCompanionManager(
             writeLine(EspCompanionProtocol.encodeRelayPulse(channel, ms))
             return
         }
+        if (!wiredLatchKnown()) return
         val bit = 1 shl channel
         val onMask = EspCompanionRepository.relayMask.value or bit
         setRelayMask(onMask)
@@ -1020,6 +1028,7 @@ class EspCompanionManager(
         sess.beginCriticalIo()
         sess.setBridgeMode(true, onRaw)
         val waiter = CompletableDeferred<EspMessage.Um980BridgeAck>()
+        bridgeAckPhase = "begin"
         bridgeAckWaiter.set(waiter)
         if (!sess.writeBytes(
                 EspCompanionProtocol.encodeUm980BridgeBegin().toByteArray(Charsets.UTF_8),
@@ -1027,6 +1036,7 @@ class EspCompanionManager(
             )
         ) {
             bridgeAckWaiter.compareAndSet(waiter, null)
+            bridgeAckPhase = null
             sess.setBridgeMode(false)
             sess.endCriticalIo()
             um980BridgeActive = false
@@ -1035,6 +1045,8 @@ class EspCompanionManager(
         runBlocking {
             val ack = withTimeoutOrNull(5_000L) { waiter.await() }
             if (ack == null || !ack.ok) {
+                bridgeAckWaiter.compareAndSet(waiter, null)
+                bridgeAckPhase = null
                 sess.setBridgeMode(false)
                 sess.endCriticalIo()
                 um980BridgeActive = false
@@ -1047,6 +1059,7 @@ class EspCompanionManager(
         val sess = session
         if (sess != null && um980BridgeActive) {
             val waiter = CompletableDeferred<EspMessage.Um980BridgeAck>()
+            bridgeAckPhase = "end"
             bridgeAckWaiter.set(waiter)
             runCatching {
                 sess.writeBytes(
@@ -1059,6 +1072,7 @@ class EspCompanionManager(
             sess.endCriticalIo()
         }
         bridgeAckWaiter.set(null)
+        bridgeAckPhase = null
         um980BridgeActive = false
     }
 
@@ -1384,6 +1398,7 @@ class EspCompanionManager(
             is EspMessage.Relay -> {
                 EspCompanionRepository.updateRelayMask(msg.mask)
                 msg.latched?.let { desiredWiredMask = it }
+                wiredRelaySeen = true
             }
             is EspMessage.Um980Rsp -> {
                 // Count as link liveness: older FW suppresses hb while collecting UART replies.
@@ -1418,7 +1433,14 @@ class EspCompanionManager(
                 }
             }
             is EspMessage.Um980BridgeAck -> {
-                bridgeAckWaiter.getAndSet(null)?.complete(msg)
+                val expected = bridgeAckPhase
+                val waiting = bridgeAckWaiter.get()
+                if (waiting != null && expected != null && msg.phase == expected &&
+                    bridgeAckWaiter.compareAndSet(waiting, null)
+                ) {
+                    bridgeAckPhase = null
+                    waiting.complete(msg)
+                }
                 if (!msg.ok) {
                     Log.w(TAG, "um980BridgeAck fail phase=${msg.phase} err=${msg.err}")
                 }

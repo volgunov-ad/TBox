@@ -1,6 +1,7 @@
 package vad.dashing.tbox.esp
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -63,6 +64,30 @@ class EspCompanionRepositoryBleTest {
             -70,
             EspCompanionRepository.bleDevices.value["11:22:33:44:55:66"]?.lastRssi,
         )
+    }
+
+    @Test
+    fun applyBleStatus_onlineRelaySeedsMaskWithoutWaitingForRelayDev() {
+        EspCompanionRepository.updateConnected(true)
+        EspCompanionRepository.applyBleStatus(
+            on = true,
+            learn = false,
+            macs = emptyList(),
+            relays = listOf(
+                EspRelayDevice(id = "AABBCCDD", name = "Gate", online = true, mask = 1),
+            ),
+        )
+        assertEquals(1, EspCompanionRepository.bleRelayMask("aabbccdd"))
+        assertTrue(EspCompanionRepository.bleRelayOnline("aabbccdd"))
+        EspCompanionRepository.applyBleStatus(
+            on = true,
+            learn = false,
+            macs = emptyList(),
+            relays = listOf(
+                EspRelayDevice(id = "aabbccdd", name = "Gate", online = false, mask = 1),
+            ),
+        )
+        assertFalse(EspCompanionRepository.bleRelayOnline("aabbccdd"))
     }
 
     @Test

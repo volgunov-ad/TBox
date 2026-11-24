@@ -59,6 +59,8 @@ static size_t s_can_batch_len;
 /** JSON line continued across USB chunks while CAN-light or the bridge is on. */
 static bool s_text_acc;
 static uint32_t s_bin_rx_ms;
+/** Last byte from the host while a binary session is open. */
+static uint32_t s_host_rx_ms;
 static bool s_ota_wait_end;
 static uint32_t s_ota_wait_end_ms;
 static volatile bool s_ota_erasing;
@@ -67,6 +69,8 @@ static bool s_app_marked_valid;
 #define BIN_IDLE_MS 8000u
 /** UM980 XMODEM is quiet for 10–20 s. Leave the bridge only after a long gap. */
 #define BRIDGE_IDLE_MS 120000u
+/** A '{' after this much host silence starts a new text line, not a half frame. */
+#define HOST_FRAME_GAP_MS 1000u
 
 /*
  * Senders run on several tasks (main loop, USB RX worker, UM980 / Wi-Fi workers, BLE).
@@ -203,6 +207,7 @@ void protocol_init(void)
     s_can_batch_len = 0;
     s_text_acc = false;
     s_bin_rx_ms = 0;
+    s_host_rx_ms = 0;
     s_ota_wait_end = false;
     s_ota_wait_end_ms = 0;
     s_ota_erasing = false;
@@ -259,9 +264,12 @@ static void abort_binary_session(const char *why)
         leave_bridge();
         protocol_send_um980_bridge_ack("end", false, why && why[0] ? why : "timeout");
     }
+    leave_can_light();
+    s_bridge_frame_len = 0;
     s_text_acc = false;
     s_line_len = 0;
     s_bin_rx_ms = 0;
+    s_host_rx_ms = 0;
 }
 
 void protocol_poll(uint32_t now_ms)
@@ -280,8 +288,8 @@ void protocol_poll(uint32_t now_ms)
         protocol_send_ota_done(false, "timeout");
     }
     /* The head unit does not drop DTR. A dead updater otherwise stays in
-     * the bridge until power cycle. Traffic in either direction refreshes
-     * s_bin_rx_ms. */
+     * the bridge until power cycle. Only host frames refresh s_bin_rx_ms,
+     * so a streaming UM980 cannot hold the bridge open. */
     if (s_bridge_bin_mode && s_bin_rx_ms != 0 &&
         (uint32_t)(now_ms - s_bin_rx_ms) > BRIDGE_IDLE_MS) {
         leave_bridge();
@@ -966,7 +974,6 @@ void protocol_um980_bridge_poll(void)
     uint8_t buf[256];
     int n = um980_uart_read_raw(buf, sizeof(buf));
     if (n > 0) {
-        mark_bin_rx();
         protocol_bridge_send_uart_bytes(buf, (size_t)n);
     }
 }
@@ -1336,6 +1343,10 @@ static void handle_line(const char *line)
         protocol_send_hello();
         /* hello has no phone list or pairing state; a restarted host needs both. */
         protocol_send_ble_status();
+        /* A Monitor restart does not re-enumerate USB, so the tud_ready edge
+         * already went out. Send the wired state with the reply. */
+        protocol_send_relay(gpio_io_get_relays(), gpio_io_latched(), gpio_io_pulse_mask());
+        protocol_send_gpio(gpio_io_read_inputs(), mono_ms());
         return;
     }
     if (line_is(line, "otaBegin")) {
@@ -1799,6 +1810,12 @@ void protocol_on_rx_bytes(const uint8_t *data, size_t len)
             uint8_t *frame = s_bridge_frame;
             size_t *flen = &s_bridge_frame_len;
             /* A JSON line may span USB packets. Keep it until '\n'. */
+            if (b == '{' && *flen > 0 &&
+                (s_host_rx_ms == 0 || (uint32_t)(mono_ms() - s_host_rx_ms) > HOST_FRAME_GAP_MS)) {
+                *flen = 0;
+            }
+            s_host_rx_ms = mono_ms();
+            if (s_host_rx_ms == 0) s_host_rx_ms = 1;
             if (s_text_acc || (*flen == 0 && b == '{')) {
                 if (!s_text_acc) {
                     s_line_len = 0;

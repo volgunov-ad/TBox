@@ -374,7 +374,9 @@ class EspUsbSerialSession(
          * companion acks this even when no bridge is open, and it is parsed
          * as text while the bridge is up. */
         val bridgeEnd = EspCompanionProtocol.encodeUm980BridgeEnd().toByteArray(Charsets.UTF_8)
+        val canEnd = EspCompanionProtocol.encodeCanLightEnd().toByteArray(Charsets.UTF_8)
         writeBytesLocked(bridgeEnd, WRITE_TIMEOUT_MS)
+        writeBytesLocked(canEnd, WRITE_TIMEOUT_MS)
         writeBytesLocked(
             EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
             WRITE_TIMEOUT_MS,
@@ -383,6 +385,7 @@ class EspUsbSerialSession(
             try {
                 Thread.sleep(300)
                 writeBytesLocked(bridgeEnd, WRITE_TIMEOUT_MS)
+                writeBytesLocked(canEnd, WRITE_TIMEOUT_MS)
                 writeBytesLocked(
                     EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
                     WRITE_TIMEOUT_MS,

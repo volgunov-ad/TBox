@@ -422,7 +422,12 @@ static void load_nvs(void)
             char rkey[COUNTER_KEY_LEN];
             snprintf(rkey, COUNTER_KEY_LEN, "r%d", i);
             uint32_t tx = 0;
-            if (nvs_get_u32(h, rkey, &tx) == ESP_OK) s_relay_tx[s_count] = tx;
+            /* A crash can lose the counter between a send and the NVS flush.
+             * Skip ahead so the first command after boot is not a replay. */
+            if (nvs_get_u32(h, rkey, &tx) == ESP_OK) {
+                if (tx > 0xFFFFFFFFu - 32u) tx = 0xFFFFFFFFu - 32u;
+                s_relay_tx[s_count] = tx + 32u;
+            }
         }
         s_count++;
     }
@@ -933,29 +938,28 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     if (s_pending_pair) return;
     int existing = find_phone(id);
     if (existing >= 0 && memcmp(s_phones[existing].key, key, 16) == 0) {
-        /* Cleartext PAIR must not move an existing binding. A relay latches
-         * only after a sealed 0x30, so retry that on the link that just
-         * paired if the allow has not been confirmed yet. */
+        /* Cleartext PAIR must not move an existing binding. A relay that
+         * still sends PAIR has not latched, so the 0x30 goes out now. */
         if (s_phones[existing].kind != REC_KIND_RELAY) {
             mark_link_seen();
             return;
         }
-        if (s_relay_need_latch[existing] && s_rx_link &&
-            link_by_phone_locked(existing) == NULL) {
+        /* A matching key and a cleartext PAIR means the relay is not
+         * latched. paired is cleared only by a factory reset, which
+         * reboots the board, so it has no generation to adopt. */
+        if (s_rx_link && link_by_phone_locked(existing) == NULL) {
             s_rx_link->phone_index = existing;
             s_rx_link->seen = true;
-            /* This relay has not applied a 0x30 yet, so there is no
-             * generation to adopt. A later 0x31 must not rewind it. */
-            s_relay_gen_synced[existing] = true;
+        }
+        s_relay_need_latch[existing] = true;
+        s_adv_refresh = true;
+        s_relay_gen_synced[existing] = true;
+        if (!s_relay_wait[existing]) {
             bool held = s_relay_hold_cmd[existing];
             uint8_t st = held ? s_relay_hold_states[existing] : 0;
             uint16_t pulse = held ? s_relay_hold_pulse[existing] : 0;
-            if (relay_send_cmd_locked(existing, st, pulse, true)) {
-                if (held) {
-                    s_relay_need_latch[existing] = false;
-                    s_adv_refresh = true;
-                }
-            } else {
+            s_relay_wait_tries[existing] = 0;
+            if (!relay_send_cmd_locked(existing, st, pulse, true)) {
                 s_relay_gen_synced[existing] = false;
             }
         }
@@ -1045,8 +1049,9 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
                 s_relay_wait[index] = false;
             }
         }
-        /* The relay opened itself. Do not close it again. A forget still waits. */
-        if (body[1] & RELAY_FLAG_SELF_OPEN) {
+        /* The relay opened itself. A keepalive that left before our latest
+         * command must not cancel that command. A forget still waits. */
+        if ((body[1] & RELAY_FLAG_SELF_OPEN) && echoed == s_relay_gen[index]) {
             s_relay_desired_valid[index] = false;
             if (!s_relay_forgetting[index]) {
                 s_relay_wait[index] = false;
@@ -1056,10 +1061,8 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
             uint8_t st = s_relay_hold_states[index];
             uint16_t pulse = s_relay_hold_pulse[index];
             s_relay_wait_tries[index] = 0;
-            if (relay_send_cmd_locked(index, st, pulse, true)) {
-                s_relay_need_latch[index] = false;
-                s_adv_refresh = true;
-            }
+            /* need_latch stays set until this generation is echoed. */
+            relay_send_cmd_locked(index, st, pulse, true);
         }
         if (s_relay_forgetting[index] && actual == 0 && echoed == s_relay_gen[index]) {
             s_relay_drop_pending[index] = true;
@@ -1163,7 +1166,8 @@ bool ble_phone_allow(const char *id_hex)
                     s_relay_desired_valid[index] = false;
                     s_relay_forgetting[index] = false;
                     s_relay_need_latch[index] = true;
-                    s_relay_gen_synced[index] = false;
+                    /* Unpaired: no generation to adopt. Send on this link now. */
+                    s_relay_gen_synced[index] = true;
                     s_relay_wait_tries[index] = 0;
                     links_ensure();
                     phone_link_t *link = link_by_conn(s_pending_conn);
@@ -1173,10 +1177,12 @@ bool ble_phone_allow(const char *id_hex)
                         bind_phone(index);
                         s_rx_link = rx;
                     }
-                    /* The latch goes out on the next 0x31 (after the echoed
-                     * generation is adopted) or on a later PAIR. Sending it
-                     * here would reuse generation 1 after a reboot. */
-                    ESP_LOGI(TAG, "relay %d latch armed", index);
+                    if (relay_send_cmd_locked(index, 0, 0, true)) {
+                        ESP_LOGI(TAG, "relay %d latch queued", index);
+                    } else {
+                        s_relay_gen_synced[index] = false;
+                        ESP_LOGI(TAG, "relay %d latch armed", index);
+                    }
                 }
             }
         }
@@ -1620,7 +1626,10 @@ int ble_phone_relay_set(const char *id_hex, uint8_t mask, uint16_t pulse_ms)
         /* A pulse returns to open on its own, so it is not a state to restore. */
         s_relay_desired_valid[i] = pulse_ms == 0;
         s_relay_wait_tries[i] = 0;
-        if (relay_send_cmd_locked(i, mask, pulse_ms, true)) queued++;
+        /* A parked command has not gone on the air. Do not report it queued. */
+        if (relay_send_cmd_locked(i, mask, pulse_ms, true) && !s_relay_hold_cmd[i]) {
+            queued++;
+        }
         matched++;
     }
     ble_radio_unlock();
