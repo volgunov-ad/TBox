@@ -177,6 +177,7 @@ class ExternalApiController(
                 }
                 syncServer()
                 publishStatus()
+                refreshConnectPrompt()
             }
         }
         scope.launch {
@@ -199,6 +200,7 @@ class ExternalApiController(
         httpServer.stop()
         persistClients()
         publishStatus()
+        hideConnectPrompt()
     }
 
     fun startPairing() {
@@ -214,6 +216,7 @@ class ExternalApiController(
         }
         publishStatus()
         _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+        refreshConnectPrompt()
     }
 
     fun stopPairing() {
@@ -222,16 +225,22 @@ class ExternalApiController(
         pairingSession.stopPairing()
         publishStatus()
         _pendingPairRequests.value = emptyList()
+        refreshConnectPrompt()
     }
 
     private fun ensurePairingRequestPoll() {
         if (pairingPollJob?.isActive == true) return
         pairingPollJob = scope.launch {
             while (pairingSession.isPairingActive()) {
-                _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+                val snapshot = pairingSession.pendingRequestsSnapshot()
+                if (_pendingPairRequests.value != snapshot) {
+                    _pendingPairRequests.value = snapshot
+                    refreshConnectPrompt()
+                }
                 delay(PAIRING_POLL_INTERVAL_MS)
             }
             _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+            refreshConnectPrompt()
         }
     }
 
@@ -255,12 +264,14 @@ class ExternalApiController(
         TboxRepository.addLog("INFO", "ExternalApi", "Pair approved: ${request.clientName}")
         stopPairing()
         _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+        refreshConnectPrompt()
     }
 
     fun denyPair(requestId: String) {
         pairingSession.denyRequest(requestId)
         TboxRepository.addLog("INFO", "ExternalApi", "Pair denied: $requestId")
         _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+        refreshConnectPrompt()
     }
 
     /**
@@ -303,12 +314,7 @@ class ExternalApiController(
         val consent = ExternalApiLocalConsent(packageName, clientName, certSha256)
         val status = if (interactive) {
             localConsentSession.requestInteractive(consent)
-            scope.launch(Dispatchers.Main) {
-                appContext.startActivity(
-                    Intent(appContext, ExternalApiLocalConsentActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            }
+            refreshConnectPrompt()
             LocalAccessContract.STATUS_PENDING
         } else {
             localConsentSession.pollStatus(consent)
@@ -344,6 +350,7 @@ class ExternalApiController(
         persistClients()
         publishStatus()
         TboxRepository.addLog("INFO", "ExternalApi", "Local access approved: ${consent.packageName}")
+        refreshConnectPrompt()
         // Same path as Settings → «Работа в среде лаунчера DCL»: DataStore + routing cache.
         if (ExternalApiLocalClients.shouldEnableDclEnvironmentOnApprove(consent.packageName)) {
             scope.launch {
@@ -355,6 +362,56 @@ class ExternalApiController(
     fun denyLocalConsent() {
         val consent = localConsentSession.takeForDeny() ?: return
         TboxRepository.addLog("INFO", "ExternalApi", "Local access denied: ${consent.packageName}")
+        refreshConnectPrompt()
+    }
+
+    /**
+     * SYSTEM_ALERT_WINDOW Allow/Deny over whatever is on screen (DCL / MQTT style).
+     * Only while API mode is enabled. Falls back to [ExternalApiLocalConsentActivity]
+     * for local companions when overlay permission is missing.
+     */
+    private fun refreshConnectPrompt() {
+        val prompt = ExternalApiConnectPromptSelector.select(
+            apiEnabled = enabled,
+            localConsent = localConsentSession.pending.value,
+            pendingPairs = _pendingPairRequests.value,
+        )
+        scope.launch(Dispatchers.Main) {
+            if (prompt == null) {
+                ExternalApiConnectPromptOverlay.hide()
+                return@launch
+            }
+            val shown = ExternalApiConnectPromptOverlay.show(
+                context = appContext,
+                prompt = prompt,
+                onAllow = {
+                    when (prompt) {
+                        is ExternalApiConnectPrompt.Local -> approveLocalConsent()
+                        is ExternalApiConnectPrompt.HttpPair ->
+                            approvePair(prompt.request.requestId)
+                    }
+                },
+                onDeny = {
+                    when (prompt) {
+                        is ExternalApiConnectPrompt.Local -> denyLocalConsent()
+                        is ExternalApiConnectPrompt.HttpPair ->
+                            denyPair(prompt.request.requestId)
+                    }
+                },
+            )
+            if (!shown && prompt is ExternalApiConnectPrompt.Local) {
+                appContext.startActivity(
+                    Intent(appContext, ExternalApiLocalConsentActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
+    }
+
+    private fun hideConnectPrompt() {
+        scope.launch(Dispatchers.Main) {
+            ExternalApiConnectPromptOverlay.hide()
+        }
     }
 
     private fun localAnswer(status: String, token: String? = null) = ExternalApiLocalAnswer(

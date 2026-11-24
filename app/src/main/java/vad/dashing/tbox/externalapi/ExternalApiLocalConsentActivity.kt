@@ -20,7 +20,8 @@ import vad.dashing.tbox.ui.AppAlertDialogTitle
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 /**
- * Started by [ExternalApiController.localAccess] over whatever app is on screen.
+ * Fallback Allow/Deny UI when SYSTEM_ALERT_WINDOW is not granted.
+ * Prefer [ExternalApiConnectPromptOverlay] (same copy and lifecycle) when overlay is available.
  *
  * Non-cancelable: Back / outside tap do not clear pending consent. Only Allow / Deny
  * (here or in Settings → API) resolve it; [LaunchedEffect] finishes when pending is cleared.
