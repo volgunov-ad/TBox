@@ -69,6 +69,11 @@
     <string name="store_error_downloads_permission">Нет разрешения на запись в Загрузки</string>
     <string name="store_error_no_activity">На устройстве нет приложения для этого действия</string>
     <string name="store_error_open_failed">Не удалось открыть приложение</string>
+    <string name="store_error_checksum_mismatch">Контрольная сумма APK не совпала — скачайте снова</string>
+    <string name="store_error_package_mismatch">В APK другой package name, чем в каталоге</string>
+    <string name="store_error_cert_mismatch">Подпись APK не входит в белый список каталога</string>
+    <string name="store_error_cert_unreadable">Не удалось прочитать сертификат подписи APK</string>
+    <string name="store_error_cert_conflicts_installed">На ГУ уже стоит это приложение с другой подписью. Удалите старую версию и установите снова</string>
     <string name="store_verifying_saving">Проверка и сохранение…</string>
     <string name="store_ready_to_install">APK скачан и проверен</string>
     <string name="store_retry">Повторить</string>

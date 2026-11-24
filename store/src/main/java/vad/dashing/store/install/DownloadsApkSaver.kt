@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -11,10 +12,19 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.IOException
+import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Writes an APK into the shared Downloads folder so other apps (e.g. DCLInstall)
  * can pick it from `/sdcard/Download` / the system Downloads UI.
+ *
+ * On API ≤ P (Jetour HUs) this matches Monitor’s Downloads helpers:
+ * `getExternalStorageDirectory()+" /Download"`, then [MediaScannerConnection]
+ * so «Загрузки» indexes the file.
  */
 object DownloadsApkSaver {
     /** True when a runtime WRITE_EXTERNAL_STORAGE grant is needed before [save]. */
@@ -28,7 +38,21 @@ object DownloadsApkSaver {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun save(context: Context, sourceApk: File, displayName: String): File {
+    /**
+     * Directory used for public APK copies. Same resolution as Monitor
+     * (`ThemeBundleExport.downloadsDir`) for API &lt; R.
+     */
+    @Suppress("DEPRECATION")
+    fun downloadsDirectory(): File {
+        val path = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        } else {
+            Environment.getExternalStorageDirectory().absolutePath + "/Download"
+        }
+        return File(path)
+    }
+
+    suspend fun save(context: Context, sourceApk: File, displayName: String): File {
         if (needsWritePermission() && !hasWritePermission(context)) {
             throw IOException("WRITE_EXTERNAL_STORAGE not granted")
         }
@@ -42,7 +66,7 @@ object DownloadsApkSaver {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveViaMediaStore(context, sourceApk, safeName)
         } else {
-            saveViaPublicDownloads(sourceApk, safeName)
+            saveViaPublicDownloads(context, sourceApk, safeName)
         }
     }
 
@@ -73,19 +97,47 @@ object DownloadsApkSaver {
             resolver.query(uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)
                 ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: displayName
-        @Suppress("DEPRECATION")
-        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        return File(downloads, savedName)
+        return File(downloadsDirectory(), savedName)
     }
 
-    @Suppress("DEPRECATION")
-    private fun saveViaPublicDownloads(sourceApk: File, displayName: String): File {
-        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    private suspend fun saveViaPublicDownloads(
+        context: Context,
+        sourceApk: File,
+        displayName: String,
+    ): File {
+        val downloads = downloadsDirectory()
         if (!downloads.exists() && !downloads.mkdirs()) {
             throw IOException("Cannot create Downloads directory")
         }
         val dest = File(downloads, displayName)
         sourceApk.copyTo(dest, overwrite = true)
+        if (!dest.isFile || dest.length() != sourceApk.length()) {
+            dest.delete()
+            throw IOException("Downloads write incomplete")
+        }
+        scanPublicFile(context, dest)
         return dest
     }
+
+    /**
+     * Makes the file visible in the system Downloads / Files UI on API ≤ P.
+     * Waits briefly for the scanner callback; proceeds if the callback never fires.
+     */
+    private suspend fun scanPublicFile(context: Context, file: File) {
+        withContext(Dispatchers.Main.immediate) {
+            withTimeoutOrNull(SCAN_TIMEOUT_MS) {
+                suspendCancellableCoroutine { cont ->
+                    MediaScannerConnection.scanFile(
+                        context.applicationContext,
+                        arrayOf(file.absolutePath),
+                        arrayOf("application/vnd.android.package-archive"),
+                    ) { _, _ ->
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                }
+            }
+        }
+    }
+
+    private const val SCAN_TIMEOUT_MS = 3_000L
 }

@@ -709,6 +709,11 @@ private fun actionErrorText(message: String): String = when (message) {
     StoreErrors.PHONE_APK_NOT_FOR_HU -> stringResource(R.string.store_error_phone_not_for_hu)
     StoreErrors.DOWNLOADS_PERMISSION -> stringResource(R.string.store_error_downloads_permission)
     StoreErrors.NO_ACTIVITY -> stringResource(R.string.store_error_no_activity)
+    StoreErrors.CHECKSUM_MISMATCH -> stringResource(R.string.store_error_checksum_mismatch)
+    StoreErrors.PACKAGE_MISMATCH -> stringResource(R.string.store_error_package_mismatch)
+    StoreErrors.CERT_MISMATCH -> stringResource(R.string.store_error_cert_mismatch)
+    StoreErrors.CERT_UNREADABLE -> stringResource(R.string.store_error_cert_unreadable)
+    StoreErrors.CERT_CONFLICTS_INSTALLED -> stringResource(R.string.store_error_cert_conflicts_installed)
     OPEN_FAILED -> stringResource(R.string.store_error_open_failed)
     else -> stringResource(R.string.store_error, message)
 }

@@ -145,6 +145,11 @@ object StoreErrors {
     const val PHONE_APK_NOT_FOR_HU = "phone_apk_not_for_hu"
     const val DOWNLOADS_PERMISSION = "downloads_permission_denied"
     const val NO_ACTIVITY = "no_activity"
+    const val CHECKSUM_MISMATCH = "checksum_mismatch"
+    const val PACKAGE_MISMATCH = "package_mismatch"
+    const val CERT_MISMATCH = "cert_mismatch"
+    const val CERT_UNREADABLE = "cert_unreadable"
+    const val CERT_CONFLICTS_INSTALLED = "cert_conflicts_installed"
 }
 
 class StoreRepository(
@@ -428,6 +433,21 @@ class StoreRepository(
             _actionState.value = StoreActionState.Error(state.appId, "APK file is missing, download again")
             return
         }
+        val installedCert = ApkVerifier.installedSigningCertSha256(context, state.entry.packageName)
+        if (installedCert != null) {
+            val apkCert = ApkVerifier.signingCertSha256(context, state.apkFile)?.lowercase()
+            if (apkCert == null) {
+                _actionState.value = StoreActionState.Error(state.appId, StoreErrors.CERT_UNREADABLE)
+                return
+            }
+            if (!apkCert.equals(installedCert, ignoreCase = true)) {
+                _actionState.value = StoreActionState.Error(
+                    state.appId,
+                    StoreErrors.CERT_CONFLICTS_INSTALLED,
+                )
+                return
+            }
+        }
         try {
             ApkInstaller.install(context, state.apkFile)
         } catch (error: ActivityNotFoundException) {
@@ -589,7 +609,7 @@ class StoreRepository(
             append(".apk")
         }
 
-    private fun saveApkToDownloads(
+    private suspend fun saveApkToDownloads(
         entry: StoreCatalogEntry,
         release: AppReleaseInfo,
         cacheFile: File,
@@ -647,17 +667,21 @@ class StoreRepository(
         }
         if (!ApkVerifier.verifySha256(file, release.sha256)) {
             file.delete()
-            throw IOException("APK checksum mismatch")
+            throw IOException(StoreErrors.CHECKSUM_MISMATCH)
         }
         if (!ApkVerifier.verifyPackageName(context, file, entry.packageName)) {
             file.delete()
-            throw IOException("APK package name mismatch")
+            throw IOException(StoreErrors.PACKAGE_MISMATCH)
         }
         if (entry.signingCertSha256.isNotEmpty()) {
             val actual = ApkVerifier.signingCertSha256(context, file)?.lowercase()
-            if (actual == null || entry.signingCertSha256.none { it.equals(actual, true) }) {
+            if (actual == null) {
                 file.delete()
-                throw IOException("APK signing certificate mismatch")
+                throw IOException(StoreErrors.CERT_UNREADABLE)
+            }
+            if (entry.signingCertSha256.none { it.equals(actual, true) }) {
+                file.delete()
+                throw IOException(StoreErrors.CERT_MISMATCH)
             }
         }
     }
