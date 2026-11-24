@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import vad.dashing.tbox.R
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.hotspot.HuSoftApRouter
@@ -110,6 +111,8 @@ class EspCompanionManager(
     private val um980RspWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Rsp>?>(null)
     private val um980BaudWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Baud>?>(null)
     private val bridgeAckWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980BridgeAck>?>(null)
+    private val canLightAckWaiter = AtomicReference<CompletableDeferred<EspMessage.CanAck>?>(null)
+    private val relayDevAckWaiter = AtomicReference<CompletableDeferred<EspMessage.BleAck>?>(null)
     @Volatile private var um980BridgeActive: Boolean = false
     private val canLightRefCount = AtomicInteger(0)
     @Volatile private var canLightBridgeOn: Boolean = false
@@ -121,6 +124,10 @@ class EspCompanionManager(
     /** Last companion reboot we ordered because paired BLE relays went quiet. */
     private var lastBleRelayRebootMs = 0L
     private var lastBleRelayRebootLogMs = 0L
+    /** One USB-watchdog reboot per session. Firmware 0.13.2+ heals advertising itself. */
+    private var bleRelayRebootsThisSession = 0
+    /** Last wired mask the user asked for. Re-sent after hello; the echo updates the UI. */
+    @Volatile private var desiredWiredMask: Int? = null
     private val phoneLearnDeadlineMs = AtomicLong(0L)
 
     private fun currentReopenIntervalMs(): Long {
@@ -136,12 +143,13 @@ class EspCompanionManager(
         if (session != null) return
         Log.i(TAG, "starting companion USB session")
         TboxRepository.addLog("INFO", "Companion", "USB session starting")
+        bleRelayRebootsThisSession = 0
         session = EspUsbSerialSession(
             context = context,
             onLine = { line ->
                 if (!loggedFirstLine) {
                     loggedFirstLine = true
-                    Log.i(TAG, "first line: ${line.take(120)}")
+                    Log.i(TAG, "first line: ${EspCompanionProtocol.redactSecrets(line).take(120)}")
                 }
                 handleLine(line)
             },
@@ -248,6 +256,7 @@ class EspCompanionManager(
         // Service teardown must release USB even mid-transfer.
         session?.close(force = true)
         session = null
+        desiredWiredMask = null
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
         lastHelloRetryMs = 0L
@@ -266,8 +275,8 @@ class EspCompanionManager(
         if (EspCompanionRepository.otaBusy.value) return
         val normalized = mask and 0xFF
         Log.d(TAG, "relaySet mask=0x${Integer.toHexString(normalized)}")
+        desiredWiredMask = normalized
         writeLine(EspCompanionProtocol.encodeRelaySet(normalized))
-        EspCompanionRepository.updateRelayMask(normalized)
     }
 
     fun toggleRelay(channel: Int) {
@@ -295,6 +304,14 @@ class EspCompanionManager(
             return
         }
         cancelRelayPulse(channel)
+        val fw = EspCompanionRepository.deviceInfo.value.firmwareVersion
+        if (EspCompanionProtocol.firmwareAtLeast(fw, 0, 14, 0)) {
+            if (EspCompanionRepository.otaBusy.value) return
+            val ms = durationMs.coerceIn(1L, 65_535L).toInt()
+            Log.d(TAG, "relaySet pulse ch=$channel ${ms}ms")
+            writeLine(EspCompanionProtocol.encodeRelayPulse(channel, ms))
+            return
+        }
         val bit = 1 shl channel
         val onMask = EspCompanionRepository.relayMask.value or bit
         setRelayMask(onMask)
@@ -328,8 +345,14 @@ class EspCompanionManager(
      */
     private fun maybeRebootStaleBleRelays(now: Long) {
         if (EspCompanionRepository.otaBusy.value) return
+        if (bleRelayRebootsThisSession >= 1) return
         val info = EspCompanionRepository.deviceInfo.value
+        val fw = info.firmwareVersion
+        if (fw.isBlank() || EspCompanionProtocol.firmwareAtLeast(fw, 0, 13, 2)) return
         if (!info.ble || !EspCompanionRepository.bleOn.value) return
+        val lastBtn = EspCompanionRepository.lastBleBtn.value?.atMs ?: 0L
+        if (lastBtn > 0L && now - lastBtn < BLE_RELAY_STALE_MS) return
+        if (EspCompanionRepository.phones.value.isNotEmpty()) return
         val relays = EspCompanionRepository.bleRelays.value
         if (relays.isEmpty()) return
         val online = EspCompanionRepository.bleRelayOnline.value
@@ -348,6 +371,7 @@ class EspCompanionManager(
         val sinceConnect = now - EspCompanionRepository.connectedAtMs.value
         if (sinceConnect < BLE_RELAY_STALE_MS) return
         lastBleRelayRebootMs = now
+        bleRelayRebootsThisSession++
         if (now - lastBleRelayRebootLogMs >= 60_000L) {
             lastBleRelayRebootLogMs = now
             Log.w(TAG, "paired BLE relays quiet >${BLE_RELAY_STALE_MS / 1000}s — rebooting companion")
@@ -363,7 +387,10 @@ class EspCompanionManager(
     private fun writeLine(payload: String) {
         val text = payload.trimEnd()
         if (text.isNotEmpty()) {
-            CompanionProtocolLogRecorder.append(CompanionLogDirection.TX, text)
+            CompanionProtocolLogRecorder.append(
+                CompanionLogDirection.TX,
+                EspCompanionProtocol.redactSecrets(text),
+            )
         }
         session?.writeLine(text)
     }
@@ -371,7 +398,10 @@ class EspCompanionManager(
     private fun writeLineOn(sess: EspUsbSerialSession, payload: String) {
         val text = payload.trimEnd()
         if (text.isNotEmpty()) {
-            CompanionProtocolLogRecorder.append(CompanionLogDirection.TX, text)
+            CompanionProtocolLogRecorder.append(
+                CompanionLogDirection.TX,
+                EspCompanionProtocol.redactSecrets(text),
+            )
         }
         sess.writeLine(text)
     }
@@ -815,7 +845,41 @@ class EspCompanionManager(
             else -> return
         }
         if (id.isEmpty()) return
+        if (!EspCompanionRepository.bleRelayMaskKnown(id)) return
         setBleRelayState(id, (EspCompanionRepository.bleRelayMask(id) and 1) == 0)
+    }
+
+    /** Wait for the companion's relayDevSet ack. UI clicks stay fire-and-forget. */
+    suspend fun setBleRelayAwait(id: String, on: Boolean): BleRelaySendResult {
+        if (EspCompanionRepository.otaBusy.value) return BleRelaySendResult.Failed
+        val key = id.trim().lowercase()
+        if (key.isEmpty()) return BleRelaySendResult.NoRelay
+        val bit = bleRelayChannelBit
+        val cur = EspCompanionRepository.bleRelayMask(key)
+        val next = if (on) cur or bit else cur and bit.inv()
+        return awaitRelayDevAck(EspCompanionProtocol.encodeRelayDevSet(key, next, 0))
+    }
+
+    suspend fun pulseBleRelayAwait(id: String, durationMs: Long): BleRelaySendResult {
+        if (EspCompanionRepository.otaBusy.value) return BleRelaySendResult.Failed
+        val key = id.trim().lowercase()
+        if (key.isEmpty()) return BleRelaySendResult.NoRelay
+        val pulse = durationMs.coerceIn(30L, 65_535L).toInt()
+        return awaitRelayDevAck(EspCompanionProtocol.encodeRelayDevSet(key, 1, pulse))
+    }
+
+    private suspend fun awaitRelayDevAck(line: String): BleRelaySendResult {
+        val waiter = CompletableDeferred<EspMessage.BleAck>()
+        relayDevAckWaiter.getAndSet(waiter)?.cancel()
+        writeLine(line)
+        val ack = withTimeoutOrNull(1_500L) { waiter.await() } ?: return BleRelaySendResult.Offline
+        return when {
+            ack.ok -> BleRelaySendResult.Queued
+            ack.err == "offline" -> BleRelaySendResult.Offline
+            ack.err == "no relay" || ack.err == "missing id" || ack.err == "bad id" ->
+                BleRelaySendResult.NoRelay
+            else -> BleRelaySendResult.Failed
+        }
     }
 
     fun pulseBleRelay(idOrIndex: Any, durationMs: Long = EspRelayWidgetMode.BUTTON_PULSE_MS) {
@@ -977,6 +1041,20 @@ class EspCompanionManager(
             EspCompanionRepository.finishOta(err)
             return Result.failure(IllegalStateException(err))
         }
+        if (um980BridgeActive) endUm980Bridge()
+        val savedCanLight = canLightRefCount.get()
+        if (canLightBridgeOn || savedCanLight > 0) {
+            canLightRefCount.set(0)
+            val waiter = CompletableDeferred<EspMessage.CanAck>()
+            canLightAckWaiter.set(waiter)
+            canLightBridgeOn = false
+            sess.setBridgeMode(false)
+            writeLine(EspCompanionProtocol.encodeCanLightEnd())
+            withTimeoutOrNull(2_000L) { waiter.await() }
+            canLightAckWaiter.compareAndSet(waiter, null)
+            canLightDecoder.reset()
+            EspCompanionRepository.updateCanLightActive(false)
+        }
         val channel = Channel<EspMessage>(Channel.BUFFERED)
         otaInbox.set(channel)
         EspCompanionRepository.beginOta()
@@ -1014,6 +1092,11 @@ class EspCompanionManager(
                     it is EspMessage.OtaAck && it.phase == "begin"
                 } as EspMessage.OtaAck
             } catch (e: TimeoutCancellationException) {
+                val fw = EspCompanionRepository.deviceInfo.value.firmwareVersion
+                if (!EspCompanionProtocol.firmwareAllowsBlindOta(fw)) {
+                    traceOta("no begin ack, abort")
+                    throw IllegalStateException("begin_ack")
+                }
                 traceOta("no begin ack, writing image")
                 null
             }
@@ -1030,7 +1113,13 @@ class EspCompanionManager(
             while (offset < image.size) {
                 val end = minOf(offset + OTA_CHUNK, image.size)
                 val chunk = image.copyOfRange(offset, end)
-                val frame = EspCompanionProtocol.encodeOtaChunkFrame(chunk)
+                val otaMagic = EspCompanionProtocol.firmwareAtLeast(
+                    EspCompanionRepository.deviceInfo.value.firmwareVersion,
+                    0,
+                    14,
+                    0,
+                )
+                val frame = EspCompanionProtocol.encodeOtaChunkFrame(chunk, otaFraming = otaMagic)
                 if (!sess.writeBytes(frame, ota = true)) {
                     throw IllegalStateException("no_usb")
                 }
@@ -1105,6 +1194,10 @@ class EspCompanionManager(
             sess.endCriticalIo()
             otaInbox.set(null)
             channel.close()
+            if (savedCanLight > 0) {
+                canLightRefCount.set(savedCanLight)
+                syncCanLightBridge()
+            }
         }
     }
 
@@ -1209,6 +1302,9 @@ class EspCompanionManager(
                     )
                 )
                 sendRememberedApCfg()
+                desiredWiredMask?.let { mask ->
+                    writeLine(EspCompanionProtocol.encodeRelaySet(mask))
+                }
                 EspCompanionRepository.updateHeartbeat(0L)
                 EspCompanionRepository.updateConnected(true)
                 EspCompanionRepository.updateLastError(null)
@@ -1287,6 +1383,7 @@ class EspCompanionManager(
                         }
                     }
                     "lightEnd" -> {
+                        canLightAckWaiter.getAndSet(null)?.complete(msg)
                         if (canLightRefCount.get() <= 0) {
                             EspCompanionRepository.updateCanLightActive(false)
                         }
@@ -1383,22 +1480,33 @@ class EspCompanionManager(
                     keyed = msg.keyed,
                     relays = msg.relays,
                 )
-                // A board that never reported 0x31 still shows its bleStatus mask.
-                for (relay in msg.relays) {
-                    if (relay.mask != 0 && !EspCompanionRepository.bleRelayMasks.value.containsKey(relay.id)) {
-                        EspCompanionRepository.applyRelayDev(relay.id, relay.mask, 0, 0)
-                    }
-                }
             }
             is EspMessage.PhonePair -> {
-                Log.i(TAG, "phonePair id=${msg.id} name=${msg.name}")
+                Log.i(TAG, "phonePair id=${msg.id} kind=${msg.kind} rssi=${msg.rssi}")
                 EspCompanionRepository.setPendingPhone(
-                    EspPhoneDevice(id = msg.id, name = msg.name.ifBlank { msg.id }),
+                    EspPhoneDevice(
+                        id = msg.id,
+                        name = msg.name.ifBlank { msg.id },
+                        kind = msg.kind,
+                        rssi = msg.rssi,
+                    ),
                 )
             }
             is EspMessage.PhoneCmd -> {
-                Log.i(TAG, "phoneCmd id=${msg.id} op=${msg.op} seat=${msg.seat} arg=${msg.arg}")
-                EspCompanionRepository.emitPhoneCommand(msg.op, msg.seat, msg.arg)
+                val phone = EspCompanionRepository.phones.value.any { it.id == msg.id }
+                val relay = EspCompanionRepository.bleRelays.value.any { it.id == msg.id }
+                if (!phone || relay) {
+                    Log.w(TAG, "drop phoneCmd id=${msg.id}")
+                } else {
+                    Log.i(TAG, "phoneCmd id=${msg.id} op=${msg.op} seat=${msg.seat} arg=${msg.arg}")
+                    EspCompanionRepository.emitPhoneCommand(msg.op, msg.seat, msg.arg)
+                }
+            }
+            is EspMessage.UnsupportedProtocol -> {
+                Log.w(TAG, "unsupported companion protocol v=${msg.version}")
+                EspCompanionRepository.updateLastError(
+                    context.getString(R.string.esp_protocol_unsupported, msg.version),
+                )
             }
             is EspMessage.PhoneSnapReq -> {
                 EspCompanionRepository.emitPhoneSnapReq()
@@ -1427,7 +1535,15 @@ class EspCompanionManager(
                 Log.i(TAG, "apStatus on=${msg.on} sta=${msg.sta} ip=${msg.ip} freq=${msg.freqMhz}")
             }
             is EspMessage.BleAck -> {
+                if (msg.phase == "relayDevSet") {
+                    relayDevAckWaiter.getAndSet(null)?.complete(msg)
+                }
                 when (msg.phase) {
+                    "relayDevSet" -> {
+                        if (!msg.ok) {
+                            Log.w(TAG, "relayDevSet err=${msg.err}")
+                        }
+                    }
                     "learnBegin" -> {
                         if (msg.ok) EspCompanionRepository.setBleLearnActive(true)
                         else {
@@ -1481,8 +1597,9 @@ class EspCompanionManager(
             else -> {
                 val text = rawLine.trim()
                 if (text.isEmpty()) return
-                EspCompanionRepository.appendCompanionTrafficLog(CompanionLogDirection.RX, text)
-                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
+                val safe = EspCompanionProtocol.redactSecrets(text)
+                EspCompanionRepository.appendCompanionTrafficLog(CompanionLogDirection.RX, safe)
+                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, safe)
             }
         }
     }
@@ -1573,4 +1690,12 @@ class EspCompanionManager(
         if (locationSource.value != LocationSource.TBOX) return
         // Mock pushes are owned by MockLocationJob.
     }
+}
+
+/** Result of a relayDevSet that waited for the companion ack. */
+enum class BleRelaySendResult {
+    Queued,
+    Offline,
+    NoRelay,
+    Failed,
 }

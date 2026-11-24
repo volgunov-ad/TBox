@@ -425,6 +425,35 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
     }
 }
 
+/* Parsed on the main loop. The NimBLE host task only copies the advert. */
+#define BTHOME_Q 8
+#define BTHOME_SVC_MAX 29
+typedef struct {
+    uint8_t addr[6];
+    int8_t rssi;
+    uint8_t svc[BTHOME_SVC_MAX];
+    uint8_t svc_len;
+} bthome_ev_t;
+static bthome_ev_t s_bthome_q[BTHOME_Q];
+static int s_bthome_w;
+static int s_bthome_r;
+
+static void enqueue_bthome(const uint8_t *addr, int8_t rssi, const uint8_t *svc, uint8_t svc_len)
+{
+    if (!addr || !svc || svc_len == 0 || svc_len > BTHOME_SVC_MAX) return;
+    ble_radio_lock();
+    int next = (s_bthome_w + 1) % BTHOME_Q;
+    if (next != s_bthome_r) {
+        bthome_ev_t *ev = &s_bthome_q[s_bthome_w];
+        memcpy(ev->addr, addr, 6);
+        ev->rssi = rssi;
+        memcpy(ev->svc, svc, svc_len);
+        ev->svc_len = svc_len;
+        s_bthome_w = next;
+    }
+    ble_radio_unlock();
+}
+
 int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
@@ -445,7 +474,7 @@ int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
             if (ad_type == 0x16 && ad_dlen >= 3) {
                 uint16_t uuid = (uint16_t)ad_data[0] | ((uint16_t)ad_data[1] << 8);
                 if (uuid == BTHOME_UUID16) {
-                    handle_bthome_adv(addr, disc->rssi, ad_data + 2, ad_dlen - 2);
+                    enqueue_bthome(addr, disc->rssi, ad_data + 2, (uint8_t)(ad_dlen - 2));
                 }
             }
             i += 1 + ad_len;
@@ -744,6 +773,18 @@ void ble_btn_last_mac(char out[18])
 
 void ble_btn_poll(uint32_t now_ms)
 {
+    for (;;) {
+        bthome_ev_t ev;
+        ble_radio_lock();
+        if (s_bthome_r == s_bthome_w) {
+            ble_radio_unlock();
+            break;
+        }
+        ev = s_bthome_q[s_bthome_r];
+        s_bthome_r = (s_bthome_r + 1) % BTHOME_Q;
+        ble_radio_unlock();
+        handle_bthome_adv(ev.addr, ev.rssi, ev.svc, ev.svc_len);
+    }
     if (s_learn && (int32_t)(now_ms - s_learn_deadline_ms) >= 0) {
         ble_btn_learn_end();
         protocol_send_ble_ack("learnEnd", false, "timeout");

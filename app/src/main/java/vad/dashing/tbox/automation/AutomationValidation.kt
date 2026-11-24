@@ -719,11 +719,23 @@ object AutomationValidator {
             AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE,
             AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE,
             AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
-            -> if (action.intValue !in 0..1) {
-                issues += AutomationValidationIssue(
-                    "$path.intValue",
-                    ruEn("Недопустимый индекс BLE-реле (0 или 1)", "Invalid BLE relay index (0 or 1)"),
-                )
+            -> {
+                if (action.intValue !in 0..1) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        ruEn("Недопустимый индекс BLE-реле (0 или 1)", "Invalid BLE relay index (0 or 1)"),
+                    )
+                }
+                val raw = action.stringValue.trim()
+                val id = EspBleRelayActionEncoding.idOf(action)
+                val pulse = action.type == AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE
+                val idOk = raw.isEmpty() || id.isNotEmpty() || (pulse && raw.toLongOrNull() != null)
+                if (!idOk) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        ruEn("Id BLE-реле — 8 hex-символов", "BLE relay id is 8 hex characters"),
+                    )
+                }
             }
 
             AutomationBuiltinActionType.ESP_RELAY_SET ->

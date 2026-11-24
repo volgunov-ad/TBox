@@ -1225,8 +1225,16 @@
     <string name="esp_phone_pair">Подключить телефон или реле</string>
     <string name="esp_phone_pair_cancel">Закрыть окно</string>
     <string name="esp_phone_pairing">Окно сопряжения открыто</string>
-    <string name="esp_phone_pair_hint">Сопрягите телефон (кнопка «Подключить» в приложении телефона) или реле на ESP32 — плата подключится сама, пока окно открыто. Ключ остаётся на компаньоне.</string>
+    <string name="esp_phone_pair_hint">Сопрягите телефон (кнопка «Подключить» в приложении телефона) или реле на ESP32 — плата подключится сама, пока окно открыто. Ключ создаётся на устройстве и передаётся открытым текстом. Отдельного окна для реле нет.</string>
     <string name="esp_phone_allow_title">Разрешить «%1$s»?</string>
+    <string name="esp_phone_allow_detail">%1$s, id %2$s</string>
+    <string name="esp_phone_kind_phone">Телефон</string>
+    <string name="esp_phone_kind_relay">Реле</string>
+    <string name="esp_ble_relay_forget_title">Забыть реле?</string>
+    <string name="esp_ble_relay_forget_message">Сначала реле будет разомкнуто. Чтобы сопрячь его снова, удерживайте кнопку на плате 5 секунд.</string>
+    <string name="esp_ble_relay_missing">Реле не найдено</string>
+    <string name="esp_ble_relay_unknown">Нет данных</string>
+    <string name="esp_protocol_unsupported">Прошивка компаньона говорит на протоколе v%1$d, приложение ждёт v1</string>
     <string name="esp_phone_allow_yes">Да</string>
     <string name="esp_phone_allow_no">Нет</string>
     <string name="esp_phone_devices">Телефоны и реле</string>

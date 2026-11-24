@@ -4,6 +4,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 #include "freertos/task.h"
 #include "host/ble_gap.h"
 #include "host/ble_gatt.h"
@@ -23,9 +24,13 @@
 #define CMD_TYPE 0x30
 #define STATE_TYPE 0x31
 #define PAIR_RETRY_MS 1000u
+#define PAIR_ATTEMPT_MAX 5
 #define BACKOFF_MIN_MS 3000u
 #define BACKOFF_MAX_MS 10000u
+#define PAIR_BLOCK_MS 60000u
+#define DISC_TIMEOUT_MS 8000u
 #define PAIR_NAME_MAX 26
+#define CMD_Q 4
 
 static const char *TAG = "relay_ble";
 
@@ -50,6 +55,18 @@ static uint16_t s_pair_len;
 static uint32_t s_next_pair_ms;
 static uint32_t s_next_state_ms;
 static uint32_t s_backoff_until_ms;
+static uint32_t s_conn_ms;
+static uint32_t s_subscribed_ms;
+static uint32_t s_last_sealed_ms;
+static int s_pair_attempts;
+static bool s_adv_learn;
+static bool s_seen_peer_valid;
+static uint8_t s_seen_peer_type;
+static uint8_t s_seen_peer[6];
+static uint8_t s_cmd_q[CMD_Q][RELAY_PKT_LEN];
+static int s_cmd_q_w;
+static int s_cmd_q_r;
+static portMUX_TYPE s_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static uint32_t now_ms(void)
 {
@@ -89,6 +106,7 @@ static int write_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
     (void)arg;
     if (error->status != 0) {
         ESP_LOGW(TAG, "write status=%d", error->status);
+        s_state_pending = true;
     }
     return 0;
 }
@@ -97,6 +115,7 @@ static void send_state(void)
 {
     uint8_t body[RELAY_BODY_LEN];
     uint8_t pkt[RELAY_PKT_LEN];
+    relay_state_lock();
     memset(body, 0, sizeof(body));
     body[0] = relay_logic_mask();
     body[1] = (uint8_t)((s_cmd_echo ? 0x01 : 0) |
@@ -108,38 +127,28 @@ static void send_state(void)
     body[4] = s_gen_echo;
     relay_crypt_seal(relay_store_key(), STATE_TYPE, relay_store_id(),
                      relay_store_next_tx(), body, pkt);
+    s_cmd_echo = false;
+    relay_state_unlock();
     int rc = ble_gattc_write_flat(s_conn, s_chr_write, pkt, RELAY_PKT_LEN, write_cb, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "state rc=%d", rc);
+        s_state_pending = true;
+        return;
     }
-    s_cmd_echo = false;
+    s_state_pending = false;
 }
 
-/** Host task context (GATT callback): touch RAM flags only, writes go via relay_task. */
+/** Host task: copy the notify. The main loop unseals and touches NVS. */
 static void on_notify(const uint8_t *pkt, uint16_t len)
 {
     if (len != RELAY_PKT_LEN) return;
-    uint8_t type = 0;
-    uint32_t counter = 0;
-    uint8_t body[RELAY_BODY_LEN];
-    if (!relay_crypt_unseal(relay_store_key(), pkt, len, &type, &counter, body)) return;
-    if (type != CMD_TYPE) return;
-    if (!relay_store_rx_accept(counter)) return;
-    relay_store_commit_rx(counter);
-    if (!relay_store_paired()) {
-        /* The first valid 0x30 proves the companion saved the record. */
-        relay_store_set_paired();
-        ESP_LOGI(TAG, "paired (latched)");
+    portENTER_CRITICAL(&s_cmd_mux);
+    int next = (s_cmd_q_w + 1) % CMD_Q;
+    if (next != s_cmd_q_r) {
+        memcpy(s_cmd_q[s_cmd_q_w], pkt, RELAY_PKT_LEN);
+        s_cmd_q_w = next;
     }
-    uint8_t chan = body[0] & 0x01;
-    uint16_t pulse_ms = (uint16_t)(body[2] | ((uint16_t)body[3] << 8));
-    uint8_t states = chan ? (body[1] & 0x01) : relay_logic_mask();
-    uint8_t actual = relay_logic_apply(states, chan ? pulse_ms : 0);
-    s_gen_echo = body[4];
-    s_cmd_echo = true;
-    s_state_pending = true;
-    ESP_LOGI(TAG, "cmd counter=%lu chan=%d states=%d pulse=%u mask=%d",
-             (unsigned long)counter, chan, states, pulse_ms, actual);
+    portEXIT_CRITICAL(&s_cmd_mux);
 }
 
 static int svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
@@ -194,7 +203,8 @@ static int cccd_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
     if (error->status == 0) {
         s_subscribed = true;
         s_state_pending = true;
-        s_next_state_ms = now_ms();
+        s_subscribed_ms = now_ms();
+        s_next_state_ms = s_subscribed_ms;
     } else {
         ESP_LOGW(TAG, "cccd status=%d", error->status);
     }
@@ -229,6 +239,20 @@ static int conn_gap_cb(struct ble_gap_event *event, void *arg)
         s_chr_write = 0;
         s_chr_notify = 0;
         s_next_pair_ms = 0;
+        s_conn_ms = now_ms();
+        s_subscribed_ms = 0;
+        s_last_sealed_ms = 0;
+        s_pair_attempts = 0;
+        s_seen_peer_valid = false;
+        {
+            struct ble_gap_conn_desc desc;
+            memset(&desc, 0, sizeof(desc));
+            if (ble_gap_conn_find(s_conn, &desc) == 0) {
+                s_seen_peer_type = desc.peer_id_addr.type;
+                memcpy(s_seen_peer, desc.peer_id_addr.val, 6);
+                s_seen_peer_valid = true;
+            }
+        }
         ESP_LOGI(TAG, "connected");
         ble_gattc_exchange_mtu(s_conn, mtu_cb, NULL);
         return 0;
@@ -256,6 +280,24 @@ static int conn_gap_cb(struct ble_gap_event *event, void *arg)
     }
 }
 
+static bool adv_is_companion(const struct ble_hs_adv_fields *fields, bool *learn_out)
+{
+    bool match = false;
+    if (fields->name_len >= 4 && memcmp(fields->name, "TBox", 4) == 0) match = true;
+    for (int i = 0; i < fields->num_uuids16; i++) {
+        if (fields->uuids16[i].value == SVC_UUID) match = true;
+    }
+    if (!match) return false;
+    bool learn = false;
+    /* Companion manufacturer payload: company 0xFFFF, bit0 = learn window. */
+    if (fields->mfg_data_len >= 3 &&
+        fields->mfg_data[0] == 0xFF && fields->mfg_data[1] == 0xFF) {
+        learn = (fields->mfg_data[2] & 0x01) != 0;
+    }
+    if (learn_out) *learn_out = learn;
+    return true;
+}
+
 static int disc_gap_cb(struct ble_gap_event *event, void *arg)
 {
     switch (event->type) {
@@ -266,12 +308,17 @@ static int disc_gap_cb(struct ble_gap_event *event, void *arg)
                                     event->disc.length_data) != 0) {
             return 0;
         }
-        bool match = false;
-        if (fields.name_len >= 4 && memcmp(fields.name, "TBox", 4) == 0) match = true;
-        for (int i = 0; i < fields.num_uuids16; i++) {
-            if (fields.uuids16[i].value == SVC_UUID) match = true;
+        bool learn = false;
+        if (!adv_is_companion(&fields, &learn)) return 0;
+        if (!relay_store_key_ok()) return 0;
+        bool paired = relay_store_paired();
+        /* Unpaired boards send the key only while the companion learn window is open. */
+        if (!paired && !learn) return 0;
+        if (paired && relay_store_has_peer() &&
+            !relay_store_peer_match(event->disc.addr.type, event->disc.addr.val)) {
+            return 0;
         }
-        if (!match) return 0;
+        s_adv_learn = learn;
         ble_gap_disc_cancel();
         int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 0, NULL,
                                  conn_gap_cb, NULL);
@@ -309,6 +356,10 @@ static void relay_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     for (;;) {
+        if (!relay_store_key_ok()) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
         if (s_conn == BLE_HS_CONN_HANDLE_NONE) {
             if ((int32_t)(now_ms() - s_backoff_until_ms) < 0) {
                 vTaskDelay(pdMS_TO_TICKS(200));
@@ -319,15 +370,42 @@ static void relay_task(void *arg)
             continue;
         }
         uint32_t now = now_ms();
+        if (!s_subscribed && s_conn_ms != 0 &&
+            (uint32_t)(now - s_conn_ms) > DISC_TIMEOUT_MS) {
+            ESP_LOGW(TAG, "discovery timeout");
+            ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
         if (s_subscribed) {
-            if (!relay_store_paired() && s_mtu >= (uint16_t)(s_pair_len + 3)) {
+            bool paired = relay_store_paired();
+            if (!paired && !s_adv_learn) {
+                ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                continue;
+            }
+            if (!paired && s_adv_learn && s_pair_attempts < PAIR_ATTEMPT_MAX &&
+                s_mtu >= (uint16_t)(s_pair_len + 3)) {
                 if ((int32_t)(now - s_next_pair_ms) >= 0) {
                     int rc = ble_gattc_write_flat(s_conn, s_chr_write,
                                                   s_pair_pkt, s_pair_len,
                                                   write_cb, NULL);
                     if (rc != 0) ESP_LOGW(TAG, "pair rc=%d", rc);
+                    s_pair_attempts++;
                     s_next_pair_ms = now + PAIR_RETRY_MS;
+                    if (s_pair_attempts >= PAIR_ATTEMPT_MAX) {
+                        s_backoff_until_ms = now + PAIR_BLOCK_MS;
+                    }
                 }
+            }
+            uint32_t sealed_limit =
+                (uint32_t)CONFIG_RELAY_KEEPALIVE_S * 1000u * 2u;
+            uint32_t since = s_last_sealed_ms != 0 ? s_last_sealed_ms : s_subscribed_ms;
+            if (since != 0 && (uint32_t)(now - since) > sealed_limit) {
+                ESP_LOGW(TAG, "no sealed traffic");
+                ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                continue;
             }
             if (s_mtu >= (uint16_t)(RELAY_PKT_LEN + 3)) {
                 bool send = s_state_pending;
@@ -336,7 +414,6 @@ static void relay_task(void *arg)
                     send = true;
                 }
                 if (send) {
-                    s_state_pending = false;
                     send_state();
                     uint32_t jitter = esp_random() % 4001u; /* +-2 s dephase */
                     s_next_state_ms = now +
@@ -384,4 +461,58 @@ void relay_ble_kick_state(void)
 bool relay_ble_online(void)
 {
     return s_conn != BLE_HS_CONN_HANDLE_NONE && s_subscribed;
+}
+
+bool relay_ble_take_cmd(uint8_t pkt[24])
+{
+    bool got = false;
+    portENTER_CRITICAL(&s_cmd_mux);
+    if (s_cmd_q_r != s_cmd_q_w) {
+        memcpy(pkt, s_cmd_q[s_cmd_q_r], RELAY_PKT_LEN);
+        s_cmd_q_r = (s_cmd_q_r + 1) % CMD_Q;
+        got = true;
+    }
+    portEXIT_CRITICAL(&s_cmd_mux);
+    return got;
+}
+
+void relay_ble_handle_cmd(const uint8_t pkt[24])
+{
+    uint8_t type = 0;
+    uint32_t counter = 0;
+    uint8_t body[RELAY_BODY_LEN];
+    relay_state_lock();
+    if (!relay_crypt_unseal(relay_store_key(), pkt, RELAY_PKT_LEN, &type, &counter, body) ||
+        type != CMD_TYPE || !relay_store_rx_accept(counter)) {
+        relay_state_unlock();
+        return;
+    }
+    relay_store_commit_rx(counter);
+    s_last_sealed_ms = now_ms();
+    if (!relay_store_paired()) {
+        relay_store_set_paired();
+        ESP_LOGI(TAG, "paired (latched)");
+    }
+    if (s_seen_peer_valid) {
+        relay_store_set_peer(s_seen_peer_type, s_seen_peer);
+    }
+    /* Channel bit 0 clear must not cancel a running pulse. */
+    if ((body[0] & 0x01) != 0) {
+        uint16_t pulse_ms = (uint16_t)(body[2] | ((uint16_t)body[3] << 8));
+        uint8_t actual = relay_logic_apply(body[1] & 0x01, pulse_ms);
+        s_gen_echo = body[4];
+        s_cmd_echo = true;
+        s_state_pending = true;
+        ESP_LOGI(TAG, "cmd counter=%lu states=%d pulse=%u mask=%d",
+                 (unsigned long)counter, body[1] & 1, pulse_ms, actual);
+    }
+    relay_state_unlock();
+}
+
+bool relay_ble_connected_peer(uint8_t *addr_type, uint8_t addr[6])
+{
+    if (!s_seen_peer_valid || !addr_type || !addr) return false;
+    *addr_type = s_seen_peer_type;
+    memcpy(addr, s_seen_peer, 6);
+    return true;
 }

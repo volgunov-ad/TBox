@@ -144,7 +144,7 @@ internal fun espRelayMaskMapBitFlow(
         if (!connected) return@combine AutomationSignalValue.Unavailable
         val id = relays.getOrNull(index)?.id
             ?: return@combine AutomationSignalValue.Unavailable
-        val value = maskMap[id] ?: 0
+        val value = maskMap[id] ?: return@combine AutomationSignalValue.Unavailable
         AutomationSignalValue.State(if ((value and 1) != 0) "on" else "off")
     }
 

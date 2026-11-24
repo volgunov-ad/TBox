@@ -129,15 +129,37 @@ void app_main(void)
     ble_init();
 
     uint32_t hold_start = 0;
-    bool state_sent = false;
+#if CONFIG_RELAY_OPEN_ON_LINK_LOSS
+    uint32_t offline_since = 0;
+#endif
     for (;;) {
+        uint8_t cmd[24];
+        while (relay_ble_take_cmd(cmd)) {
+            relay_ble_handle_cmd(cmd);
+        }
+        relay_state_lock();
+        bool was_pulse = relay_logic_pulse_active();
         relay_logic_poll();
+        bool now_pulse = relay_logic_pulse_active();
         relay_store_tick();
-        if (relay_logic_pulse_active() && !state_sent) {
-            state_sent = true;
+#if CONFIG_RELAY_OPEN_ON_LINK_LOSS
+        if (relay_ble_online()) {
+            offline_since = 0;
+        } else if ((relay_logic_mask() & 0x01) && !now_pulse) {
+            uint32_t t = now_ms();
+            if (offline_since == 0) offline_since = t ? t : 1;
+            uint32_t limit = (uint32_t)CONFIG_RELAY_KEEPALIVE_S * 1000u *
+                             (uint32_t)CONFIG_RELAY_LINK_LOSS_MISSES;
+            if ((uint32_t)(t - offline_since) >= limit) {
+                relay_logic_apply(0, 0);
+                offline_since = t;
+            }
+        }
+#endif
+        relay_state_unlock();
+        if (was_pulse != now_pulse) {
             relay_ble_kick_state();
         }
-        if (!relay_logic_pulse_active()) state_sent = false;
         relay_led_mode_t led = RELAY_LED_ON;
         if (reset_held()) {
             if (hold_start == 0) hold_start = now_ms();

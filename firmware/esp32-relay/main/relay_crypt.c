@@ -120,7 +120,9 @@ bool relay_crypt_unseal(const uint8_t key[16], const uint8_t *pkt, size_t len,
     make_nonce(type, id, counter, nonce);
     aes_ctr_xor(key, nonce, pkt + 9, body, RELAY_BODY_LEN);
     make_tag(key, type, id, counter, body, tag);
-    if (memcmp(tag, pkt + 9 + RELAY_BODY_LEN, 4) != 0) return false;
+    uint8_t diff = 0;
+    for (int i = 0; i < 4; i++) diff |= (uint8_t)(tag[i] ^ pkt[9 + RELAY_BODY_LEN + i]);
+    if (diff != 0) return false;
     *type_out = type;
     *counter_out = counter;
     return true;

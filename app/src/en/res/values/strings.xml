@@ -1217,8 +1217,16 @@
     <string name="esp_phone_pair">Connect phone or relay</string>
     <string name="esp_phone_pair_cancel">Close window</string>
     <string name="esp_phone_pairing">Pairing window is open</string>
-    <string name="esp_phone_pair_hint">Pair the phone (tap Connect in the phone app) or an ESP32 relay board — the board connects on its own while the window is open. The key stays on the companion.</string>
+    <string name="esp_phone_pair_hint">Pair the phone (tap Connect in the phone app) or an ESP32 relay board — the board connects on its own while the window is open. The key is generated on the device and sent in cleartext. Phones and relays share this window.</string>
     <string name="esp_phone_allow_title">Allow “%1$s”?</string>
+    <string name="esp_phone_allow_detail">%1$s, id %2$s</string>
+    <string name="esp_phone_kind_phone">Phone</string>
+    <string name="esp_phone_kind_relay">Relay</string>
+    <string name="esp_ble_relay_forget_title">Forget this relay?</string>
+    <string name="esp_ble_relay_forget_message">The relay is opened first. To pair it again, hold the button on the board for 5 seconds.</string>
+    <string name="esp_ble_relay_missing">Relay missing</string>
+    <string name="esp_ble_relay_unknown">No data</string>
+    <string name="esp_protocol_unsupported">Companion firmware speaks protocol v%1$d; this app expects v1</string>
     <string name="esp_phone_allow_yes">Yes</string>
     <string name="esp_phone_allow_no">No</string>
     <string name="esp_phone_devices">Phones and relays</string>

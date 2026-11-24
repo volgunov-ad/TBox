@@ -4,16 +4,21 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.13.2"
+#define ESP_COMPANION_FW_VERSION "0.14.0"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
 #define ESP_COMPANION_DEFAULT_UM980_BAUD 115200
 #define ESP_COMPANION_BLE_MAX_MACS 20
 
-/** OTA / light-bridge binary frame: 0xA5 0x5A | u16be len | payload | u32be crc32(payload) */
+/**
+ * Binary frame: 0xA5 | magic1 | u16be len | payload | u32be crc32(payload).
+ * CAN-light and the UM980 bridge keep magic1 0x5A. OTA on 0.14+ uses 0x5B so a
+ * failed begin cannot be decoded as frames on the vehicle CAN bus.
+ */
 #define OTA_FRAME_MAGIC0 0xA5
 #define OTA_FRAME_MAGIC1 0x5A
+#define OTA_FRAME_MAGIC_OTA 0x5B
 #define OTA_FRAME_MAX_PAYLOAD 1024
 
 /** Compact CAN frame in light mode (device↔host payload record). */
@@ -76,8 +81,8 @@ void protocol_send_ble_status(void);
 void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms);
 void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
 
-/** Phone companion. USB carries id and name, never the key. */
-void protocol_send_phone_pair(const char *id_hex, const char *name);
+/** Phone companion. USB carries id, name and kind, never the key. kind 1 = relay. */
+void protocol_send_phone_pair(const char *id_hex, const char *name, int kind, int rssi);
 void protocol_send_phone_cmd(const char *id_hex, int op, int seat, int arg);
 void protocol_send_phone_snap_req(void);
 
@@ -91,6 +96,12 @@ void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *ps
 
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);
+/** True only during the blocking flash erase inside otaBegin. */
+bool protocol_ota_erasing(void);
+/** Drop a stalled OTA or bridge session. Call from the main loop. */
+void protocol_poll(uint32_t now_ms);
+/** CDC DTR dropped: leave binary modes. Ignored when DTR was never high. */
+void protocol_on_cdc_line(bool dtr);
 
 /** Set after successful otaEnd ACK — main loop reboots (not from CDC RX). */
 bool protocol_ota_restart_pending(void);
@@ -98,7 +109,8 @@ bool protocol_ota_restart_pending(void);
 /** Current UART baud for hello (set by main before send). */
 void protocol_set_um980_baud_for_hello(int baud);
 
-typedef void (*protocol_relay_set_cb_t)(uint8_t mask);
+/** pulse_ms == 0 latches mask. pulse_ms > 0 pulses the bits set in mask. */
+typedef void (*protocol_relay_set_cb_t)(uint8_t mask, uint16_t pulse_ms);
 typedef void (*protocol_um980_cmd_cb_t)(const char *cmd);
 typedef void (*protocol_um980_baud_cb_t)(int baud);
 typedef void (*protocol_reboot_cb_t)(void);

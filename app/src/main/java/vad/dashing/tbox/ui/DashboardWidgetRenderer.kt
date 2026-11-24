@@ -2456,6 +2456,7 @@ fun DashboardWidgetRenderer(
         "espBleRelay0", "espBleRelay1" -> {
             val context = androidx.compose.ui.platform.LocalContext.current
             val index = if (widget.dataKey == "espBleRelay0") 0 else 1
+            val relayId = widgetConfig.espBleRelayId.trim().lowercase()
             val relayMode = widgetConfig.espRelayMode
             fun startRelayToggle() {
                 context.startService(
@@ -2465,6 +2466,12 @@ fun DashboardWidgetRenderer(
                             vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
                             index,
                         )
+                        if (relayId.isNotEmpty()) {
+                            putExtra(
+                                vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_ID,
+                                relayId,
+                            )
+                        }
                     }
                 )
             }
@@ -2476,6 +2483,12 @@ fun DashboardWidgetRenderer(
                             vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
                             index,
                         )
+                        if (relayId.isNotEmpty()) {
+                            putExtra(
+                                vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_ID,
+                                relayId,
+                            )
+                        }
                         putExtra(
                             vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
                             EspRelayWidgetMode.BUTTON_PULSE_MS,
@@ -2510,7 +2523,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
-                textColor = widgetTextColor
+                textColor = widgetTextColor,
+                valueKey = if (relayId.isNotEmpty()) "espBleRelayId:$relayId" else widget.dataKey,
             )
         }
 

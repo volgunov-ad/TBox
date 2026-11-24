@@ -58,6 +58,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.esp.BLE_RELAY_ONLINE_MS
 import vad.dashing.tbox.esp.CompanionProtocolLogRecorder
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -111,11 +112,15 @@ private fun CompanionHelperText(text: String) {
 @Composable
 private fun EspBleRelayRow(
     relay: EspRelayDevice,
-    mask: Int,
+    mask: Int?,
+    online: Boolean,
     enabled: Boolean,
+    onForget: () -> Unit,
 ) {
     val context = LocalContext.current
-    val closed = (mask and 1) != 0
+    val known = mask != null
+    val closed = known && (mask and 1) != 0
+    val controls = enabled && online && known
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -127,7 +132,7 @@ private fun EspBleRelayRow(
             modifier = Modifier
                 .size(8.dp)
                 .background(
-                    color = if (relay.online) {
+                    color = if (online) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.outline
@@ -160,7 +165,7 @@ private fun EspBleRelayRow(
                     },
                 )
             },
-            enabled = enabled,
+            enabled = controls,
         ) {
             Text(
                 text = stringResource(R.string.esp_ble_relay_pulse),
@@ -178,12 +183,25 @@ private fun EspBleRelayRow(
                     },
                 )
             },
-            enabled = enabled,
+            enabled = controls,
         ) {
             Text(
                 text = stringResource(
-                    if (closed) R.string.esp_ble_relay_open else R.string.esp_ble_relay_close,
+                    when {
+                        !known -> R.string.esp_ble_relay_unknown
+                        closed -> R.string.esp_ble_relay_open
+                        else -> R.string.esp_ble_relay_close
+                    },
                 ),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        TextButton(
+            onClick = rememberWrappedOnClick { onForget() },
+            enabled = enabled,
+        ) {
+            Text(
+                text = stringResource(R.string.esp_ble_forget),
                 style = MaterialTheme.typography.tboxButton,
             )
         }
@@ -227,6 +245,7 @@ fun EspCompanionTabContent(
     val phones by EspCompanionRepository.phones.collectAsStateWithLifecycle()
     val bleRelays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
     val bleRelayMasks by EspCompanionRepository.bleRelayMasks.collectAsStateWithLifecycle()
+    val bleRelayOnline by EspCompanionRepository.bleRelayOnline.collectAsStateWithLifecycle()
     val phoneLearn by EspCompanionRepository.phoneLearnActive.collectAsStateWithLifecycle()
     val pendingPhone by EspCompanionRepository.pendingPhone.collectAsStateWithLifecycle()
     val bleDevices by EspCompanionRepository.bleDevices.collectAsStateWithLifecycle()
@@ -266,6 +285,7 @@ fun EspCompanionTabContent(
     var showUm980Settings by remember { mutableStateOf(false) }
     var showCanConsole by remember { mutableStateOf(false) }
     var showRebootConfirm by remember { mutableStateOf(false) }
+    var forgetRelay by remember { mutableStateOf<EspRelayDevice?>(null) }
     var pendingOtaFile by remember { mutableStateOf<File?>(null) }
     var pendingOtaDisplayName by remember { mutableStateOf("") }
 
@@ -703,10 +723,13 @@ fun EspCompanionTabContent(
                         )
                         if (info.bleRelay && bleRelays.isNotEmpty()) {
                             for (relay in bleRelays) {
+                                val seen = bleRelayOnline[relay.id] ?: 0L
                                 EspBleRelayRow(
                                     relay = relay,
-                                    mask = bleRelayMasks[relay.id] ?: relay.mask,
+                                    mask = bleRelayMasks[relay.id],
+                                    online = seen > 0L && nowMs - seen <= BLE_RELAY_ONLINE_MS,
                                     enabled = controlsEnabled,
+                                    onForget = { forgetRelay = relay },
                                 )
                             }
                         }
@@ -1006,6 +1029,18 @@ fun EspCompanionTabContent(
                 )
             },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_phone_allow_title, pending.name)) },
+            text = {
+                val kind = stringResource(
+                    if (pending.kind == "relay") {
+                        R.string.esp_phone_kind_relay
+                    } else {
+                        R.string.esp_phone_kind_phone
+                    },
+                )
+                AppAlertDialogText(
+                    stringResource(R.string.esp_phone_allow_detail, kind, pending.id),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = rememberWrappedOnClick {
@@ -1033,6 +1068,34 @@ fun EspCompanionTabContent(
                         )
                     },
                 ) {
+                    Text(stringResource(R.string.esp_phone_allow_no))
+                }
+            },
+        )
+    }
+
+    forgetRelay?.let { relay ->
+        AlertDialog(
+            onDismissRequest = { forgetRelay = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.esp_ble_relay_forget_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.esp_ble_relay_forget_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = rememberWrappedOnClick {
+                        forgetRelay = null
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_ESP_PHONE_FORGET
+                                putExtra(BackgroundService.EXTRA_ESP_PHONE_ID, relay.id)
+                            },
+                        )
+                    },
+                ) {
+                    Text(stringResource(R.string.esp_ble_forget))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { forgetRelay = null }) {
                     Text(stringResource(R.string.esp_phone_allow_no))
                 }
             },

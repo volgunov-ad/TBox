@@ -66,6 +66,30 @@ config RELAY_REBOOT_MARGIN
         jumps this far forward; stale packets from before the cut fail replay
         protection on the companion.
 
+config RELAY_MAX_ON_S
+    int "Max latched-on time in seconds (0 = unlimited)"
+    default 0
+    range 0 86400
+    help
+        A latched close opens itself after this many seconds. 0 keeps the
+        relay closed until an explicit open (the historical behaviour).
+        Whether a given load should time out is a product choice (TBOX-4);
+        the default does not change existing boards.
+
+config RELAY_OPEN_ON_LINK_LOSS
+    bool "Open the relay when the companion link stays down"
+    default n
+    help
+        After RELAY_LINK_LOSS_MISSES keepalive periods with no connection,
+        a latched relay opens. Off by default so a light or similar load
+        stays as the user left it when the companion reboots (TBOX-4).
+
+config RELAY_LINK_LOSS_MISSES
+    int "Missed keepalives before open-on-link-loss"
+    default 2
+    range 1 10
+    depends on RELAY_OPEN_ON_LINK_LOSS
+
 config RELAY_PROBE_GPIOS
     string "Probe mode candidates"
     default "4,13,14,25,26,27,32,33"

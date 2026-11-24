@@ -240,7 +240,9 @@ class EspCompanionProtocolTest {
     fun rejectBadLines() {
         assertNull(EspCompanionProtocol.parseLine(""))
         assertNull(EspCompanionProtocol.parseLine("not-json"))
-        assertNull(EspCompanionProtocol.parseLine("""{"v":2,"t":"hello"}"""))
+        val unsupported = EspCompanionProtocol.parseLine("""{"v":2,"t":"hello"}""")
+        assertTrue(unsupported is EspMessage.UnsupportedProtocol)
+        assertEquals(2, (unsupported as EspMessage.UnsupportedProtocol).version)
         assertNull(EspCompanionProtocol.parseLine("""{"v":1,"t":"unknown"}"""))
     }
 
@@ -580,5 +582,53 @@ class EspCompanionProtocolTest {
         val msg = parseReceived("\u0000\u00a5Z{\"v\":1,\"t\":\"otaAck\",\"phase\":\"begin\",\"ok\":true}\u0001\u0002")
         assertNotNull(msg)
         assertTrue(msg is EspMessage.OtaAck)
+    }
+
+    @Test
+    fun relayPulseAndOtaMagicStayDistinctFromBridge() {
+        val pulse = EspCompanionProtocol.encodeRelayPulse(1, 300)
+        assertTrue(pulse.contains("\"ch\":1"))
+        assertTrue(pulse.contains("\"pulseMs\":300"))
+        val payload = byteArrayOf(0xE9.toByte(), 0x01)
+        val ota = EspCompanionProtocol.encodeOtaChunkFrame(payload, otaFraming = true)
+        val bridge = EspCompanionProtocol.encodeBridgeChunkFrame(payload)
+        assertEquals(0x5B.toByte(), ota[1])
+        assertEquals(0x5A.toByte(), bridge[1])
+    }
+
+    @Test
+    fun phonesSkipRelayRecordsAndPairCarriesKind() {
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"phones":[""" +
+                """{"id":"0a1b2c3d","name":"Pixel"},{"id":"aabbccdd","name":"Board","r":1}],""" +
+                """"relays":[{"id":"aabbccdd","name":"Board"}]}""",
+        ) as EspMessage.BleStatus
+        assertEquals(listOf("0a1b2c3d"), status.phones.map { it.id })
+        assertEquals("aabbccdd", status.relays.single().id)
+        val pair = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"phonePair","id":"aabbccdd","name":"Board","kind":"relay","rssi":-40}""",
+        ) as EspMessage.PhonePair
+        assertEquals("relay", pair.kind)
+        assertEquals(-40, pair.rssi)
+    }
+
+    @Test
+    fun redactSecretsKeepsTheRestOfTheLine() {
+        val raw = """{"t":"apCfg","huPsk":"abcd1234","apPsk":"cabin","psk":"x"}"""
+        val safe = EspCompanionProtocol.redactSecrets(raw)
+        assertFalse(safe.contains("abcd1234"))
+        assertFalse(safe.contains("cabin"))
+        assertTrue(safe.contains("\"huPsk\":\"***\""))
+        assertTrue(safe.contains("\"t\":\"apCfg\""))
+    }
+
+    @Test
+    fun firmwareCompareGatesPulseAndBlindOta() {
+        assertTrue(EspCompanionProtocol.firmwareAtLeast("0.14.0", 0, 14, 0))
+        assertFalse(EspCompanionProtocol.firmwareAtLeast("0.13.2", 0, 14, 0))
+        assertTrue(EspCompanionProtocol.firmwareAtLeast("v0.13.2-dev", 0, 13, 2))
+        assertTrue(EspCompanionProtocol.firmwareAllowsBlindOta("0.8.1"))
+        assertFalse(EspCompanionProtocol.firmwareAllowsBlindOta("0.9.0"))
+        assertFalse(EspCompanionProtocol.firmwareAllowsBlindOta(""))
     }
 }

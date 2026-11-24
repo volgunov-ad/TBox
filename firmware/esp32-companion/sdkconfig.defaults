@@ -8,6 +8,9 @@ CONFIG_TINYUSB_CDC_TX_BUFSIZE=512
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
 # Avoid GCC ICE on esp_lcd rgb panel with -Og (xtensa-esp-elf 14.2).
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+# A bad OTA that boots but loses USB rolls back after the next reset unless
+# the app has been marked valid (first hello with the HU).
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 # Shelly Blu RC Button 4 — NimBLE observer, plus up to five phone/relay links (peripheral).
 # Connection interval is 200–300 ms so the 40 ms / 80 ms Shelly scan still gets airtime.
@@ -22,6 +25,9 @@ CONFIG_BT_NIMBLE_NVS_PERSIST=n
 CONFIG_BT_NIMBLE_SM_LEGACY=n
 CONFIG_BT_NIMBLE_SM_SC=n
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=5
+# 5 links + scan + advert. The controller default activity count is 6, which
+# is one short of connections=5 plus those two roles.
+CONFIG_BT_CTRL_BLE_MAX_ACT=8
 CONFIG_BT_NIMBLE_GATT_MAX_PROCS=8
 
 # Companion SoftAP + STA NAT (phone -> ESP -> head-unit AP). fw 0.9+

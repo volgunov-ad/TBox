@@ -9,12 +9,14 @@
 #include "bthome_crypt.h"
 #include "wifi_router.h"
 #include "esp_crc.h"
+#include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "gnss_detect.h"
+#include "gpio_io.h"
 #include "ota_update.h"
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
@@ -54,6 +56,15 @@ static size_t s_bridge_frame_len;
 static bool s_can_light_mode;
 static uint8_t s_can_batch[OTA_FRAME_MAX_PAYLOAD];
 static size_t s_can_batch_len;
+/** JSON line continued across USB chunks while CAN-light or the bridge is on. */
+static bool s_text_acc;
+static uint32_t s_bin_rx_ms;
+static bool s_ota_wait_end;
+static uint32_t s_ota_wait_end_ms;
+static volatile bool s_ota_erasing;
+static bool s_dtr_high;
+static bool s_app_marked_valid;
+#define BIN_IDLE_MS 8000u
 
 /*
  * Senders run on several tasks (main loop, USB RX worker, UM980 / Wi-Fi workers, BLE).
@@ -188,6 +199,98 @@ void protocol_init(void)
     s_bridge_frame_len = 0;
     s_can_light_mode = false;
     s_can_batch_len = 0;
+    s_text_acc = false;
+    s_bin_rx_ms = 0;
+    s_ota_wait_end = false;
+    s_ota_wait_end_ms = 0;
+    s_ota_erasing = false;
+    s_dtr_high = false;
+}
+
+bool protocol_ota_erasing(void)
+{
+    return s_ota_erasing;
+}
+
+static uint32_t mono_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
+
+static void mark_bin_rx(void)
+{
+    s_bin_rx_ms = mono_ms();
+    if (s_bin_rx_ms == 0) s_bin_rx_ms = 1;
+}
+
+static void can_light_flush_batch(void);
+
+static void leave_can_light(void)
+{
+    if (!s_can_light_mode) return;
+    can_light_flush_batch();
+    s_can_light_mode = false;
+    s_can_batch_len = 0;
+    if (s_can_light_cb) s_can_light_cb(false);
+}
+
+static void leave_bridge(void)
+{
+    if (!s_bridge_bin_mode) return;
+    s_bridge_bin_mode = false;
+    s_bridge_frame_len = 0;
+    um980_uart_set_bridge_mode(false);
+}
+
+static void abort_binary_session(const char *why)
+{
+    bool ota = s_ota_bin_mode || ota_is_active();
+    bool bridge = s_bridge_bin_mode;
+    if (ota) {
+        ota_abort();
+        s_ota_bin_mode = false;
+        s_ota_frame_len = 0;
+        s_ota_wait_end = false;
+        protocol_send_ota_done(false, why && why[0] ? why : "timeout");
+    }
+    if (bridge) {
+        leave_bridge();
+        protocol_send_um980_bridge_ack("end", false, why && why[0] ? why : "timeout");
+    }
+    s_text_acc = false;
+    s_line_len = 0;
+    s_bin_rx_ms = 0;
+}
+
+void protocol_poll(uint32_t now_ms)
+{
+    if ((s_ota_bin_mode || s_bridge_bin_mode) && s_bin_rx_ms != 0 &&
+        (uint32_t)(now_ms - s_bin_rx_ms) > BIN_IDLE_MS) {
+        abort_binary_session("timeout");
+    }
+    if (s_ota_wait_end && !s_ota_bin_mode && ota_is_active() &&
+        (uint32_t)(now_ms - s_ota_wait_end_ms) > BIN_IDLE_MS) {
+        s_ota_wait_end = false;
+        ota_abort();
+        protocol_send_ota_done(false, "timeout");
+    }
+}
+
+void protocol_on_cdc_line(bool dtr)
+{
+    if (s_dtr_high && !dtr) {
+        abort_binary_session("disconnect");
+    }
+    s_dtr_high = dtr;
+}
+
+static void mark_app_valid(void)
+{
+    if (s_app_marked_valid) return;
+    esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
+    if (err == ESP_OK || err == ESP_ERR_NOT_SUPPORTED) {
+        s_app_marked_valid = true;
+    }
 }
 
 bool protocol_ota_active(void)
@@ -497,7 +600,7 @@ void protocol_send_relay_dev(const char *id_hex, int mask, int flags, int uptime
     cdc_write_str(buf);
 }
 
-void protocol_send_phone_pair(const char *id_hex, const char *name)
+void protocol_send_phone_pair(const char *id_hex, const char *name, int kind, int rssi)
 {
     char name_esc[80];
     size_t pos = 0;
@@ -506,11 +609,14 @@ void protocol_send_phone_pair(const char *id_hex, const char *name)
         json_escape_append(name_esc, sizeof(name_esc), &pos, name);
         name_esc[pos] = '\0';
     }
-    char buf[192];
+    char buf[240];
     snprintf(buf, sizeof(buf),
-             "{\"v\":1,\"t\":\"phonePair\",\"id\":\"%s\",\"name\":\"%s\"}\n",
+             "{\"v\":1,\"t\":\"phonePair\",\"id\":\"%s\",\"name\":\"%s\","
+             "\"kind\":\"%s\",\"rssi\":%d}\n",
              id_hex ? id_hex : "",
-             name_esc);
+             name_esc,
+             kind == 1 ? "relay" : "phone",
+             rssi);
     cdc_write_str(buf);
 }
 
@@ -957,18 +1063,31 @@ static void handle_ota_begin(const char *line)
         protocol_send_ota_ack("begin", 0, false, "missing fields");
         return;
     }
+    /* OTA bytes share a framing family with CAN-light. Leave those modes first
+     * so a failed begin cannot put the image on the vehicle bus. */
+    leave_can_light();
+    leave_bridge();
+    s_text_acc = false;
+    s_line_len = 0;
     /* Stop heartbeats before the blocking erase. On 0.8 they filled the
      * CDC TX FIFO and the begin ack was dropped. */
+    s_ota_erasing = true;
     s_ota_bin_mode = true;
+    mark_bin_rx();
     if (!ota_begin(size, crc, err, sizeof(err))) {
+        s_ota_erasing = false;
         s_ota_bin_mode = false;
+        s_bin_rx_ms = 0;
         protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         return;
     }
+    s_ota_erasing = false;
     s_ota_bin_mode = true;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
+    s_ota_wait_end = false;
     s_line_len = 0;
+    mark_bin_rx();
     protocol_send_ota_ack("begin", 0, true, NULL);
 }
 
@@ -977,6 +1096,8 @@ static void handle_ota_end(void)
     char err[64];
     s_ota_bin_mode = false;
     s_ota_frame_len = 0;
+    s_ota_wait_end = false;
+    s_bin_rx_ms = 0;
     if (!ota_finish(err, sizeof(err))) {
         protocol_send_ota_ack("end", ota_bytes_written(), false, err[0] ? err : "end failed");
         protocol_send_ota_done(false, err[0] ? err : "end failed");
@@ -1123,41 +1244,92 @@ static void apply_can_light_host_frame(const uint8_t *payload, uint16_t plen)
     }
 }
 
+/** Top-level string value of key. Ignores the same text inside nested values. */
+static bool json_top_string(const char *line, const char *key, char *out, size_t cap)
+{
+    if (!line || !key || !out || cap == 0) return false;
+    size_t key_len = strlen(key);
+    int depth = 0;
+    bool in_str = false;
+    bool escape = false;
+    for (const char *p = line; *p; p++) {
+        char c = *p;
+        if (in_str) {
+            if (escape) escape = false;
+            else if (c == '\\') escape = true;
+            else if (c == '"') in_str = false;
+            continue;
+        }
+        if (c == '"') {
+            if (depth == 1 && strncmp(p + 1, key, key_len) == 0 && p[1 + key_len] == '"') {
+                const char *v = strchr(p + 2 + key_len, ':');
+                if (!v) return false;
+                v++;
+                while (*v == ' ') v++;
+                if (*v != '"') return false;
+                v++;
+                size_t n = 0;
+                while (*v && *v != '"' && n + 1 < cap) {
+                    if (*v == '\\' && v[1]) v++;
+                    out[n++] = *v++;
+                }
+                out[n] = '\0';
+                return n > 0 || *v == '"';
+            }
+            in_str = true;
+            continue;
+        }
+        if (c == '{' || c == '[') depth++;
+        else if (c == '}' || c == ']') depth--;
+    }
+    return false;
+}
+
+static bool line_is(const char *line, const char *type)
+{
+    char got[40];
+    if (!json_top_string(line, "t", got, sizeof(got))) return false;
+    return strcmp(got, type) == 0;
+}
+
 static void handle_line(const char *line)
 {
-    if (strstr(line, "\"t\":\"hello\"") || strstr(line, "\"t\": \"hello\"")) {
+    if (line_is(line, "hello")) {
+        mark_app_valid();
         protocol_send_hello();
         /* hello has no phone list or pairing state; a restarted host needs both. */
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"otaBegin\"") || strstr(line, "\"t\": \"otaBegin\"")) {
+    if (line_is(line, "otaBegin")) {
         handle_ota_begin(line);
         return;
     }
-    if (strstr(line, "\"t\":\"otaEnd\"") || strstr(line, "\"t\": \"otaEnd\"")) {
+    if (line_is(line, "otaEnd")) {
         handle_ota_end();
         return;
     }
-    if (strstr(line, "\"t\":\"um980BridgeBegin\"") || strstr(line, "\"t\": \"um980BridgeBegin\"")) {
+    if (line_is(line, "um980BridgeBegin")) {
         if (s_ota_bin_mode || ota_is_active() || s_can_light_mode) {
             protocol_send_um980_bridge_ack("begin", false, "busy");
             return;
         }
         s_bridge_bin_mode = true;
         s_bridge_frame_len = 0;
+        s_text_acc = false;
+        mark_bin_rx();
         um980_uart_set_bridge_mode(true);
         protocol_send_um980_bridge_ack("begin", true, NULL);
         return;
     }
-    if (strstr(line, "\"t\":\"um980BridgeEnd\"") || strstr(line, "\"t\": \"um980BridgeEnd\"")) {
+    if (line_is(line, "um980BridgeEnd")) {
         s_bridge_bin_mode = false;
         s_bridge_frame_len = 0;
         um980_uart_set_bridge_mode(false);
         protocol_send_um980_bridge_ack("end", true, NULL);
         return;
     }
-    if (strstr(line, "\"t\":\"canLightBegin\"") || strstr(line, "\"t\": \"canLightBegin\"")) {
+    if (line_is(line, "canLightBegin")) {
         if (s_ota_bin_mode || ota_is_active() || s_bridge_bin_mode) {
             protocol_send_can_ack("lightBegin", false, "busy");
             return;
@@ -1168,7 +1340,7 @@ static void handle_line(const char *line)
         protocol_send_can_ack("lightBegin", true, NULL);
         return;
     }
-    if (strstr(line, "\"t\":\"canLightEnd\"") || strstr(line, "\"t\": \"canLightEnd\"")) {
+    if (line_is(line, "canLightEnd")) {
         can_light_flush_batch();
         s_can_light_mode = false;
         s_can_batch_len = 0;
@@ -1176,11 +1348,11 @@ static void handle_line(const char *line)
         protocol_send_can_ack("lightEnd", true, NULL);
         return;
     }
-    if (strstr(line, "\"t\":\"canTx\"") || strstr(line, "\"t\": \"canTx\"")) {
+    if (line_is(line, "canTx")) {
         handle_can_tx_json(line);
         return;
     }
-    if (strstr(line, "\"t\":\"canBaud\"") || strstr(line, "\"t\": \"canBaud\"")) {
+    if (line_is(line, "canBaud")) {
         bool found = false;
         uint32_t baud = extract_json_u32(line, "baud", &found);
         if (!found || !s_can_baud_cb) {
@@ -1190,11 +1362,11 @@ static void handle_line(const char *line)
         s_can_baud_cb(baud);
         return;
     }
-    if (strstr(line, "\"t\":\"canFilter\"") || strstr(line, "\"t\": \"canFilter\"")) {
+    if (line_is(line, "canFilter")) {
         handle_can_filter_json(line);
         return;
     }
-    if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
+    if (line_is(line, "magChipSet")) {
         char chip[16];
         const char *seen_ptrs[8] = {0};
         if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
@@ -1208,14 +1380,14 @@ static void handle_line(const char *line)
         }
         return;
     }
-    if (strstr(line, "\"t\":\"bleSet\"") || strstr(line, "\"t\": \"bleSet\"")) {
+    if (line_is(line, "bleSet")) {
         bool on = extract_json_bool(line, "on", false);
         bool ok = ble_btn_set_on(on);
         protocol_send_ble_ack("set", ok, ok ? NULL : "fail");
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"bleLearnBegin\"") || strstr(line, "\"t\": \"bleLearnBegin\"")) {
+    if (line_is(line, "bleLearnBegin")) {
         bool found = false;
         uint32_t timeout = extract_json_u32(line, "timeoutMs", &found);
         if (!found) timeout = BLE_BTN_LEARN_DEFAULT_MS;
@@ -1232,13 +1404,13 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"bleLearnEnd\"") || strstr(line, "\"t\": \"bleLearnEnd\"")) {
+    if (line_is(line, "bleLearnEnd")) {
         ble_btn_learn_end();
         protocol_send_ble_ack("learnEnd", true, NULL);
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"bleAllow\"") || strstr(line, "\"t\": \"bleAllow\"")) {
+    if (line_is(line, "bleAllow")) {
         char mac[24];
         if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
             protocol_send_ble_ack("allow", false, "missing mac");
@@ -1249,7 +1421,7 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"bleKey\"") || strstr(line, "\"t\": \"bleKey\"")) {
+    if (line_is(line, "bleKey")) {
         char mac[24];
         char key_hex[64];
         uint8_t key[BTHOME_KEY_LEN];
@@ -1268,7 +1440,7 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"bleForget\"") || strstr(line, "\"t\": \"bleForget\"")) {
+    if (line_is(line, "bleForget")) {
         if (extract_json_bool(line, "all", false)) {
             bool ok = ble_btn_forget_all();
             protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
@@ -1285,7 +1457,7 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"phoneLearnBegin\"") || strstr(line, "\"t\": \"phoneLearnBegin\"")) {
+    if (line_is(line, "phoneLearnBegin")) {
         bool found = false;
         uint32_t timeout = extract_json_u32(line, "timeoutMs", &found);
         if (!found) timeout = 90000u;
@@ -1294,13 +1466,13 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"phoneLearnEnd\"") || strstr(line, "\"t\": \"phoneLearnEnd\"")) {
+    if (line_is(line, "phoneLearnEnd")) {
         ble_phone_learn_end();
         protocol_send_ble_ack("phoneLearnEnd", true, NULL);
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"phoneAllow\"") || strstr(line, "\"t\": \"phoneAllow\"")) {
+    if (line_is(line, "phoneAllow")) {
         char id[12];
         if (!extract_json_string(line, "id", id, sizeof(id))) {
             protocol_send_ble_ack("phoneAllow", false, "missing id");
@@ -1311,7 +1483,7 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"phoneDeny\"") || strstr(line, "\"t\": \"phoneDeny\"")) {
+    if (line_is(line, "phoneDeny")) {
         char id[12];
         if (extract_json_string(line, "id", id, sizeof(id))) {
             ble_phone_deny(id);
@@ -1319,7 +1491,7 @@ static void handle_line(const char *line)
         protocol_send_ble_ack("phoneDeny", true, NULL);
         return;
     }
-    if (strstr(line, "\"t\":\"phoneForget\"") || strstr(line, "\"t\": \"phoneForget\"")) {
+    if (line_is(line, "phoneForget")) {
         char id[12];
         if (!extract_json_string(line, "id", id, sizeof(id))) {
             protocol_send_ble_ack("phoneForget", false, "missing id");
@@ -1330,18 +1502,32 @@ static void handle_line(const char *line)
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"relayDevSet\"") || strstr(line, "\"t\": \"relayDevSet\"")) {
+    if (line_is(line, "relayDevSet")) {
         char id[12];
         bool has_id = extract_json_string(line, "id", id, sizeof(id)) && id[0] != '\0';
+        bool all = extract_json_bool(line, "all", false);
+        if (!has_id && !all) {
+            protocol_send_ble_ack("relayDevSet", false, "missing id");
+            return;
+        }
         uint32_t mask = extract_json_u32(line, "mask", NULL);
         uint32_t pulse = extract_json_u32(line, "pulseMs", NULL);
         int n = ble_phone_relay_set(has_id ? id : NULL, (uint8_t)(mask & 0xFF),
                                     (uint16_t)(pulse & 0xFFFF));
-        protocol_send_ble_ack("relayDevSet", n > 0, n > 0 ? NULL : "no relay");
+        const char *err = NULL;
+        bool ok = false;
+        if (n == -1) err = "bad id";
+        else if (n == 0) err = "no relay";
+        else if (n < 0) err = "offline";
+        else {
+            ok = true;
+            err = "queued";
+        }
+        protocol_send_ble_ack("relayDevSet", ok, err);
         protocol_send_ble_status();
         return;
     }
-    if (strstr(line, "\"t\":\"phoneSnap\"") || strstr(line, "\"t\": \"phoneSnap\"")) {
+    if (line_is(line, "phoneSnap")) {
         bool found = false;
         uint32_t gen = extract_json_u32(line, "gen", &found);
         if (!found) return;
@@ -1384,7 +1570,7 @@ static void handle_line(const char *line)
         ble_phone_set_snapshot((int)gen, mask, vals, &media);
         return;
     }
-    if (strstr(line, "\"t\":\"apCfg\"") || strstr(line, "\"t\": \"apCfg\"")) {
+    if (line_is(line, "apCfg")) {
         bool on = extract_json_bool(line, "on", false);
         char ssid[33];
         char psk[64];
@@ -1407,13 +1593,13 @@ static void handle_line(const char *line)
         wifi_router_request(on, ssid, psk, port, ap_ssid, ap_psk);
         return;
     }
-    if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {
+    if (line_is(line, "reboot")) {
         if (s_reboot_cb) {
             s_reboot_cb();
         }
         return;
     }
-    if (strstr(line, "\"t\":\"um980Cmd\"") || strstr(line, "\"t\": \"um980Cmd\"")) {
+    if (line_is(line, "um980Cmd")) {
         if (!gnss_is_um980()) {
             protocol_send_um980_rsp("", NULL, 0, false);
             return;
@@ -1424,7 +1610,7 @@ static void handle_line(const char *line)
         }
         return;
     }
-    if (strstr(line, "\"t\":\"um980Baud\"") || strstr(line, "\"t\": \"um980Baud\"")) {
+    if (line_is(line, "um980Baud")) {
         const char *p = strstr(line, "\"baud\"");
         if (!p) {
             protocol_send_um980_baud(s_hello_baud, false);
@@ -1443,7 +1629,16 @@ static void handle_line(const char *line)
         }
         return;
     }
-    if (strstr(line, "\"t\":\"relaySet\"") || strstr(line, "\"t\": \"relaySet\"")) {
+    if (line_is(line, "relaySet")) {
+        bool found_pulse = false;
+        bool found_ch = false;
+        uint32_t pulse = extract_json_u32(line, "pulseMs", &found_pulse);
+        uint32_t ch = extract_json_u32(line, "ch", &found_ch);
+        if (found_pulse && pulse > 0 && found_ch && ch < 8 && s_relay_cb) {
+            s_relay_cb((uint8_t)(1u << ch), (uint16_t)(pulse & 0xFFFF));
+            protocol_send_relay(gpio_io_get_relays());
+            return;
+        }
         const char *p = strstr(line, "\"mask\"");
         if (!p) {
             return;
@@ -1454,9 +1649,9 @@ static void handle_line(const char *line)
         }
         int mask = atoi(p + 1);
         if (s_relay_cb) {
-            s_relay_cb((uint8_t)(mask & 0xFF));
+            s_relay_cb((uint8_t)(mask & 0xFF), 0);
         }
-        protocol_send_relay((uint8_t)(mask & 0xFF));
+        protocol_send_relay(gpio_io_get_relays());
     }
 }
 
@@ -1490,6 +1685,9 @@ static void process_ota_frame(const uint8_t *payload, uint16_t plen)
         // Host will send otaEnd as NDJSON; leave binary mode.
         s_ota_bin_mode = false;
         s_ota_frame_len = 0;
+        s_ota_wait_end = true;
+        s_ota_wait_end_ms = mono_ms();
+        s_bin_rx_ms = 0;
     }
 }
 
@@ -1503,7 +1701,7 @@ static void feed_ota_byte(uint8_t b)
         return;
     }
     if (s_ota_frame_len == 1) {
-        if (b != OTA_FRAME_MAGIC1) {
+        if (b != OTA_FRAME_MAGIC_OTA) {
             s_ota_frame_len = (b == OTA_FRAME_MAGIC0) ? 1 : 0;
             if (s_ota_frame_len) s_ota_frame[0] = b;
             return;
@@ -1537,6 +1735,7 @@ static void feed_ota_byte(uint8_t b)
         s_ota_frame_len = 0;
         return;
     }
+    mark_bin_rx();
     process_ota_frame(payload, plen);
     s_ota_frame_len = 0;
 }
@@ -1557,30 +1756,28 @@ void protocol_on_rx_bytes(const uint8_t *data, size_t len)
         }
         if (s_bridge_bin_mode || s_can_light_mode) {
             uint8_t b = data[i];
-            uint8_t *frame = s_bridge_bin_mode ? s_bridge_frame : s_bridge_frame;
-            size_t *flen = s_bridge_bin_mode ? &s_bridge_frame_len : &s_bridge_frame_len;
-            /* Reuse bridge frame buffer for CAN light host→device frames. */
-            if (*flen == 0 && b == '{') {
-                s_line_len = 0;
-                s_line[s_line_len++] = '{';
-                size_t j = i + 1;
-                for (; j < len; j++) {
-                    char c = (char)data[j];
-                    if (c == '\n' || c == '\r') {
-                        if (s_line_len > 0) {
-                            s_line[s_line_len] = '\0';
-                            handle_line(s_line);
-                            s_line_len = 0;
-                        }
-                        i = j;
-                        break;
+            uint8_t *frame = s_bridge_frame;
+            size_t *flen = &s_bridge_frame_len;
+            /* A JSON line may span USB packets. Keep it until '\n'. */
+            if (s_text_acc || (*flen == 0 && b == '{')) {
+                if (!s_text_acc) {
+                    s_line_len = 0;
+                    s_text_acc = true;
+                }
+                if (b == '\n' || b == '\r') {
+                    if (s_line_len > 0) {
+                        s_line[s_line_len] = '\0';
+                        handle_line(s_line);
+                        s_line_len = 0;
                     }
-                    if (s_line_len + 1 < sizeof(s_line)) {
-                        s_line[s_line_len++] = c;
-                    }
-                    if (j + 1 == len) {
-                        i = j;
-                    }
+                    s_text_acc = false;
+                    continue;
+                }
+                if (s_line_len + 1 < sizeof(s_line)) {
+                    s_line[s_line_len++] = (char)b;
+                } else {
+                    s_line_len = 0;
+                    s_text_acc = false;
                 }
                 continue;
             }
@@ -1618,6 +1815,7 @@ void protocol_on_rx_bytes(const uint8_t *data, size_t len)
             uint32_t expect_crc = esp_crc32_le(0, payload, plen);
             if (got_crc == expect_crc) {
                 if (s_bridge_bin_mode) {
+                    mark_bin_rx();
                     process_bridge_frame(payload, plen);
                 } else {
                     apply_can_light_host_frame(payload, plen);

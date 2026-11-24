@@ -47,9 +47,17 @@ static QueueHandle_t s_um980_job_q;
 static StreamBufferHandle_t s_usb_rx_stream;
 static bool s_can_present;
 
-static void on_relay_set(uint8_t mask)
+static void on_relay_set(uint8_t mask, uint16_t pulse_ms)
 {
-    gpio_io_set_relays(mask);
+    if (pulse_ms > 0) gpio_io_pulse(mask, pulse_ms);
+    else gpio_io_set_relays(mask);
+}
+
+static void cdc_line_state_cb(int itf, cdcacm_event_t *event)
+{
+    (void)itf;
+    if (!event) return;
+    protocol_on_cdc_line(event->line_state_changed_data.dtr);
 }
 
 static void on_um980_cmd(const char *cmd)
@@ -259,7 +267,7 @@ void app_main(void)
         .cdc_port = TINYUSB_CDC_ACM_0,
         .callback_rx = &tinyusb_cdc_rx_callback,
         .callback_rx_wanted_char = NULL,
-        .callback_line_state_changed = NULL,
+        .callback_line_state_changed = &cdc_line_state_cb,
         .callback_line_coding_changed = NULL,
     };
     ESP_ERROR_CHECK(tusb_cdc_acm_init(&acm_cfg));
@@ -329,7 +337,9 @@ void app_main(void)
             esp_restart();
         }
 
+        protocol_poll(now_ms);
         const bool ota_busy = protocol_ota_active();
+        const bool ota_erasing = protocol_ota_erasing();
         if (protocol_um980_bridge_active()) {
             protocol_um980_bridge_poll();
         }
@@ -370,13 +380,18 @@ void app_main(void)
                               fix.hrms, fix.vrms, fix.diff_age);
         }
 
-        if (!ota_busy) {
-            gpio_io_poll(now_ms, gpio_event);
-            if (now_ms - last_gpio_ms >= 1000) {
+        if (!ota_erasing) {
+            gpio_io_poll(now_ms, ota_busy ? NULL : gpio_event);
+            if (gpio_io_take_relay_dirty() && !ota_busy) {
+                protocol_send_relay(gpio_io_get_relays());
+            }
+            if (!ota_busy && now_ms - last_gpio_ms >= 1000) {
                 protocol_send_gpio(gpio_io_read_inputs(), now_ms);
                 last_gpio_ms = now_ms;
             }
             ble_btn_poll(now_ms);
+        }
+        if (!ota_busy) {
 
             if (ble_btn_is_on()) {
                 if (!ble_phone_adv_dead()) {

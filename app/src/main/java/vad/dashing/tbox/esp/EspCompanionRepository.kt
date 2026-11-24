@@ -11,6 +11,9 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationTriggerEspGpioBtnEventBus
 
+/** Two relay keepalives (12 s). A quieter board is offline. */
+const val BLE_RELAY_ONLINE_MS = 24_000L
+
 data class EspDeviceInfo(
     val firmwareVersion: String = "",
     val gpioInCount: Int = 0,
@@ -405,8 +408,17 @@ object EspCompanionRepository {
 
     fun bleRelayMask(id: String): Int = _bleRelayMasks.value[id.trim().lowercase(java.util.Locale.US)] ?: 0
 
-    fun bleRelayOnline(id: String): Boolean =
-        _bleRelayOnline.value.containsKey(id.trim().lowercase(java.util.Locale.US))
+    fun bleRelayMaskKnown(id: String): Boolean =
+        _bleRelayMasks.value.containsKey(id.trim().lowercase(java.util.Locale.US))
+
+    /**
+     * Online when a `relayDev` report arrived within two keepalives (12 s × 2).
+     * A `bleStatus` list entry is not a fresh report.
+     */
+    fun bleRelayOnline(id: String, nowMs: Long = System.currentTimeMillis()): Boolean {
+        val at = _bleRelayOnline.value[id.trim().lowercase(java.util.Locale.US)] ?: return false
+        return at > 0L && nowMs - at <= BLE_RELAY_ONLINE_MS
+    }
 
     fun clearPendingPhone() {
         _pendingPhone.value = null

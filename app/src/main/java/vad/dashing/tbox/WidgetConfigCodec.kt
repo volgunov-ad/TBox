@@ -419,6 +419,11 @@ fun serializeWidgetConfigsToJsonArray(
         ) {
             obj.put("espRelayMode", config.espRelayMode.storageKey)
         }
+        if ((config.dataKey == "espBleRelay0" || config.dataKey == "espBleRelay1") &&
+            config.espBleRelayId.isNotBlank()
+        ) {
+            obj.put("espBleRelayId", config.espBleRelayId.trim().lowercase())
+        }
         if (isCruiseWidgetDataKey(config.dataKey) &&
             config.cruiseControlType != CruiseControlType.DEFAULT
         ) {
@@ -985,6 +990,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             EspRelayWidgetMode.DEFAULT
+                        },
+                        espBleRelayId = if (dataKey == "espBleRelay0" || dataKey == "espBleRelay1") {
+                            item.optString("espBleRelayId", "").trim().lowercase()
+                        } else {
+                            ""
                         },
                         cruiseControlType = if (isCruiseWidgetDataKey(dataKey)) {
                             CruiseControlType.fromStorageKey(
