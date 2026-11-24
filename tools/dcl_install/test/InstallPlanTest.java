@@ -28,6 +28,7 @@ public final class InstallPlanTest {
         failed += check("foreign", foreign());
         failed += check("lock", lock());
         failed += check("boot-mark", bootMark());
+        failed += check("clock-jump", clockJump());
         if (failed != 0) {
             System.out.println(failed + " failed");
             System.exit(1);
@@ -344,29 +345,30 @@ public final class InstallPlanTest {
         File dir = new File(System.getProperty("java.io.tmpdir"), "dcl-lock-" + System.nanoTime());
         if (!dir.mkdirs()) return "temp dir";
         File lock = new File(dir, "lock");
-        long now = System.currentTimeMillis();
-        long boot = 5_000_000L;
-        long otherBoot = boot + 60_000L;
-        if (RootRun.inProgress(lock, now, boot)) return "missing lock is in progress";
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, now, boot)) return "could not acquire a free lock";
+        long boot = 40L;
+        long otherBoot = 41L;
+        long elapsed = 25_000L;
+        if (RootRun.inProgress(lock, elapsed, boot)) return "missing lock is in progress";
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, elapsed, boot)) return "could not acquire a free lock";
         if (!RootRun.OWNER_INSTALL.equals(RootRun.owner(lock))) return "owner was not stored";
-        if (RootRun.readBootMark(lock) != boot) return "boot mark was not stored";
-        if (!RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "fresh lock is not in progress";
-        if (RootRun.inProgress(lock, System.currentTimeMillis(), otherBoot)) return "old boot still in progress";
-        if (RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), boot)) {
+        if (RootRun.readBootMark(lock) != boot) return "boot id was not stored";
+        if (RootRun.readElapsed(lock) != elapsed) return "elapsed time was not stored";
+        if (!RootRun.inProgress(lock, elapsed + 1_000L, boot)) return "fresh lock is not in progress";
+        if (RootRun.inProgress(lock, elapsed + 1_000L, otherBoot)) return "old boot still in progress";
+        if (RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, elapsed + 1_000L, boot)) {
             return "second acquire succeeded";
         }
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), otherBoot)) {
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, elapsed + 1_000L, otherBoot)) {
             return "other boot could not replace the lock";
         }
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, System.currentTimeMillis(), boot)) {
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, elapsed + 2_000L, boot)) {
             return "same boot could not replace an old-boot lock";
         }
-        if (!lock.setLastModified(System.currentTimeMillis() - RootRun.STALE_MS - 1000L)) {
-            return "could not age the lock";
+        if (RootRun.inProgress(lock, elapsed + 2_000L - 1_000L, boot)) return "elapsed reset still in progress";
+        if (RootRun.inProgress(lock, elapsed + 2_000L + RootRun.STALE_MS, boot)) {
+            return "stale elapsed is still in progress";
         }
-        if (RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "stale lock is still in progress";
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), boot)) {
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, elapsed + 2_000L + RootRun.STALE_MS, boot)) {
             return "stale lock could not be replaced";
         }
         if (!RootRun.OWNER_BOOT.equals(RootRun.owner(lock))) return "replaced owner was not stored";
@@ -380,7 +382,7 @@ public final class InstallPlanTest {
         } catch (Exception e) {
             return "could not write an old lock: " + e;
         }
-        if (RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "lock without a boot mark is in progress";
+        if (RootRun.inProgress(lock, elapsed, boot)) return "lock without a boot mark is in progress";
         if (!lock.delete()) return "cleanup";
         dir.delete();
         return null;
@@ -391,6 +393,29 @@ public final class InstallPlanTest {
         if (!RootRun.sameBoot(mark, RootRun.bootMark(5_000_500L, 20_400L))) return "same boot was split";
         if (RootRun.sameBoot(mark, RootRun.bootMark(5_000_000L + 60_000L, 20_000L))) return "a later boot matched";
         if (RootRun.sameBoot(0L, mark)) return "empty stamp matched";
+        if (!RootRun.sameBoot(40L, 40L)) return "same boot count was split";
+        if (RootRun.sameBoot(40L, 41L)) return "next boot count matched";
+        return null;
+    }
+
+    /** A +4911 s wall jump, as on A9 boot5, must not drop a live lock or allow a second command. */
+    private static String clockJump() {
+        File dir = new File(System.getProperty("java.io.tmpdir"), "dcl-jump-" + System.nanoTime());
+        if (!dir.mkdirs()) return "temp dir";
+        File lock = new File(dir, "lock");
+        long boot = 40L;
+        long elapsed = 25_000L;
+        long wall = 1_700_000_000_000L;
+        long wallAfter = wall + 4_911_000L;
+        if (wallAfter - wall < RootRun.STALE_MS) return "jump is inside the stale window";
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, elapsed, boot)) return "could not acquire";
+        if (!lock.setLastModified(wallAfter)) return "could not move the file mtime";
+        if (!RootRun.inProgress(lock, elapsed + 1_000L, boot)) return "clock jump dropped a live lock";
+        if (RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, elapsed + 1_000L, boot)) {
+            return "clock jump allowed a second command";
+        }
+        if (!lock.delete()) return "cleanup";
+        dir.delete();
         return null;
     }
 }

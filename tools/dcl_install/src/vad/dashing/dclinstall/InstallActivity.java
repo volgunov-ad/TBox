@@ -876,16 +876,16 @@ public class InstallActivity extends Activity {
         });
     }
 
-    private static long bootMark() {
-        return RootRun.thisBoot(SystemClock.elapsedRealtime());
+    private long bootId() {
+        return BootReceiver.currentBootId(this);
     }
 
-    private static boolean runInProgress() {
-        return RootRun.inProgress(new File(InstallPlan.LOCK_FILE), System.currentTimeMillis(), bootMark());
+    private boolean runInProgress() {
+        return RootRun.inProgress(new File(InstallPlan.LOCK_FILE), SystemClock.elapsedRealtime(), bootId());
     }
 
     private void arm(String script) throws Exception {
-        if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL, bootMark())) {
+        if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL, SystemClock.elapsedRealtime(), bootId())) {
             throw new IllegalStateException("Уже выполняется другая команда");
         }
         try {

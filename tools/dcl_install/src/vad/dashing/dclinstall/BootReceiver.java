@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -81,7 +82,7 @@ public class BootReceiver extends BroadcastReceiver {
         boolean nativeUnlock = InstallPlan.hasNativeUnlock(version);
         boolean systemUiHidden = DclPackages.hidden(context.getPackageManager(), InstallPlan.SYSTEMUI);
         boolean unlockUsb = systemUiHidden && !nativeUnlock;
-        if (!RootRun.tryAcquire(RootRun.OWNER_BOOT, RootRun.thisBoot(SystemClock.elapsedRealtime()))) {
+        if (!RootRun.tryAcquire(RootRun.OWNER_BOOT, SystemClock.elapsedRealtime(), currentBootId(context))) {
             Log.i(TAG, "another root script is running, boot fix skipped");
             return;
         }
@@ -109,8 +110,23 @@ public class BootReceiver extends BroadcastReceiver {
         return "9".equals(Build.VERSION.RELEASE) && "MB".equals(prop("ro.wt.solution.provider"));
     }
 
+    /**
+     * {@code BOOT_COUNT} does not move when the wall clock jumps. A missing count falls
+     * back to the wall-minus-uptime mark, which {@link RootRun#sameBoot} still tolerates.
+     */
+    static long currentBootId(Context context) {
+        int count = 0;
+        try {
+            count = Settings.Global.getInt(context.getContentResolver(), Settings.Global.BOOT_COUNT, 0);
+        } catch (Throwable t) {
+            count = 0;
+        }
+        if (count > 0) return count;
+        return RootRun.bootMark(System.currentTimeMillis(), SystemClock.elapsedRealtime());
+    }
+
     private static boolean alreadyThisBoot(Context context) {
-        long now = RootRun.bootMark(System.currentTimeMillis(), SystemClock.elapsedRealtime());
+        long now = currentBootId(context);
         File file = new File(context.getFilesDir(), STAMP);
         if (!file.isFile()) return false;
         try {
@@ -130,7 +146,7 @@ public class BootReceiver extends BroadcastReceiver {
     }
 
     private static void markThisBoot(Context context) throws Exception {
-        long now = RootRun.bootMark(System.currentTimeMillis(), SystemClock.elapsedRealtime());
+        long now = currentBootId(context);
         FileOutputStream out = new FileOutputStream(new File(context.getFilesDir(), STAMP));
         try {
             out.write(Long.toString(now).getBytes("UTF-8"));

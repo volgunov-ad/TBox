@@ -165,7 +165,8 @@ final class DclStatus {
         long waitLock = System.currentTimeMillis() + 20_000L;
         boolean acquired = false;
         while (System.currentTimeMillis() < waitLock) {
-            if (RootRun.tryAcquire(RootRun.OWNER_APPOPS, RootRun.thisBoot(SystemClock.elapsedRealtime()))) {
+            if (RootRun.tryAcquire(RootRun.OWNER_APPOPS, SystemClock.elapsedRealtime(),
+                    BootReceiver.currentBootId(context))) {
                 acquired = true;
                 break;
             }

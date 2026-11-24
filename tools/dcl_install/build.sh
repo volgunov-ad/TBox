@@ -2,6 +2,8 @@
 # Linux counterpart of build.ps1: aapt + javac + d8 + apksigner, repo keystore.
 # Needs ANDROID_HOME with platforms/android-28 and build-tools. Commits the APK:
 # CI compares its versionCode with AndroidManifest.xml.
+# Prefer build-tools 35.0.0 (35.0.1 matches). d8 from 34 crashes on these classes;
+# 36 changes the dex, so a newer default is not a reproducible rebuild.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -9,6 +11,14 @@ sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 if [[ -z "$sdk" ]]; then
   echo "Set ANDROID_HOME to an SDK with platforms/android-28 and build-tools." >&2
   exit 1
+fi
+if [[ -z "${BUILD_TOOLS:-}" ]]; then
+  for name in 35.0.0 35.0.1 35.0.2; do
+    if [[ -x "$sdk/build-tools/$name/aapt" ]]; then
+      BUILD_TOOLS="$sdk/build-tools/$name"
+      break
+    fi
+  done
 fi
 if [[ -z "${BUILD_TOOLS:-}" ]]; then
   BUILD_TOOLS=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 \( -type d -o -type l \) | sort -V | tail -1)
