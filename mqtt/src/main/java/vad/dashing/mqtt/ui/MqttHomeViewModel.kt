@@ -83,6 +83,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(MqttHomeState())
     val state: StateFlow<MqttHomeState> = _state
     private var pairJob: Job? = null
+    /** True while [settings] on screen came from the empty fallback, not the encrypted store. */
+    private var loadedFromErrorStore = false
     private val ioErrors = CoroutineExceptionHandler { _, error ->
         _state.update { current ->
             current.copy(
@@ -99,6 +101,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val opened = openStore()
         val settings = opened.load()
+        loadedFromErrorStore = opened.storageError != null
         val startTab = if (settings.ready) 1 else 0
         _state.value = _state.value.copy(
             settings = settings,
@@ -125,13 +128,20 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectTab(index: Int) {
-        rememberStorage(openStore())
+        val opened = openStore()
+        if (adoptRecoveredStore(opened, tab = index)) {
+            if (index == 2) refreshEntities()
+            return
+        }
+        rememberStorage(opened)
         _state.update { it.copy(tab = index) }
         if (index == 2) refreshEntities()
     }
 
-    fun update(transform: (MqttSettings) -> MqttSettings) {
+    /** @return false when the edit was dropped because the real store just became readable. */
+    fun update(transform: (MqttSettings) -> MqttSettings): Boolean {
         val opened = openStore()
+        if (adoptRecoveredStore(opened)) return false
         rememberStorage(opened)
         val current = _state.value
         val base = storedAccess(opened, current.settings)
@@ -158,11 +168,35 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 ),
             )
         }
+        return true
+    }
+
+    /**
+     * The on-screen settings are the empty fallback. Replace them with the real store and
+     * do not write the pending edit: it was made against those defaults.
+     */
+    private fun adoptRecoveredStore(opened: MqttSettingsStore, tab: Int? = null): Boolean {
+        if (!staleUiNeedsReload(loadedFromErrorStore, opened.storageError)) return false
+        val settings = opened.load()
+        loadedFromErrorStore = false
+        val notice = opened.storageNotice?.takeIf { it.isNotBlank() }
+        _state.update { current ->
+            current.copy(
+                settings = settings,
+                connectionDraft = settings,
+                wqttTokenDraft = settings.wqttApiToken,
+                wqttRoomDraft = settings.wqttRoom,
+                tab = tab ?: current.tab,
+                storageMessage = if (notice == null) SETTINGS_RELOADED else "$SETTINGS_RELOADED $notice",
+                connectionMessage = "",
+            )
+        }
+        return true
     }
 
     /** Applies at once, unlike the broker fields: the switch is the quick way to pause the bridge. */
     fun setBrokerEnabled(enabled: Boolean) {
-        update { it.copy(brokerEnabled = enabled) }
+        if (!update { it.copy(brokerEnabled = enabled) }) return
         if (enabled) {
             startBridgeIfReady()
         } else {
@@ -213,6 +247,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveConnection() {
         val opened = openStore()
+        if (adoptRecoveredStore(opened)) return
         rememberStorage(opened)
         val current = _state.value
         val merged = storedAccess(opened, current.settings).applyingConnection(current.connectionDraft).normalized()
@@ -243,7 +278,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             _state.value = _state.value.copy(pairMessage = "Вставьте токен")
             return
         }
-        update { it.copy(accessToken = token) }
+        if (!update { it.copy(accessToken = token) }) return
         _state.value = _state.value.copy(manualToken = "", manualTokenOpen = false, pairMessage = "Токен сохранён")
         startBridgeIfReady()
         refreshEntities()
@@ -266,7 +301,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             if (result.granted) {
                 withContext(Dispatchers.Main) {
                     val opened = openStore()
-                    rememberStorage(opened)
+                    if (!adoptRecoveredStore(opened)) rememberStorage(opened)
                     opened.saveMonitorAccess(accessToken = result.accessToken, apiPort = result.port)
                     reloadMonitorAccess()
                     val message = if (result.serverEnabled == false) {
@@ -309,7 +344,15 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                             updateUi { it.copy(pairBusy = false, pairMessage = "Monitor не вернул токен") }
                         } else {
                             withContext(Dispatchers.Main) {
-                                update { it.copy(accessToken = token) }
+                                if (!update { it.copy(accessToken = token) }) {
+                                    updateUi {
+                                        it.copy(
+                                            pairBusy = false,
+                                            pairMessage = it.storageMessage.ifBlank { SETTINGS_RELOADED },
+                                        )
+                                    }
+                                    return@withContext
+                                }
                                 updateUi { it.copy(pairBusy = false, pairMessage = "Доступ разрешён") }
                                 startBridgeIfReady()
                                 refreshEntities()
@@ -392,12 +435,10 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setEntities(objectIds: Collection<String>, enabled: Boolean) {
-        update { settings ->
-            val next = settings.selectedObjectIds.toMutableSet()
-            if (enabled) next += objectIds else next -= objectIds.toSet()
-            settings.copy(selectedObjectIds = next)
-        }
+    fun setEntities(objectIds: Collection<String>, enabled: Boolean): Boolean = update { settings ->
+        val next = settings.selectedObjectIds.toMutableSet()
+        if (enabled) next += objectIds else next -= objectIds.toSet()
+        settings.copy(selectedObjectIds = next)
     }
 
     fun connectionDirty(): Boolean = connectionChanged(_state.value.settings, _state.value.connectionDraft)
@@ -460,7 +501,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        setEntities(ids, enabled)
+        if (!setEntities(ids, enabled)) return
         _state.update {
             it.copy(
                 wqttMessage = if (enabled) {
@@ -478,7 +519,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     fun saveWqttCredentials() {
         val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
         val room = _state.value.wqttRoomDraft
-        update { it.copy(wqttApiToken = token, wqttRoom = room) }
+        if (!update { it.copy(wqttApiToken = token, wqttRoom = room) }) return
         _state.update {
             it.copy(
                 wqttTokenDraft = token,
@@ -599,12 +640,15 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                         id > 0 && result.action != WqttDeviceAction.FAILED
                     }
                 }.toSet()
-                update { saved ->
+                if (!update { saved ->
                     saved.copy(
                         wqttApiToken = token,
                         wqttRoom = current.wqttRoomDraft.ifBlank { saved.wqttRoom },
                         wqttDeviceIds = saved.wqttDeviceIds + provisionedIds,
                     )
+                }) {
+                    updateUi { it.copy(wqttBusy = false, wqttMessage = it.storageMessage) }
+                    return@withContext
                 }
                 val commandsOff = !current.settings.acceptCommands && report.enabledObjectIds.any { id ->
                     current.entities.any { entity -> entity.objectId == id && entity.writable }
@@ -741,13 +785,12 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             }
             withContext(Dispatchers.Main) {
                 val deletedIds = pending.map { it.id }.toSet()
-                if (report.deleted > 0) {
-                    update { saved ->
-                        saved.copy(
-                            wqttApiToken = token,
-                            wqttDeviceIds = saved.wqttDeviceIds - deletedIds,
-                        )
-                    }
+                if (report.deleted > 0 && update { saved ->
+                    saved.copy(
+                        wqttApiToken = token,
+                        wqttDeviceIds = saved.wqttDeviceIds - deletedIds,
+                    )
+                }) {
                     onSettingsSaved()
                 }
                 updateUi {
