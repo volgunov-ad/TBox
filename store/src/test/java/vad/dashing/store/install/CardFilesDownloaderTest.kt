@@ -58,6 +58,37 @@ class CardFilesDownloaderTest {
     }
 
     @Test
+    fun unreadableExistingFileIsDownloadedAgain() = runBlocking {
+        val payload = "fresh".toByteArray()
+        val published = mutableListOf<String>()
+        val downloader = CardFilesDownloader(
+            cacheDir = temp.newFolder("cache"),
+            download = { _, dest, _ ->
+                dest.parentFile?.mkdirs()
+                dest.writeBytes(payload)
+            },
+            publish = { source, _, name ->
+                published += name
+                source
+            },
+            existing = { _, _ -> throw SecurityException("scoped storage") },
+        )
+        val entry = StoreCatalogEntry(
+            id = "demo",
+            packageName = "p",
+            title = "Demo",
+            downloads = StoreDownloads(
+                folder = "F",
+                files = listOf(StoreDownloadFile("a.txt", sha(payload), payload.size.toLong())),
+            ),
+        )
+        val result = downloader.saveAll(UpdateChannel.RELEASE, entry) { _, _, _ -> }
+        assertEquals(listOf("a.txt"), published)
+        assertEquals(listOf("a.txt"), result.saved)
+        assertTrue(result.failed.isEmpty())
+    }
+
+    @Test
     fun shaMismatchFailsSoftAndContinues() = runBlocking {
         val good = "ok".toByteArray()
         val bad = "bad".toByteArray()

@@ -86,6 +86,15 @@ class DownloadsSaverTest {
     }
 
     @Test
+    fun saveFileAcceptsEmptyFile() {
+        shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val source = File(context.cacheDir, "empty.txt").apply { writeBytes(ByteArray(0)) }
+        val saved = runBlocking { DownloadsSaver.saveFile(context, source, "Folder", "empty.txt") }
+        assertTrue(saved.isFile)
+        assertEquals(0L, saved.length())
+    }
+
+    @Test
     fun saveFileReplacesForbiddenCharacters() {
         shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         val source = File(context.cacheDir, "src.bin").apply { writeBytes(byteArrayOf(1)) }

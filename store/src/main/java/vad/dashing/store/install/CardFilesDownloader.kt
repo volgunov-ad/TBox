@@ -5,6 +5,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import vad.dashing.store.StoreErrors
 import vad.dashing.store.catalog.StoreCatalogEntry
+import vad.dashing.store.catalog.StoreDownloadFile
 import vad.dashing.store.catalog.StoreFileNames
 import vad.dashing.store.catalog.YandexDiskPath
 import vad.dashing.store.disk.UpdateChannel
@@ -62,11 +63,7 @@ internal class CardFilesDownloader(
         for ((index, fileMeta) in files.withIndex()) {
             val progress = CardFileProgress(fileMeta.name, index + 1, count)
             onProgress(progress, 0L, fileMeta.sizeBytes)
-            val existingFile = existing(folder, fileMeta.name)
-            if (existingFile != null &&
-                (fileMeta.sizeBytes == null || existingFile.length() == fileMeta.sizeBytes) &&
-                ApkVerifier.verifySha256(existingFile, fileMeta.sha256)
-            ) {
+            if (isIdenticalExisting(folder, fileMeta)) {
                 unchanged += fileMeta.name
                 continue
             }
@@ -108,4 +105,15 @@ internal class CardFilesDownloader(
             failed = failed,
         )
     }
+
+    /** An unreadable existing file (e.g. another app's file under scoped storage) is just re-downloaded. */
+    private fun isIdenticalExisting(folder: String, fileMeta: StoreDownloadFile): Boolean =
+        try {
+            val file = existing(folder, fileMeta.name)
+            file != null &&
+                (fileMeta.sizeBytes == null || file.length() == fileMeta.sizeBytes) &&
+                ApkVerifier.verifySha256(file, fileMeta.sha256)
+        } catch (_: Exception) {
+            false
+        }
 }

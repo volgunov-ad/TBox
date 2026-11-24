@@ -75,7 +75,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,6 +89,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import vad.dashing.store.BuildConfig
 import vad.dashing.store.DownloadTarget
 import vad.dashing.store.HuKind
@@ -707,7 +707,6 @@ private fun SelfUpdateBanner(
         }
     }
 }
-
 
 @Composable
 private fun FilesResultBanners(files: CardFilesResult?) {
@@ -1345,7 +1344,6 @@ private fun AppDetail(
                 }
             }
 
-
             if (compileState != null) {
                 DetailCard(title = stringResource(R.string.store_compile_title)) {
                     CompileSection(state = compileState, busy = compileBusy, onCompile = onCompile)
@@ -1494,7 +1492,6 @@ private fun ChangelogSection(
         }
     }
 }
-
 
 @Composable
 private fun PhoneQrSection(url: String) {

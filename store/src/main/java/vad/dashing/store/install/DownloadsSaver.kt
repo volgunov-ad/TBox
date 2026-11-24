@@ -83,7 +83,7 @@ object DownloadsSaver {
         if (needsWritePermission() && !hasWritePermission(context)) {
             throw IOException(StoreErrors.DOWNLOADS_PERMISSION)
         }
-        if (!source.isFile || source.length() <= 0L) {
+        if (!source.isFile) {
             throw IOException(StoreErrors.FILE_WRITE_FAILED)
         }
         val safeFolder = sanitizeSegment(folder).ifBlank { "app" }
