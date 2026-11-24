@@ -41,10 +41,13 @@ import vad.dashing.mqtt.ha.AutomationRow
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.DiscoveryCleanup
 import vad.dashing.mqtt.ha.DiscoveryPayload
+import vad.dashing.mqtt.ha.DiscoverySignature
 import vad.dashing.mqtt.ha.HaComponent
+import vad.dashing.mqtt.ha.MissingEntityPolicy
 import vad.dashing.mqtt.ha.Topics
 import vad.dashing.mqtt.ha.buildEntities
 import vad.dashing.mqtt.mqttclient.HiveMqttSession
+import vad.dashing.mqtt.mqttclient.Outgoing
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.wireguard.WgRouteException
@@ -52,11 +55,13 @@ import vad.dashing.mqtt.wireguard.WgTunnel
 import vad.dashing.tbox.localaccess.LocalAccessClient
 import vad.dashing.tbox.localaccess.LocalAccessContract
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 class MqttBridgeService : Service() {
     private val thread = HandlerThread("mqtt-bridge")
     private lateinit var handler: Handler
     private lateinit var store: MqttSettingsStore
+    private var instanceGen = 0
     private val api = MonitorApi()
     private val session = HiveMqttSession()
     private val guard = CommandGuard()
@@ -70,6 +75,14 @@ class MqttBridgeService : Service() {
     private var catalogAtMs: Long = 0L
     private var catalogVersion: Int = -1
     private var publishSignature: String = ""
+    private var signatureKey: String = ""
+    private var signaturePending = true
+    private val knownEntities = HashMap<String, CatalogEntity>()
+    private val missingReloads = HashMap<String, Int>()
+    private val missingSinceMs = HashMap<String, Long>()
+    private val heldMissing = HashSet<String>()
+    private var monitorFailStreak = 0
+    private var monitorFailSinceMs = 0L
     private var lastSeenAtMs: Long = 0L
     private var lastRepeatAtMs: Long = 0L
     private var monitorUp = false
@@ -85,6 +98,7 @@ class MqttBridgeService : Service() {
     private var brokerSinceMs = 0L
     private var monitorSinceMs = 0L
     private val journal = LinkJournal()
+    @Volatile
     private var running = false
     private val statusHttp = MqttStatusHttpServer {
         MqttLocalStatus.encode(BridgeStatusStore.state.value, serviceRunning = true)
@@ -109,6 +123,7 @@ class MqttBridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instanceGen = bumpGeneration()
         store = MqttSettingsStore.get(this)
         cleanup.commit(store.loadPublishedTopics())
         startAsForeground(notificationText(monitorUp = false, brokerUp = false))
@@ -148,17 +163,30 @@ class MqttBridgeService : Service() {
         running = false
         statusHttp.stop()
         runCatching { unregisterReceiver(shutdownReceiver) }
+        val gen = instanceGen
         if (::handler.isInitialized) {
             handler.removeCallbacksAndMessages(null)
-            post {
-                publishOffline()
-                session.disconnect()
+            handler.post {
+                try {
+                    if (currentGeneration() == gen) {
+                        publishOffline()
+                        session.disconnect(publishOffline = true)
+                    } else {
+                        session.disconnect(publishOffline = false)
+                    }
+                } catch (error: Exception) {
+                    lastError = error.message ?: error.javaClass.simpleName
+                }
             }
         }
         thread.quitSafely()
-        BridgeStatusStore.state.value = BridgeStatus()
+        if (currentGeneration() == gen) {
+            BridgeStatusStore.state.value = BridgeStatus()
+        }
         super.onDestroy()
     }
+
+    private fun stillMine(): Boolean = running && instanceGen == currentGeneration()
 
     /** Anything thrown on the bridge looper would kill the whole process. */
     private fun post(block: () -> Unit) {
@@ -172,7 +200,18 @@ class MqttBridgeService : Service() {
     }
 
     private fun cycle() {
-        if (!running) return
+        if (!stillMine()) return
+        if (store.storageError != null) {
+            store = MqttSettingsStore.get(this)
+            if (publishedTopicsNeedReload(hadStorageError = true, storageError = store.storageError)) {
+                cleanup.commit(store.loadPublishedTopics())
+            }
+        }
+        if (store.storageError != null) {
+            lastError = store.storageError ?: MqttSettingsStore.STORAGE_UNAVAILABLE
+            reschedule(MqttSettings().pollSeconds)
+            return
+        }
         val settings = try {
             store.load().normalized()
         } catch (error: Exception) {
@@ -182,13 +221,14 @@ class MqttBridgeService : Service() {
         }
         wireguardOn = settings.wireguardEnabled
         if (!settings.active) {
+            if (!stillMine()) return
             monitorUp = false
             lastError = ""
             monitorError = ""
             brokerCycleError = ""
             tunnelRouteError = ""
             runCatching { publishOffline() }
-            session.disconnect()
+            session.disconnect(publishOffline = true)
             // By start id: a start that raced in with fresh settings keeps the service alive.
             stopSelf(lastStartId)
         } else {
@@ -207,12 +247,12 @@ class MqttBridgeService : Service() {
                 lastError = error.message ?: "Ошибка моста"
             }
         }
-        runCatching { publishStatus(settings) }
+        if (stillMine()) runCatching { publishStatus(settings) }
         reschedule(settings.pollSeconds)
     }
 
     private fun reschedule(pollSeconds: Int) {
-        if (!running) return
+        if (!stillMine()) return
         val delay = if (expedite) START_SETTLE_MS else pollSeconds.coerceIn(1, 60) * 1000L
         expedite = false
         handler.removeCallbacks(loop)
@@ -220,15 +260,17 @@ class MqttBridgeService : Service() {
     }
 
     private fun connectBroker(settings: MqttSettings) {
+        if (!stillMine()) return
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
         session.ensureConnected(
             settings = settings,
             statusTopic = Topics.status(base),
-            onConnected = { post { onBrokerConnected(store.load().normalized()) } },
-            onDisconnected = { post { publishStatus(store.load().normalized()) } },
+            onConnected = { post { if (stillMine()) onBrokerConnected(store.load().normalized()) } },
+            onDisconnected = { post { if (stillMine()) publishStatus(store.load().normalized()) } },
             onMessage = { topic, payload, retained ->
-                post { onMqttMessage(store.load().normalized(), topic, payload, retained) }
+                post { if (stillMine()) onMqttMessage(store.load().normalized(), topic, payload, retained) }
             },
+            stillActive = { stillMine() },
         )
     }
 
@@ -244,7 +286,12 @@ class MqttBridgeService : Service() {
         val health = try {
             api.health(settings.apiPort)
         } catch (error: ApiCallException) {
-            markMonitorDown(settings, wasUp, monitorDownReason(settings))
+            val reason = if (error.code == "bad_response") {
+                error.message ?: "Monitor вернул не JSON"
+            } else {
+                monitorDownReason(settings)
+            }
+            markMonitorDown(settings, wasUp, reason)
             return
         }
         val catalogChanged = health.catalogVersion != catalogVersion
@@ -262,16 +309,38 @@ class MqttBridgeService : Service() {
                 markMonitorDown(settings, wasUp, "Monitor не принимает токен")
                 return
             }
-            throw error
+            notePollFailure(settings, wasUp, error.message ?: "Ошибка опроса")
+            return
+        } catch (error: Exception) {
+            notePollFailure(settings, wasUp, error.message ?: "Ошибка опроса")
+            return
         }
         catalogVersion = health.catalogVersion
         unauthorized = false
+        notePollSuccess()
         monitorUp = true
         if (!wasUp) publishAvailability(settings, "online")
         monitorError = ""
         maybeRepeat(settings)
         syncSubscriptions(settings)
         lastError = ""
+    }
+
+    private fun notePollFailure(settings: MqttSettings, wasUp: Boolean, message: String) {
+        val now = System.currentTimeMillis()
+        if (monitorFailStreak == 0) monitorFailSinceMs = now
+        monitorFailStreak += 1
+        val elapsed = now - monitorFailSinceMs
+        if (MonitorPollPolicy.shouldMarkDown(monitorFailStreak, elapsed)) {
+            markMonitorDown(settings, wasUp, message)
+        } else {
+            lastError = message
+        }
+    }
+
+    private fun notePollSuccess() {
+        monitorFailStreak = 0
+        monitorFailSinceMs = 0L
     }
 
     /**
@@ -314,25 +383,87 @@ class MqttBridgeService : Service() {
 
     private fun reloadCatalogIfNeeded(settings: MqttSettings, force: Boolean) {
         val now = System.currentTimeMillis()
+        var catalogReloaded = false
         if (force || catalogJson.isEmpty() || now - catalogAtMs >= CATALOG_PERIOD_MS) {
             catalogJson = api.catalog(settings.apiPort, settings.accessToken)
             val automations = api.automations(settings.apiPort, settings.accessToken)
                 .map { AutomationRow(it.id, it.name) }
             catalogAtMs = now
-            allEntities = buildEntities(catalogJson, automations)
+            allEntities = try {
+                buildEntities(catalogJson, automations)
+            } catch (error: Exception) {
+                throw ApiCallException("bad_response", error.message ?: "Каталог не разобран", 0)
+            }
+            catalogReloaded = true
         }
         val selected = settings.selectedObjectIds
-        entities = allEntities.filter { it.objectId in selected }
-        val liveIds = entities.map { it.objectId }.toSet()
-        lastState.keys.retainAll(liveIds)
-        fastPublish.retain(liveIds)
-        val signature = entities.joinToString(",") { it.objectId } +
-            "|${settings.discoveryEnabled}|${settings.deviceName}|${settings.deviceId}|" +
-            "${settings.topicPrefix}|${settings.discoveryPrefix}|${settings.acceptCommands}"
-        if (signature != publishSignature) {
-            publishSignature = signature
-            republishStatic(settings)
+        if (catalogReloaded) rememberMissing(selected, now)
+        heldMissing.retainAll(selected)
+        val live = allEntities.filter { it.objectId in selected }
+        val liveIds = live.map { it.objectId }.toSet()
+        entities = live + heldMissing.mapNotNull { id ->
+            if (id in liveIds) null else knownEntities[id]
         }
+        val publishedIds = entities.map { it.objectId }.toSet()
+        lastState.keys.retainAll(publishedIds)
+        fastPublish.retain(publishedIds)
+        val key = discoverySignatureKey(settings)
+        if (catalogReloaded || key != signatureKey) {
+            signatureKey = key
+            signaturePending = true
+        }
+        if (!signaturePending) return
+        val signature = DiscoverySignature.compute(
+            entities = entities,
+            topicPrefix = settings.topicPrefix,
+            discoveryPrefix = settings.discoveryPrefix,
+            deviceId = settings.deviceId,
+            deviceName = settings.deviceName,
+            swVersion = BuildConfig.VERSION_NAME,
+            discoveryEnabled = settings.discoveryEnabled,
+            acceptCommands = settings.acceptCommands,
+        )
+        if (signature == publishSignature || republishStatic(settings)) {
+            publishSignature = signature
+            signaturePending = false
+        }
+    }
+
+    /** Catalog content is hashed on reload. A settings edit hashes on the next cycle. */
+    private fun discoverySignatureKey(settings: MqttSettings): String = listOf(
+        settings.topicPrefix,
+        settings.discoveryPrefix,
+        settings.deviceId,
+        settings.deviceName,
+        settings.discoveryEnabled.toString(),
+        settings.acceptCommands.toString(),
+        settings.selectedObjectIds.sorted().joinToString(","),
+    ).joinToString("\u0000")
+
+    private fun rememberMissing(selected: Set<String>, now: Long) {
+        allEntities.forEach { knownEntities[it.objectId] = it }
+        val seen = allEntities.map { it.objectId }.toSet()
+        (selected - seen).forEach { id ->
+            val count = (missingReloads[id] ?: 0) + 1
+            missingReloads[id] = count
+            val since = missingSinceMs.getOrPut(id) { now }
+            if (MissingEntityPolicy.keep(count, now - since)) {
+                heldMissing += id
+            } else {
+                heldMissing -= id
+                knownEntities.remove(id)
+                missingReloads.remove(id)
+                missingSinceMs.remove(id)
+            }
+        }
+        selected.intersect(seen).forEach { id ->
+            missingReloads.remove(id)
+            missingSinceMs.remove(id)
+            heldMissing.remove(id)
+        }
+        missingReloads.keys.retainAll(selected)
+        missingSinceMs.keys.retainAll(selected)
+        heldMissing.retainAll(selected)
     }
 
     private fun pollSignals(settings: MqttSettings) {
@@ -365,9 +496,10 @@ class MqttBridgeService : Service() {
             if (entity.component == HaComponent.DEVICE_TRACKER) {
                 val point = geoOf(sample) ?: return@forEach
                 if (location.shouldSend(point, now, force = false, minIntervalMs = fastIntervalMs)) {
-                    publishGeo(base, entity, point)
-                    location.markSent(point, now)
-                    sawFresh = true
+                    if (publishGeo(base, entity, point)) {
+                        location.markSent(point, now)
+                        sawFresh = true
+                    }
                 }
                 return@forEach
             }
@@ -380,8 +512,11 @@ class MqttBridgeService : Service() {
             if (entity.component == HaComponent.SELECT && text !in entity.options) return@forEach
             if (lastState[entity.objectId] == text) return@forEach
             if (number != null && !fastPublish.allow(entity.objectId, now, fastIntervalMs)) return@forEach
-            publishState(base, entity.objectId, text)
-            sawFresh = true
+            if (publishState(base, entity.objectId, text)) {
+                sawFresh = true
+            } else if (number != null) {
+                fastPublish.forget(entity.objectId)
+            }
         }
         if (sawFresh) publishLastSeen(settings, force = false)
     }
@@ -405,8 +540,9 @@ class MqttBridgeService : Service() {
         } else {
             fastPublish.mark(entity.objectId, now)
         }
-        publishState(base, entity.objectId, next.json())
-        return true
+        if (publishState(base, entity.objectId, next.json())) return true
+        fastPublish.forget(entity.objectId)
+        return false
     }
 
     private fun maybeRepeat(settings: MqttSettings) {
@@ -415,34 +551,47 @@ class MqttBridgeService : Service() {
         if (now - lastRepeatAtMs < settings.repeatMinutes * 60_000L) return
         lastRepeatAtMs = now
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
-        lastState.forEach { (objectId, payload) ->
-            session.publish(Topics.state(base, objectId), payload, retain = true)
-        }
+        session.publishAll(
+            lastState.map { (objectId, payload) ->
+                Outgoing(Topics.state(base, objectId), payload, retain = true)
+            },
+        )
         location.lastSent()?.let { point ->
             val tracker = entities.firstOrNull { it.component == HaComponent.DEVICE_TRACKER }
             if (tracker != null) publishGeo(base, tracker, point)
         }
-        publishLastSeen(settings, force = true)
-    }
-
-    private fun republishStatic(settings: MqttSettings) {
-        if (!session.connected) return
-        val base = Topics.base(settings.topicPrefix, settings.deviceId)
         publishAvailability(settings, if (monitorUp) "online" else "offline")
         session.publish(
             Topics.commands(base),
             if (settings.acceptCommands) "on" else "off",
             retain = true,
         )
-        publishDiscovery(settings)
-        lastState.forEach { (objectId, payload) ->
-            session.publish(Topics.state(base, objectId), payload, retain = true)
-        }
+        publishLastSeen(settings, force = true)
     }
 
-    private fun publishDiscovery(settings: MqttSettings) {
+    private fun republishStatic(settings: MqttSettings): Boolean {
+        if (!session.connected || !stillMine()) return false
+        val base = Topics.base(settings.topicPrefix, settings.deviceId)
+        val availabilityOk = publishAvailability(settings, if (monitorUp) "online" else "offline")
+        val commandsOk = session.publish(
+            Topics.commands(base),
+            if (settings.acceptCommands) "on" else "off",
+            retain = true,
+        )
+        val discoveryOk = publishDiscovery(settings)
+        session.publishAll(
+            lastState.map { (objectId, payload) ->
+                Outgoing(Topics.state(base, objectId), payload, retain = true)
+            },
+        )
+        return availabilityOk && commandsOk && discoveryOk
+    }
+
+    private fun publishDiscovery(settings: MqttSettings): Boolean {
+        if (!session.connected) return false
         val sw = BuildConfig.VERSION_NAME
         val next = linkedSetOf<String>()
+        val batch = mutableListOf<Outgoing>()
         if (settings.discoveryEnabled) {
             entities.forEach { entity ->
                 val topic = DiscoveryPayload.configTopic(settings.discoveryPrefix, settings.deviceId, entity)
@@ -454,14 +603,13 @@ class MqttBridgeService : Service() {
                     settings.deviceName,
                     sw,
                 )
-                session.publish(topic, body, retain = true)
+                batch += Outgoing(topic, body, retain = true)
                 next += topic
             }
-            DiscoveryPayload.serviceTopics(settings.discoveryPrefix, settings.deviceId).forEach { topic ->
-                next += topic
-            }
-            session.publish(
-                DiscoveryPayload.serviceTopics(settings.discoveryPrefix, settings.deviceId)[0],
+            val serviceTopics = DiscoveryPayload.serviceTopics(settings.discoveryPrefix, settings.deviceId)
+            next += serviceTopics
+            batch += Outgoing(
+                serviceTopics[0],
                 DiscoveryPayload.connectivityConfig(
                     settings.topicPrefix,
                     settings.deviceId,
@@ -470,8 +618,8 @@ class MqttBridgeService : Service() {
                 ),
                 retain = true,
             )
-            session.publish(
-                DiscoveryPayload.serviceTopics(settings.discoveryPrefix, settings.deviceId)[1],
+            batch += Outgoing(
+                serviceTopics[1],
                 DiscoveryPayload.lastSeenConfig(
                     settings.topicPrefix,
                     settings.deviceId,
@@ -481,10 +629,13 @@ class MqttBridgeService : Service() {
                 retain = true,
             )
         }
-        val stale = cleanup.plan(next)
-        stale.forEach { topic -> session.publish(topic, "", retain = true) }
-        cleanup.commit(next)
+        val confirmed = session.publishAll(batch)
+        val keep = if (settings.discoveryEnabled) heldMissing else emptySet()
+        val stale = cleanup.plan(next, keep)
+        val cleared = session.publishAll(stale.map { Outgoing(it, "", retain = true) })
+        cleanup.commit(cleanup.remembered(confirmed, cleared))
         store.savePublishedTopics(cleanup.publishedTopics())
+        return confirmed.containsAll(next) && cleared.size == stale.size
     }
 
     private fun syncSubscriptions(settings: MqttSettings) {
@@ -494,10 +645,8 @@ class MqttBridgeService : Service() {
         if (settings.discoveryEnabled) {
             topics += Topics.haStatus(settings.discoveryPrefix)
         }
-        if (settings.acceptCommands && monitorUp) {
-            entities.filter { it.writable }.forEach { entity ->
-                topics += Topics.set(base, entity.objectId)
-            }
+        if (settings.acceptCommands && monitorUp && entities.any { it.writable }) {
+            topics += Topics.set(base, "+")
         }
         session.replaceSubscriptions(topics)
     }
@@ -516,7 +665,7 @@ class MqttBridgeService : Service() {
         }
         if (!settings.acceptCommands || !monitorUp) return
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
-        val entity = entities.firstOrNull { Topics.set(base, it.objectId) == topic } ?: return
+        val entity = entities.firstOrNull { it.writable && Topics.set(base, it.objectId) == topic } ?: return
         val decision = guard.decide(
             objectId = entity.objectId,
             payload = payload.trim(),
@@ -580,14 +729,15 @@ class MqttBridgeService : Service() {
         session.publish(Topics.state(base, entity.objectId), previous, retain = true)
     }
 
-    private fun publishState(base: String, objectId: String, payload: String) {
-        lastState[objectId] = payload
-        session.publish(Topics.state(base, objectId), payload, retain = true)
+    private fun publishState(base: String, objectId: String, payload: String): Boolean {
+        val ok = session.publish(Topics.state(base, objectId), payload, retain = true)
+        if (ok) lastState[objectId] = payload
+        return ok
     }
 
-    private fun publishGeo(base: String, entity: CatalogEntity, point: GeoPoint) {
-        val json = """{"latitude":${point.latitude},"longitude":${point.longitude}}"""
-        session.publish(Topics.attributes(base, entity.objectId), json, retain = true)
+    private fun publishGeo(base: String, entity: CatalogEntity, point: GeoPoint): Boolean {
+        val json = """{"latitude":${point.latitude},"longitude":${point.longitude},"gps_accuracy":0}"""
+        return session.publish(Topics.attributes(base, entity.objectId), json, retain = true)
     }
 
     private fun publishLastSeen(settings: MqttSettings, force: Boolean) {
@@ -598,10 +748,10 @@ class MqttBridgeService : Service() {
         session.publish(Topics.lastSeen(base), Instant.ofEpochMilli(now).toString(), retain = true)
     }
 
-    private fun publishAvailability(settings: MqttSettings, value: String) {
-        if (!session.connected) return
+    private fun publishAvailability(settings: MqttSettings, value: String): Boolean {
+        if (!session.connected) return false
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
-        session.publish(Topics.status(base), value, retain = true)
+        return session.publish(Topics.status(base), value, retain = true)
     }
 
     private fun publishOffline() {
@@ -613,6 +763,7 @@ class MqttBridgeService : Service() {
     }
 
     private fun publishStatus(settings: MqttSettings) {
+        if (!stillMine()) return
         val brokerUp = session.connected
         val monitorOk = monitorUp && !unauthorized
         val now = System.currentTimeMillis()
@@ -642,6 +793,7 @@ class MqttBridgeService : Service() {
             }
             reportedMonitorUp = monitorOk
         }
+        if (!stillMine()) return
         BridgeStatusStore.state.value = BridgeStatus(
             monitorUp = monitorOk,
             brokerUp = brokerUp,
@@ -657,6 +809,7 @@ class MqttBridgeService : Service() {
             lastPublishAtMs = session.lastPublishAtMs,
             events = journal.snapshot(),
         )
+        if (!stillMine()) return
         val text = notificationText(monitorOk, brokerUp)
         if (text == notifiedText) return
         getSystemService(NotificationManager::class.java)
@@ -727,6 +880,12 @@ class MqttBridgeService : Service() {
 
         /** Each renewal rotates the token, so a token Monitor keeps rejecting must not spin. */
         private const val RENEW_PERIOD_MS = 30_000L
+
+        private val instanceGeneration = AtomicInteger(0)
+
+        private fun bumpGeneration(): Int = instanceGeneration.incrementAndGet()
+
+        private fun currentGeneration(): Int = instanceGeneration.get()
 
         fun start(context: Context) {
             val intent = Intent(context, MqttBridgeService::class.java)

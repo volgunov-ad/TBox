@@ -31,7 +31,14 @@ object DiscoveryPayload {
         swVersion: String,
     ): String {
         val base = Topics.base(topicPrefix, deviceId)
-        val json = baseFields(entity.label, deviceId, entity.objectId, deviceName, swVersion)
+        val json = baseFields(
+            entity.label,
+            entity.component.storageKey,
+            deviceId,
+            entity.objectId,
+            deviceName,
+            swVersion,
+        )
         when (entity.component) {
             HaComponent.SENSOR, HaComponent.BINARY_SENSOR -> {
                 val stateTopic = Topics.state(base, entity.objectId)
@@ -51,8 +58,8 @@ object DiscoveryPayload {
                 putUnit(json, entity)
             }
             HaComponent.DEVICE_TRACKER -> {
+                // No state_topic: a JSON body would become the zone name and beat GPS.
                 val attributes = Topics.attributes(base, entity.objectId)
-                json.put("state_topic", attributes)
                 json.put("json_attributes_topic", attributes)
                 json.put("source_type", "gps")
             }
@@ -89,7 +96,14 @@ object DiscoveryPayload {
         swVersion: String,
     ): String {
         val base = Topics.base(topicPrefix, deviceId)
-        return baseFields(LINK_NAME, deviceId, LINK_OBJECT_ID, deviceName, swVersion)
+        return baseFields(
+            LINK_NAME,
+            HaComponent.BINARY_SENSOR.storageKey,
+            deviceId,
+            LINK_OBJECT_ID,
+            deviceName,
+            swVersion,
+        )
             .put("state_topic", Topics.status(base))
             .put("payload_on", "online")
             .put("payload_off", "offline")
@@ -104,7 +118,14 @@ object DiscoveryPayload {
         swVersion: String,
     ): String {
         val base = Topics.base(topicPrefix, deviceId)
-        return baseFields(LAST_SEEN_NAME, deviceId, LAST_SEEN_OBJECT_ID, deviceName, swVersion)
+        return baseFields(
+            LAST_SEEN_NAME,
+            HaComponent.SENSOR.storageKey,
+            deviceId,
+            LAST_SEEN_OBJECT_ID,
+            deviceName,
+            swVersion,
+        )
             .put("state_topic", Topics.lastSeen(base))
             .put("device_class", "timestamp")
             .toString()
@@ -112,6 +133,7 @@ object DiscoveryPayload {
 
     private fun baseFields(
         name: String,
+        component: String,
         deviceId: String,
         objectId: String,
         deviceName: String,
@@ -119,7 +141,9 @@ object DiscoveryPayload {
     ): JSONObject = JSONObject()
         .put("name", name)
         .put("unique_id", Topics.uniqueId(deviceId, objectId))
+        // object_id keeps entity ids stable on Home Assistant older than 2025.10.
         .put("object_id", objectId)
+        .put("default_entity_id", Topics.defaultEntityId(component, deviceId, objectId))
         .put(
             "device",
             JSONObject()

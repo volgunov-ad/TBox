@@ -68,8 +68,25 @@ object Topics {
     fun uniqueId(deviceId: String, objectId: String): String =
         "tbox_${normalizeDeviceId(deviceId)}_$objectId"
 
-    fun mqttClientId(explicit: String, deviceId: String): String {
-        val raw = explicit.trim().ifEmpty { "tbox-mqtt-${normalizeDeviceId(deviceId)}" }
+    /** Full entity id. Invalid characters are folded so Home Assistant accepts it. */
+    fun defaultEntityId(component: String, deviceId: String, objectId: String): String {
+        val raw = "${component}.${uniqueId(deviceId, objectId)}".lowercase()
+        val dot = raw.indexOf('.')
+        if (dot <= 0) return raw.replace(Regex("[^a-z0-9_]"), "_")
+        val domain = raw.substring(0, dot).replace(Regex("[^a-z0-9_]"), "_")
+        val name = raw.substring(dot + 1).replace(Regex("[^a-z0-9_]"), "_")
+        return "$domain.$name"
+    }
+
+    fun mqttClientId(explicit: String, deviceId: String, installSuffix: String = ""): String {
+        val raw = explicit.trim().ifEmpty {
+            val suffix = installSuffix.trim().replace(Regex("[^A-Za-z0-9]"), "")
+            if (suffix.isEmpty()) {
+                "tbox-mqtt-${normalizeDeviceId(deviceId)}"
+            } else {
+                "tbox-mqtt-${normalizeDeviceId(deviceId)}-$suffix"
+            }
+        }
         val cleaned = raw.replace(Regex("[^A-Za-z0-9_-]"), "_").take(64)
         return cleaned.ifEmpty { "tbox-mqtt-${normalizeDeviceId(deviceId)}" }
     }

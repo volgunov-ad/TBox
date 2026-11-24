@@ -16,9 +16,11 @@ data class CommandResult(
     val publishedState: String?,
 )
 
+const val IGNORED_COMMAND = "NOOP"
+
 fun commandToInvoke(entity: CatalogEntity, payload: String): CommandResult? {
     val text = payload.trim()
-    if (text.isEmpty()) return null
+    if (text.isEmpty() || text.equals(IGNORED_COMMAND, ignoreCase = true)) return null
     entity.automationId?.let { id ->
         if (!text.equals("PRESS", ignoreCase = true)) return null
         return CommandResult(InvokeRequest.RunAutomation(id), publishedState = null)

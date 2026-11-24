@@ -8,13 +8,17 @@ import com.hivemq.client.mqtt.exceptions.MqttClientStateException
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client
 import vad.dashing.mqtt.settings.MqttSettings
+import vad.dashing.mqtt.wireguard.ProbeTunnelPlan
 import vad.dashing.mqtt.wireguard.TunnelEndpoint
 import vad.dashing.mqtt.wireguard.WgRouteException
+import vad.dashing.mqtt.wireguard.WgSupersededException
 import vad.dashing.mqtt.wireguard.WgTunnel
+import vad.dashing.mqtt.wireguard.planProbeTunnel
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
@@ -23,7 +27,14 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.TrustManagerFactory
 
+data class Outgoing(
+    val topic: String,
+    val payload: String,
+    val retain: Boolean,
+)
+
 class HiveMqttSession {
+    private val tunnelOwner = WgTunnel.newOwner()
     private var client: Mqtt3AsyncClient? = null
     private val subscribed = mutableSetOf<String>()
     private var connectionKey: String = ""
@@ -49,15 +60,22 @@ class HiveMqttSession {
         onConnected: () -> Unit,
         onDisconnected: () -> Unit,
         onMessage: (topic: String, payload: String, retained: Boolean) -> Unit,
+        stillActive: () -> Boolean = { true },
     ) {
+        if (!stillActive()) return
         val normalized = settings.normalized()
         val base = normalized.connectionKey() + "|" + statusTopic
         val turningOff = !normalized.wireguardEnabled || normalized.wireguardConf.isBlank()
         // Drop the old session while its tunnel is still up, so offline is a clean DISCONNECT.
         if (turningOff && client != null && connectionKey.substringBeforeLast('|') != base) {
-            closeQuietly()
+            closeQuietly(publishOffline = true)
         }
-        val tunnel = WgTunnel.route(normalized)
+        val tunnel = try {
+            WgTunnel.route(normalized, tunnelOwner, stillActive, takeover = true)
+        } catch (_: WgSupersededException) {
+            return
+        }
+        if (!stillActive()) return
         val key = base + "|" + (tunnel?.port ?: 0)
         if (client != null && connectionKey == key) {
             if (!connected && connectExisting(willTopic)) {
@@ -65,7 +83,7 @@ class HiveMqttSession {
             }
             return
         }
-        closeQuietly()
+        closeQuietly(publishOffline = true)
         connectionKey = key
         val own = generation.incrementAndGet()
         val holder = AtomicReference<Mqtt3AsyncClient?>(null)
@@ -78,7 +96,7 @@ class HiveMqttSession {
             .maxDelay(RECONNECT_MAX_DELAY_S, TimeUnit.SECONDS)
             .applyAutomaticReconnect()
             .addConnectedListener {
-                if (generation.get() != own) {
+                if (generation.get() != own || !stillActive()) {
                     // Same client id: a late stale connect would kick the live client off the broker.
                     // disconnect() returns a hot future; waiting here would stall the client loop.
                     holder.get()?.disconnect()
@@ -89,7 +107,7 @@ class HiveMqttSession {
                 onConnected()
             }
             .addDisconnectedListener { context ->
-                if (generation.get() != own) {
+                if (generation.get() != own || !stillActive()) {
                     // disconnect() is a no-op between reconnect attempts; stop the loop here.
                     context.reconnector.reconnect(false)
                     return@addDisconnectedListener
@@ -127,17 +145,37 @@ class HiveMqttSession {
         connectExisting(statusTopic)
     }
 
-    fun publish(topic: String, payload: String, retain: Boolean) {
-        val current = client ?: return
-        if (!connected) return
-        current.publishWith()
-            .topic(topic)
-            .payload(payload.toByteArray(StandardCharsets.UTF_8))
-            .qos(MqttQos.AT_LEAST_ONCE)
-            .retain(retain)
-            .send()
-            .get(8, TimeUnit.SECONDS)
-        lastPublishAtMs = System.currentTimeMillis()
+    /** False when the client is down or the broker does not confirm the publish. */
+    fun publish(topic: String, payload: String, retain: Boolean): Boolean =
+        publishAll(listOf(Outgoing(topic, payload, retain)), timeoutSeconds = 8).contains(topic)
+
+    fun publishAll(items: List<Outgoing>, timeoutSeconds: Long = PUBLISH_BATCH_TIMEOUT_S): Set<String> {
+        val current = client ?: return emptySet()
+        if (!connected || items.isEmpty()) return emptySet()
+        val futures = items.mapNotNull { item ->
+            try {
+                val future = current.publishWith()
+                    .topic(item.topic)
+                    .payload(item.payload.toByteArray(StandardCharsets.UTF_8))
+                    .qos(MqttQos.AT_LEAST_ONCE)
+                    .retain(item.retain)
+                    .send()
+                item.topic to future
+            } catch (_: Exception) {
+                null
+            }
+        }
+        if (futures.isEmpty()) return emptySet()
+        try {
+            CompletableFuture.allOf(*futures.map { it.second }.toTypedArray()).get(timeoutSeconds, TimeUnit.SECONDS)
+        } catch (_: Exception) {
+            // Individual futures say which topics actually landed.
+        }
+        val done = futures.filter { (_, future) ->
+            future.isDone && !future.isCompletedExceptionally && !future.isCancelled
+        }.map { it.first }.toSet()
+        if (done.isNotEmpty()) lastPublishAtMs = System.currentTimeMillis()
+        return done
     }
 
     /** Clean session drops broker subscriptions. The next replace sends them again. */
@@ -164,9 +202,13 @@ class HiveMqttSession {
         }
     }
 
-    fun disconnect() {
-        closeQuietly()
-        WgTunnel.stop()
+    /**
+     * @param publishOffline false when a newer instance already owns the status topic.
+     * The tunnel stops only if this session still owns it.
+     */
+    fun disconnect(publishOffline: Boolean = true) {
+        closeQuietly(publishOffline)
+        WgTunnel.release(tunnelOwner)
     }
 
     /**
@@ -213,7 +255,7 @@ class HiveMqttSession {
         return false
     }
 
-    private fun closeQuietly() {
+    private fun closeQuietly(publishOffline: Boolean) {
         generation.incrementAndGet()
         val current = client
         val oldWill = willTopic
@@ -226,7 +268,7 @@ class HiveMqttSession {
         willTopic = null
         if (current == null) return
         // A clean DISCONNECT suppresses the will, so the old status topic would stay "online".
-        if (wasConnected && oldWill != null) {
+        if (publishOffline && wasConnected && oldWill != null) {
             runCatching {
                 current.publishWith()
                     .topic(oldWill)
@@ -242,19 +284,36 @@ class HiveMqttSession {
 
     companion object {
         private const val RECONNECT_MAX_DELAY_S = 30L
+        private const val PUBLISH_BATCH_TIMEOUT_S = 20L
 
         fun probe(settings: MqttSettings): String? {
             val normalized = settings.normalized()
             if (normalized.brokerHost.isBlank()) return "Укажите адрес брокера"
+            val plan = planProbeTunnel(WgTunnel.identity(normalized), WgTunnel.held())
+            var probeOwner = 0L
             val tunnel = try {
-                WgTunnel.route(normalized)
+                when (plan) {
+                    is ProbeTunnelPlan.Refuse -> return plan.message
+                    is ProbeTunnelPlan.Direct -> null
+                    is ProbeTunnelPlan.Reuse -> WgTunnel.endpointFor(normalized.brokerHost)
+                    ProbeTunnelPlan.Start -> {
+                        probeOwner = WgTunnel.newOwner()
+                        WgTunnel.route(normalized, probeOwner, stillActive = { true }, takeover = false)
+                    }
+                }
             } catch (error: WgRouteException) {
+                if (probeOwner != 0L) WgTunnel.release(probeOwner)
                 return error.message
             }
             var client: Mqtt3AsyncClient? = null
+            val note = (plan as? ProbeTunnelPlan.Direct)?.note
             return try {
                 val builder = Mqtt3Client.builder()
                     .identifier(clientId(normalized) + "-check")
+                builder.transportConfig()
+                    .socketConnectTimeout(8, TimeUnit.SECONDS)
+                    .mqttConnectTimeout(10, TimeUnit.SECONDS)
+                    .applyTransportConfig()
                 bindBroker(builder, normalized, tunnel)
                 if (normalized.tlsEnabled) builder.sslConfig(sslConfig(normalized.caPem))
                 if (normalized.username.isNotBlank()) {
@@ -265,12 +324,20 @@ class HiveMqttSession {
                 }
                 val built = builder.buildAsync()
                 client = built
-                built.connectWith().keepAlive(30).cleanSession(true).send().get(12, TimeUnit.SECONDS)
-                null
+                val connect = built.connectWith().keepAlive(30).cleanSession(true).send()
+                try {
+                    connect.get(12, TimeUnit.SECONDS)
+                } catch (error: TimeoutException) {
+                    connect.whenComplete { _, _ -> runCatching { built.disconnect() } }
+                    throw error
+                }
+                if (note.isNullOrBlank()) null else "$note. Брокер отвечает"
             } catch (error: Exception) {
-                brokerFailureText(error)
+                val text = brokerFailureText(error)
+                if (note.isNullOrBlank()) text else "$note. $text"
             } finally {
                 client?.let { runCatching { it.disconnect().get(4, TimeUnit.SECONDS) } }
+                if (probeOwner != 0L) WgTunnel.release(probeOwner)
             }
         }
 
@@ -287,7 +354,11 @@ class HiveMqttSession {
         }
 
         private fun clientId(settings: MqttSettings): String =
-            vad.dashing.mqtt.ha.Topics.mqttClientId(settings.mqttClientId, settings.deviceId)
+            vad.dashing.mqtt.ha.Topics.mqttClientId(
+                settings.mqttClientId,
+                settings.deviceId,
+                settings.clientSuffix,
+            )
 
         private fun sslConfig(pem: String): MqttClientSslConfig {
             val builder = MqttClientSslConfig.builder()

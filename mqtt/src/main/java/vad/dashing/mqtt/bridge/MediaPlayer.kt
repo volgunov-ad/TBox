@@ -86,7 +86,10 @@ fun parseMediaCommand(payload: String): MediaCommand? {
     val text = payload.trim()
     if (text.isEmpty()) return null
     val volume = Regex("^volume\\s+(-?\\d+)$", RegexOption.IGNORE_CASE).matchEntire(text)
-    if (volume != null) return MediaCommand.Volume(volume.groupValues[1].toInt())
+    if (volume != null) {
+        val level = volume.groupValues[1].toIntOrNull() ?: return null
+        return MediaCommand.Volume(level)
+    }
     return when (text.uppercase()) {
         "PLAY" -> MediaCommand.Play
         "PAUSE" -> MediaCommand.Pause

@@ -28,6 +28,11 @@ class TopicLayoutTest {
             "homeassistant/sensor/tbox_dashing/outside_temperature/config",
             Topics.discoveryConfig("homeassistant", "sensor", "dashing", "outside_temperature"),
         )
+        assertEquals("sensor.tbox_dashing_outside_temperature", Topics.defaultEntityId("sensor", "dashing", "outside_temperature"))
+        assertEquals("sensor.tbox_dashing_automation_a_b", Topics.defaultEntityId("sensor", "dashing", "automation-a/b"))
+        assertEquals("tbox-mqtt-dashing", Topics.mqttClientId("", "dashing"))
+        assertEquals("tbox-mqtt-dashing-ab12cd34", Topics.mqttClientId("", "dashing", "ab12cd34"))
+        assertEquals("custom-id", Topics.mqttClientId("custom-id", "dashing", "ab12cd34"))
         assertEquals("tbox_dashing", Topics.deviceIdentifier("dashing"))
         assertEquals("Jetour Dashing", Topics.deviceName("  "))
     }
