@@ -165,7 +165,7 @@ final class DclStatus {
         long waitLock = System.currentTimeMillis() + 20_000L;
         boolean acquired = false;
         while (System.currentTimeMillis() < waitLock) {
-            if (RootRun.tryAcquire(RootRun.OWNER_APPOPS)) {
+            if (RootRun.tryAcquire(RootRun.OWNER_APPOPS, RootRun.thisBoot(SystemClock.elapsedRealtime()))) {
                 acquired = true;
                 break;
             }
@@ -188,7 +188,13 @@ final class DclStatus {
             while (System.currentTimeMillis() < deadline && !result.isFile()) {
                 Thread.sleep(300);
             }
-            Log.i(TAG, "appops grant " + (result.isFile() ? "done" : "timeout"));
+            boolean done = result.isFile();
+            Log.i(TAG, "appops grant " + (done ? "done" : "timeout"));
+            if (!done && new File(MbDaemon.APPOPS_BODY).isFile()) {
+                new File(MbDaemon.APPOPS_BODY).delete();
+                RootRun.release();
+                Log.i(TAG, "appops grant released, script never finished");
+            }
         } catch (Exception e) {
             RootRun.release();
             Log.i(TAG, "appops grant " + e);

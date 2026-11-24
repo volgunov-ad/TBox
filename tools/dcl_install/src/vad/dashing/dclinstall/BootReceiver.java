@@ -81,7 +81,7 @@ public class BootReceiver extends BroadcastReceiver {
         boolean nativeUnlock = InstallPlan.hasNativeUnlock(version);
         boolean systemUiHidden = DclPackages.hidden(context.getPackageManager(), InstallPlan.SYSTEMUI);
         boolean unlockUsb = systemUiHidden && !nativeUnlock;
-        if (!RootRun.tryAcquire(RootRun.OWNER_BOOT)) {
+        if (!RootRun.tryAcquire(RootRun.OWNER_BOOT, RootRun.thisBoot(SystemClock.elapsedRealtime()))) {
             Log.i(TAG, "another root script is running, boot fix skipped");
             return;
         }

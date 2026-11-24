@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -69,6 +70,8 @@ public class InstallActivity extends Activity {
     private String customImagePath;
     private boolean running;
     private boolean expectReboot;
+    /** Drop the wallpaper mode file only after restore actually succeeds. */
+    private boolean clearModeOnOk;
     private volatile boolean stopPoll;
     private boolean nativeUnlock;
     private boolean a9Known;
@@ -677,9 +680,9 @@ public class InstallActivity extends Activity {
                     public void run() {
                         saveChoices();
                         expectReboot = true;
+                        clearModeOnOk = true;
                         setBusy(true);
                         restoreStock.setText("Возврат… ГУ перезагрузится");
-                        WallpaperStore.clearMode(InstallActivity.this);
                         startPrepared(currentPlan(false).toRestoreScript(), false, false, true, false);
                     }
                 });
@@ -873,8 +876,16 @@ public class InstallActivity extends Activity {
         });
     }
 
+    private static long bootMark() {
+        return RootRun.thisBoot(SystemClock.elapsedRealtime());
+    }
+
+    private static boolean runInProgress() {
+        return RootRun.inProgress(new File(InstallPlan.LOCK_FILE), System.currentTimeMillis(), bootMark());
+    }
+
     private void arm(String script) throws Exception {
-        if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL)) {
+        if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL, bootMark())) {
             throw new IllegalStateException("Уже выполняется другая команда");
         }
         try {
@@ -891,7 +902,7 @@ public class InstallActivity extends Activity {
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
         while (!stopPoll && System.currentTimeMillis() < deadline) {
             final String text = readTail(InstallPlan.LOG_FILE);
-            final String result = readTail(InstallPlan.RESULT_FILE).trim();
+            String result = readTail(InstallPlan.RESULT_FILE).trim();
             final String shown = text;
             runOnUiThread(new Runnable() {
                 @Override
@@ -899,6 +910,18 @@ public class InstallActivity extends Activity {
                     if (alive() && shown.length() > 0) showLog(shown);
                 }
             });
+            if (!result.startsWith("OK") && !result.startsWith("FAIL") && !runInProgress()) {
+                result = readTail(InstallPlan.RESULT_FILE).trim();
+                if (!result.startsWith("OK") && !result.startsWith("FAIL")) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            failUi("Команда прервалась. Можно начать заново.");
+                        }
+                    });
+                    return;
+                }
+            }
             if (result.startsWith("OK") || result.startsWith("FAIL")) {
                 final String done = result;
                 runOnUiThread(new Runnable() {
@@ -906,6 +929,10 @@ public class InstallActivity extends Activity {
                     public void run() {
                         if (!alive()) return;
                         if (done.startsWith("OK")) {
+                            if (clearModeOnOk) {
+                                WallpaperStore.clearMode(InstallActivity.this);
+                                clearModeOnOk = false;
+                            }
                             if (shown.length() > 0) showLog(shown);
                             if (shown.contains("WARN")) {
                                 log.append("\nЕсть предупреждения, см. строки WARN.");
@@ -953,6 +980,7 @@ public class InstallActivity extends Activity {
     private void failUi(String message) {
         handler.removeCallbacks(rebootWatch);
         running = false;
+        clearModeOnOk = false;
         if (!alive()) return;
         refreshStatus();
         showLog(message);
@@ -993,7 +1021,7 @@ public class InstallActivity extends Activity {
 
     private void resumeRunIfNeeded() {
         File lock = new File(InstallPlan.LOCK_FILE);
-        if (!RootRun.inProgress(lock, System.currentTimeMillis())) return;
+        if (!runInProgress()) return;
         final String owner = RootRun.owner(lock);
         running = true;
         expectReboot = RootRun.OWNER_INSTALL.equals(owner);
@@ -1011,7 +1039,7 @@ public class InstallActivity extends Activity {
                         long deadline = System.currentTimeMillis() + 60_000L;
                         while (!stopPoll
                                 && System.currentTimeMillis() < deadline
-                                && RootRun.inProgress(new File(InstallPlan.LOCK_FILE), System.currentTimeMillis())) {
+                                && runInProgress()) {
                             Thread.sleep(300);
                         }
                         runOnUiThread(new Runnable() {

@@ -259,7 +259,9 @@ final class InstallPlan {
         sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
         sh.append("echo STEP dealer_hide\n");
         hideChecked(sh, DCL_PACKAGE, true);
-        if (!launcherHasNativeUnlock) hideChecked(sh, USB_MOUNT, false);
+        sh.append("if pm path ").append(USB_MOUNT).append(" >/dev/null; then\n");
+        hideChecked(sh, USB_MOUNT, false);
+        sh.append("fi\n");
         hideChecked(sh, BLANK_WALLPAPER, false);
         unhide(sh, USB_HANDLER);
         finishScript(sh, true);
@@ -269,12 +271,19 @@ final class InstallPlan {
     /**
      * Dealer visit off. Hides come from the flag file written by dealer-on, not from the
      * checkboxes on screen, so a visit cannot change which optional packages were hidden.
+     * An empty flag (1.21 wrote one before recording packages) falls back to the SystemUI checkbox.
      */
     String toDealerOffScript() {
         StringBuilder sh = scriptHeader();
         sh.append("echo STEP dealer_unhide\n");
         unhide(sh, DCL_PACKAGE);
-        if (!launcherHasNativeUnlock) unhide(sh, USB_MOUNT);
+        if (launcherHasNativeUnlock) {
+            sh.append("if pm path ").append(USB_MOUNT).append(" >/dev/null; then\n");
+            unhide(sh, USB_MOUNT);
+            sh.append("fi\n");
+        } else {
+            unhide(sh, USB_MOUNT);
+        }
         unhide(sh, BLANK_WALLPAPER);
         sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
         appendGrants(sh);
@@ -291,6 +300,11 @@ final class InstallPlan {
         sh.append("    pm hide \"$pkg\"\n");
         sh.append("    dumpsys package \"$pkg\" | grep -q 'hidden=true' || echo WARN \"hide_$pkg\"\n");
         sh.append("  done < ").append(q(DEALER_FLAG)).append("\n");
+        if (hideSystemUi) {
+            sh.append("  if [ ! -s ").append(q(DEALER_FLAG)).append(" ]; then\n");
+            hideChecked(sh, SYSTEMUI, false);
+            sh.append("  fi\n");
+        }
         sh.append("fi\n");
         appendHomeCheck(sh);
         sh.append("rm -f ").append(q(DEALER_FLAG)).append("\n");
@@ -447,6 +461,7 @@ final class InstallPlan {
         sh.append("fail() {\n");
         sh.append("  echo \"FAIL $1\"\n");
         sh.append("  echo \"FAIL $1\" > \"$RES\"\n");
+        sh.append("  rm -f ").append(q(STAGED_APK)).append("\n");
         appendRelease(sh, false);
         sh.append("  exit 1\n");
         sh.append("}\n");

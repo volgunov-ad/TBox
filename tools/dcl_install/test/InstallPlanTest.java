@@ -1,6 +1,7 @@
 package vad.dashing.dclinstall;
 
 import java.io.File;
+import java.io.FileOutputStream;
 
 /** JDK-only checks for the root scripts. No Android SDK. Run tools/dcl_install/test.sh. */
 public final class InstallPlanTest {
@@ -121,6 +122,11 @@ public final class InstallPlanTest {
             return "rollback does not restore HOME";
         }
         if (!script.contains("{ rollback; fail install_dcl; }")) return "install failure does not roll back";
+        int failFn = script.indexOf("fail() {");
+        int failEnd = script.indexOf("exit 1", failFn);
+        if (failFn < 0 || failEnd < 0 || !script.substring(failFn, failEnd).contains("rm -f '/sdcard/dcl_install/dcl.apk'")) {
+            return "failed install keeps the staged APK";
+        }
         if (!script.contains("cp '/sdcard/Download/dcl.apk' '/sdcard/dcl_install/dcl.apk'")) {
             return "APK is not staged before uninstall";
         }
@@ -226,7 +232,22 @@ public final class InstallPlanTest {
         String off = plan(true).toDealerOffScript();
         if (!off.contains("while IFS= read -r pkg")) return "dealer-off does not replay the flag";
         if (!off.contains("done < '/sdcard/dcl_dealer.flag'")) return "dealer-off does not read the flag";
-        if (off.contains("pm hide com.android.systemui\n")) return "dealer-off hides SystemUI from the checkbox";
+        int empty = off.indexOf("if [ ! -s '/sdcard/dcl_dealer.flag' ]");
+        int hideUi = off.indexOf("pm hide com.android.systemui\n");
+        if (empty < 0 || hideUi < empty) return "empty dealer flag does not hide SystemUI";
+        InstallPlan noUi = new InstallPlan("/x", false, false, false, false, false, false, true);
+        if (noUi.toDealerOffScript().contains("pm hide com.android.systemui\n")) {
+            return "dealer-off hides SystemUI when the checkbox is off";
+        }
+        InstallPlan nativePlan = new InstallPlan("", false, true, false, false, false, false, true);
+        String nativeOn = nativePlan.toDealerOnScript();
+        if (!nativeOn.contains("if pm path vad.dashing.usbmount >/dev/null; then")) {
+            return "dealer-on does not check for a leftover usbmount";
+        }
+        if (!nativeOn.contains("pm hide vad.dashing.usbmount")) return "dealer-on leaves usbmount visible";
+        String nativeOff = nativePlan.toDealerOffScript();
+        if (nativeOff.contains("Unstop")) return "native dealer-off still unstops usbmount";
+        if (!nativeOff.contains("pm unhide vad.dashing.usbmount")) return "dealer-off leaves usbmount hidden";
         return null;
     }
 
@@ -324,21 +345,42 @@ public final class InstallPlanTest {
         if (!dir.mkdirs()) return "temp dir";
         File lock = new File(dir, "lock");
         long now = System.currentTimeMillis();
-        if (RootRun.inProgress(lock, now)) return "missing lock is in progress";
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, now)) return "could not acquire a free lock";
+        long boot = 5_000_000L;
+        long otherBoot = boot + 60_000L;
+        if (RootRun.inProgress(lock, now, boot)) return "missing lock is in progress";
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, now, boot)) return "could not acquire a free lock";
         if (!RootRun.OWNER_INSTALL.equals(RootRun.owner(lock))) return "owner was not stored";
-        if (!RootRun.inProgress(lock, System.currentTimeMillis())) return "fresh lock is not in progress";
-        if (RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis())) {
+        if (RootRun.readBootMark(lock) != boot) return "boot mark was not stored";
+        if (!RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "fresh lock is not in progress";
+        if (RootRun.inProgress(lock, System.currentTimeMillis(), otherBoot)) return "old boot still in progress";
+        if (RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), boot)) {
             return "second acquire succeeded";
+        }
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), otherBoot)) {
+            return "other boot could not replace the lock";
+        }
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_INSTALL, System.currentTimeMillis(), boot)) {
+            return "same boot could not replace an old-boot lock";
         }
         if (!lock.setLastModified(System.currentTimeMillis() - RootRun.STALE_MS - 1000L)) {
             return "could not age the lock";
         }
-        if (RootRun.inProgress(lock, System.currentTimeMillis())) return "stale lock is still in progress";
-        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis())) {
+        if (RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "stale lock is still in progress";
+        if (!RootRun.tryAcquire(lock, RootRun.OWNER_BOOT, System.currentTimeMillis(), boot)) {
             return "stale lock could not be replaced";
         }
         if (!RootRun.OWNER_BOOT.equals(RootRun.owner(lock))) return "replaced owner was not stored";
+        try {
+            FileOutputStream old = new FileOutputStream(lock);
+            try {
+                old.write("install\n1\n".getBytes("UTF-8"));
+            } finally {
+                old.close();
+            }
+        } catch (Exception e) {
+            return "could not write an old lock: " + e;
+        }
+        if (RootRun.inProgress(lock, System.currentTimeMillis(), boot)) return "lock without a boot mark is in progress";
         if (!lock.delete()) return "cleanup";
         dir.delete();
         return null;

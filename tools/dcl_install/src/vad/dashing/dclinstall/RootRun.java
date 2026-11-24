@@ -5,8 +5,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 /**
- * One root script at a time. The lock file holds the owner name and is removed by the
- * script on every exit. A lock older than {@link #STALE_MS} is treated as abandoned.
+ * One root script at a time. The lock file holds the owner, the wall time and the boot
+ * mark, and the script removes it on every exit. A lock from another boot is abandoned
+ * immediately, so a power cut in the middle of an install does not block the next boot
+ * fix. A lock older than {@link #STALE_MS} on the same boot is abandoned too.
  * Pure Java so the installer tests can run it without Android.
  */
 final class RootRun {
@@ -18,26 +20,32 @@ final class RootRun {
 
     private RootRun() {}
 
-    static boolean inProgress(File lock, long nowMs) {
+    /** Boot mark for the device that is calling. Pass {@code SystemClock.elapsedRealtime()}. */
+    static long thisBoot(long elapsedRealtimeMs) {
+        return bootMark(System.currentTimeMillis(), elapsedRealtimeMs);
+    }
+
+    static boolean inProgress(File lock, long nowMs, long currentBootMark) {
         if (lock == null || !lock.isFile()) return false;
+        if (!sameBoot(readBootMark(lock), currentBootMark)) return false;
         long modified = lock.lastModified();
         if (modified <= 0L) return false;
         long age = nowMs - modified;
         return age >= 0L && age < STALE_MS;
     }
 
-    static synchronized boolean tryAcquire(String owner) {
-        return tryAcquire(new File(InstallPlan.LOCK_FILE), owner, System.currentTimeMillis());
+    static synchronized boolean tryAcquire(String owner, long bootMark) {
+        return tryAcquire(new File(InstallPlan.LOCK_FILE), owner, System.currentTimeMillis(), bootMark);
     }
 
-    static synchronized boolean tryAcquire(File lock, String owner, long nowMs) {
-        if (inProgress(lock, nowMs)) return false;
+    static synchronized boolean tryAcquire(File lock, String owner, long nowMs, long bootMark) {
+        if (inProgress(lock, nowMs, bootMark)) return false;
         try {
             File parent = lock.getParentFile();
             if (parent != null && !parent.exists() && !parent.mkdirs()) return false;
             FileOutputStream out = new FileOutputStream(lock);
             try {
-                String text = (owner == null ? "" : owner) + "\n" + nowMs + "\n";
+                String text = (owner == null ? "" : owner) + "\n" + nowMs + "\n" + bootMark + "\n";
                 out.write(text.getBytes("UTF-8"));
             } finally {
                 out.close();
@@ -53,7 +61,7 @@ final class RootRun {
         try {
             FileInputStream in = new FileInputStream(lock);
             try {
-                byte[] buf = new byte[128];
+                byte[] buf = new byte[256];
                 int n = in.read(buf);
                 if (n <= 0) return "";
                 String text = new String(buf, 0, n, "UTF-8");
@@ -64,6 +72,32 @@ final class RootRun {
             }
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /** Third line of the lock. Missing or unreadable is 0, which {@link #sameBoot} treats as stale. */
+    static long readBootMark(File lock) {
+        if (lock == null || !lock.isFile()) return 0L;
+        try {
+            FileInputStream in = new FileInputStream(lock);
+            try {
+                byte[] buf = new byte[256];
+                int n = in.read(buf);
+                if (n <= 0) return 0L;
+                String text = new String(buf, 0, n, "UTF-8");
+                int first = text.indexOf('\n');
+                if (first < 0) return 0L;
+                int second = text.indexOf('\n', first + 1);
+                if (second < 0) return 0L;
+                int third = text.indexOf('\n', second + 1);
+                String line = text.substring(second + 1, third < 0 ? text.length() : third).trim();
+                if (line.length() == 0) return 0L;
+                return Long.parseLong(line);
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            return 0L;
         }
     }
 
