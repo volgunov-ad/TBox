@@ -121,6 +121,38 @@ object CamdBuiltinPresets {
             ),
             builtin = true,
         ),
+        // Trailing export fragments (same values as overridden full_front / full_rear).
+        CamdPreset(
+            "dcl_front",
+            8,
+            crop = CamdCrop(0f, 0f, 0.9941999912261963f, 0.7436000108718872f),
+            defaultCorrection = false,
+            correction = CamdLensCorrection(
+                k1 = -0.8552405834197998f,
+                k2 = 0.744962215423584f,
+                cx = -0.023818425834178925f,
+                cy = 0.24563753604888916f,
+                tiltV = 0.05140483379364014f,
+                tiltH = 0.026158928871154785f,
+            ),
+            builtin = true,
+        ),
+        CamdPreset(
+            "dcl_rear",
+            9,
+            flipH = true,
+            crop = CamdCrop(0f, 0f, 0.9936000108718872f, 0.9944999814033508f),
+            defaultCorrection = false,
+            correction = CamdLensCorrection(
+                k1 = -1f,
+                k2 = 0.9838429689407349f,
+                cx = -0.021876446902751923f,
+                cy = -0.04323837161064148f,
+                tiltV = -0.223419189453125f,
+                tiltH = -0.024627089500427246f,
+            ),
+            builtin = true,
+        ),
     )
 
     fun byName(name: String): CamdPreset? = all.firstOrNull { it.name == name }
