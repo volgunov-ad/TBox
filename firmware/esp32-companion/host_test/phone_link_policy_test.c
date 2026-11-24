@@ -21,7 +21,7 @@ int main(void)
     CHECK(max == 240);
     CHECK(latency == 0);
     CHECK(timeout == 500);
-    CHECK(PHONE_LINK_MAX == 3);
+    CHECK(PHONE_LINK_MAX == 5);
     /* 200 ms is the floor. A phone asking for 100 ms must be refused. */
     CHECK(phone_link_params_ok(160));
     CHECK(phone_link_params_ok(240));

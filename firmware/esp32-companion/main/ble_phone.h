@@ -21,7 +21,8 @@ int ble_phone_relay_count(void);
 /**
  * Command relay channels: bit set = closed. pulse_ms > 0 closes for that long and
  * opens again; 0 holds the state. id_hex NULL/empty targets every relay record.
- * Returns how many relay records matched, or -1 on a malformed id.
+ * Returns how many commands were queued, 0 if none matched, -1 on a bad id,
+ * -2 when every match was offline.
  */
 int ble_phone_relay_set(const char *id_hex, uint8_t mask, uint16_t pulse_ms);
 /** JSON array of {id,name,online,mask} for relay records. No keys. */

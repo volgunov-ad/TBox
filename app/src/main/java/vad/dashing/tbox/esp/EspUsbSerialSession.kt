@@ -63,6 +63,8 @@ class EspUsbSerialSession(
     private var inEndpoint: UsbEndpoint? = null
     private var outEndpoint: UsbEndpoint? = null
     private var openDeviceId: Int = -1
+    /** CDC comm interface, so close can drop DTR. -1 when this device has none. */
+    private var commInterfaceId: Int = -1
     private var readThread: Thread? = null
     private val lineBuffer = StringBuilder()
     @Volatile private var bridgeMode: Boolean = false
@@ -361,19 +363,32 @@ class EspUsbSerialSession(
             inEndpoint = epIn
             outEndpoint = epOut
             openDeviceId = device.deviceId
+            commInterfaceId = commIntf?.id ?: -1
         }
         onConnectionChanged(true)
         startReadLoop()
         if (commIntf != null) {
             assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
         }
+        /* A previous session may still be inside the UM980 bridge. The
+         * companion acks this even when no bridge is open, and it is parsed
+         * as text while the bridge is up. */
+        val bridgeEnd = EspCompanionProtocol.encodeUm980BridgeEnd().toByteArray(Charsets.UTF_8)
+        val canEnd = EspCompanionProtocol.encodeCanLightEnd().toByteArray(Charsets.UTF_8)
+        writeBytesLocked(bridgeEnd, WRITE_TIMEOUT_MS)
+        writeBytesLocked(canEnd, WRITE_TIMEOUT_MS)
         writeBytesLocked(
             EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
             WRITE_TIMEOUT_MS,
         )
+        /* usbIo is the single thread that also runs writeLine. This delayed
+         * end therefore lands before a hello reply can re-open CAN-light or
+         * the UM980 bridge. */
         usbIo.execute {
             try {
                 Thread.sleep(300)
+                writeBytesLocked(bridgeEnd, WRITE_TIMEOUT_MS)
+                writeBytesLocked(canEnd, WRITE_TIMEOUT_MS)
                 writeBytesLocked(
                     EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
                     WRITE_TIMEOUT_MS,
@@ -534,18 +549,24 @@ class EspUsbSerialSession(
         }
         val conn: UsbDeviceConnection?
         val intf: UsbInterface?
+        val commId: Int
         synchronized(ioLock) {
             readThread?.interrupt()
             readThread = null
             conn = connection
             intf = usbInterface
+            commId = commInterfaceId
             connection = null
             usbInterface = null
             inEndpoint = null
             outEndpoint = null
             openDeviceId = -1
+            commInterfaceId = -1
             synchronized(lineBuffer) { lineBuffer.setLength(0) }
             loggedFirstRx.set(false)
+        }
+        if (conn != null && commId >= 0) {
+            assertCdcControlLineState(conn, commId, dtr = false, rts = false)
         }
         try {
             intf?.let { conn?.releaseInterface(it) }

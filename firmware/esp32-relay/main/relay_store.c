@@ -31,6 +31,9 @@ static bool s_tx_dirty;
 static bool s_rx_dirty;
 static uint32_t s_tx_saved_ms;
 static uint32_t s_rx_saved_ms;
+static bool s_have_peer;
+static uint8_t s_peer_type;
+static uint8_t s_peer_addr[6];
 
 static uint32_t now_ms(void)
 {
@@ -72,6 +75,13 @@ void relay_store_init(void)
     uint8_t mask = 0;
     nvs_get_u8(h, "mask", &mask);
     s_mask = mask & 0x01;
+    uint8_t peer[7];
+    len = sizeof(peer);
+    if (nvs_get_blob(h, "peer", peer, &len) == ESP_OK && len == sizeof(peer)) {
+        s_have_peer = true;
+        s_peer_type = peer[0];
+        memcpy(s_peer_addr, peer + 1, 6);
+    }
 
     /* Jump past anything sent before an unclean power cut. */
     s_tx += (uint32_t)CONFIG_RELAY_REBOOT_MARGIN;
@@ -93,6 +103,38 @@ const uint8_t *relay_store_id(void) { return s_id; }
 const uint8_t *relay_store_key(void) { return s_key; }
 const char *relay_store_name(void) { return s_name; }
 bool relay_store_paired(void) { return s_paired; }
+
+bool relay_store_key_ok(void)
+{
+    uint8_t diff = 0;
+    for (int i = 0; i < (int)sizeof(s_key); i++) diff |= s_key[i];
+    return diff != 0;
+}
+
+bool relay_store_has_peer(void) { return s_have_peer; }
+
+bool relay_store_peer_match(uint8_t addr_type, const uint8_t addr[6])
+{
+    if (!s_have_peer || !addr) return false;
+    return s_peer_type == addr_type && memcmp(s_peer_addr, addr, 6) == 0;
+}
+
+void relay_store_set_peer(uint8_t addr_type, const uint8_t addr[6])
+{
+    if (!addr) return;
+    if (s_have_peer && s_peer_type == addr_type && memcmp(s_peer_addr, addr, 6) == 0) return;
+    s_have_peer = true;
+    s_peer_type = addr_type;
+    memcpy(s_peer_addr, addr, 6);
+    uint8_t peer[7];
+    peer[0] = addr_type;
+    memcpy(peer + 1, addr, 6);
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_blob(h, "peer", peer, sizeof(peer));
+    nvs_commit(h);
+    nvs_close(h);
+}
 
 void relay_store_set_paired(void)
 {
@@ -124,7 +166,14 @@ void relay_store_commit_rx(uint32_t counter)
 {
     if (counter <= s_rx) return;
     s_rx = counter;
-    s_rx_dirty = true;
+    s_rx_dirty = false;
+    s_rx_saved_ms = now_ms();
+    /* Commands are rare. Persist now so a power cut cannot replay this 0x30. */
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u32(h, "rx", s_rx);
+    nvs_commit(h);
+    nvs_close(h);
 }
 
 uint8_t relay_store_mask(void) { return s_mask; }

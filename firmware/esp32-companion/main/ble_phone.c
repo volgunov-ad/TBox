@@ -135,6 +135,28 @@ static bool s_relay_desired_valid[BLE_DEVICE_MAX];
 static uint8_t s_relay_actual[BLE_DEVICE_MAX];
 static bool s_relay_actual_valid[BLE_DEVICE_MAX];
 static uint8_t s_relay_gen[BLE_DEVICE_MAX];
+static bool s_relay_wait[BLE_DEVICE_MAX];
+static uint32_t s_relay_wait_ms[BLE_DEVICE_MAX];
+static uint8_t s_relay_wait_tries[BLE_DEVICE_MAX];
+static uint8_t s_relay_wait_states[BLE_DEVICE_MAX];
+static uint16_t s_relay_wait_pulse[BLE_DEVICE_MAX];
+static bool s_relay_need_latch[BLE_DEVICE_MAX];
+/** Forget asked for an open; the record stays until 0x31 confirms it. */
+static bool s_relay_forgetting[BLE_DEVICE_MAX];
+/** Drop from the main loop. on_sealed must not write NVS on the host task. */
+static bool s_relay_drop_pending[BLE_DEVICE_MAX];
+/**
+ * False until the first 0x31 after boot copies the relay's echoed generation.
+ * The relay keeps the last generation across a companion reboot.
+ */
+static bool s_relay_gen_synced[BLE_DEVICE_MAX];
+/** Command parked until the first 0x31 adopts the relay's generation. */
+static bool s_relay_hold_cmd[BLE_DEVICE_MAX];
+static uint8_t s_relay_hold_states[BLE_DEVICE_MAX];
+static uint16_t s_relay_hold_pulse[BLE_DEVICE_MAX];
+static bool s_adv_refresh;
+/** 0x31 body[1]: the relay opened itself (max-on or link loss), not a pulse end. */
+#define RELAY_FLAG_SELF_OPEN 0x08
 
 static bool s_learn;
 static uint32_t s_learn_deadline_ms;
@@ -170,6 +192,9 @@ typedef struct {
     int phone_index;
     uint8_t tx[TX_MAX][SEALED_LEN];
     int tx_n;
+    /* Relay 0x30. Snapshot pages must not evict it. */
+    uint8_t tx_hi[SEALED_LEN];
+    bool tx_hi_valid;
 } phone_link_t;
 
 static phone_link_t s_links[PHONE_LINK_MAX];
@@ -190,6 +215,9 @@ static idle_block_t s_blocked[IDLE_BLOCK_MAX];
 static bool s_out_pair;
 static uint8_t s_out_pair_id[4];
 static char s_out_pair_name[PHONE_NAME_MAX + 1];
+static int s_out_pair_kind;
+static int s_out_pair_rssi;
+static uint16_t s_out_pair_conn;
 static cmd_out_t s_out_cmd[CMD_OUT_MAX];
 static int s_out_cmd_n;
 static bool s_out_snap_req;
@@ -359,6 +387,16 @@ static void load_nvs(void)
     memset(s_relay_actual, 0, sizeof(s_relay_actual));
     memset(s_relay_actual_valid, 0, sizeof(s_relay_actual_valid));
     memset(s_relay_gen, 0, sizeof(s_relay_gen));
+    memset(s_relay_wait, 0, sizeof(s_relay_wait));
+    memset(s_relay_wait_ms, 0, sizeof(s_relay_wait_ms));
+    memset(s_relay_wait_tries, 0, sizeof(s_relay_wait_tries));
+    memset(s_relay_wait_states, 0, sizeof(s_relay_wait_states));
+    memset(s_relay_wait_pulse, 0, sizeof(s_relay_wait_pulse));
+    memset(s_relay_need_latch, 0, sizeof(s_relay_need_latch));
+    memset(s_relay_forgetting, 0, sizeof(s_relay_forgetting));
+    memset(s_relay_drop_pending, 0, sizeof(s_relay_drop_pending));
+    memset(s_relay_gen_synced, 0, sizeof(s_relay_gen_synced));
+    memset(s_relay_hold_cmd, 0, sizeof(s_relay_hold_cmd));
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
     uint8_t n = 0;
@@ -384,7 +422,12 @@ static void load_nvs(void)
             char rkey[COUNTER_KEY_LEN];
             snprintf(rkey, COUNTER_KEY_LEN, "r%d", i);
             uint32_t tx = 0;
-            if (nvs_get_u32(h, rkey, &tx) == ESP_OK) s_relay_tx[s_count] = tx;
+            /* A crash can lose the counter between a send and the NVS flush.
+             * Skip ahead so the first command after boot is not a replay. */
+            if (nvs_get_u32(h, rkey, &tx) == ESP_OK) {
+                if (tx > 0xFFFFFFFFu - 32u) tx = 0xFFFFFFFFu - 32u;
+                s_relay_tx[s_count] = tx + 32u;
+            }
         }
         s_count++;
     }
@@ -503,7 +546,9 @@ static bool unseal(const uint8_t key[16], const uint8_t *payload, uint8_t len,
     make_nonce(type, id, counter, nonce);
     aes_ctr_xor(key, nonce, payload + 9, body, BODY_LEN);
     make_tag(key, type, id, counter, body, tag);
-    if (memcmp(tag, payload + 9 + BODY_LEN, 4) != 0) return false;
+    uint8_t diff = 0;
+    for (int i = 0; i < 4; i++) diff |= (uint8_t)(tag[i] ^ payload[9 + BODY_LEN + i]);
+    if (diff != 0) return false;
     *type_out = type;
     *counter_out = counter;
     return true;
@@ -833,15 +878,28 @@ static phone_link_t *link_by_phone_locked(int index)
     return NULL;
 }
 
+static bool drop_record_locked(int index);
+
 /**
  * Seal 0x30 and queue it for the relay. The counter bump stays in RAM; NVS r%d is
- * flushed from poll, so this is safe inside GATT callbacks. Returns false when the
- * relay is offline (the desired state still applies on its next report).
+ * flushed from poll, so this is safe inside GATT callbacks. A retry passes
+ * fresh=false and reuses the generation so the relay does not pulse again.
+ * Returns false when the relay is offline (the desired state still applies
+ * on its next report).
  */
-static bool relay_send_cmd_locked(int index, uint8_t states, uint16_t pulse_ms)
+static bool relay_send_cmd_locked(int index, uint8_t states, uint16_t pulse_ms, bool fresh)
 {
     phone_link_t *link = link_by_phone_locked(index);
     if (!link) return false;
+    /* A command before the first 0x31 would reuse generation 1 and the
+     * powered relay would echo it without applying. Park it. */
+    if (!s_relay_gen_synced[index]) {
+        s_relay_hold_cmd[index] = true;
+        s_relay_hold_states[index] = states;
+        s_relay_hold_pulse[index] = pulse_ms;
+        return true;
+    }
+    s_relay_hold_cmd[index] = false;
     uint8_t body[BODY_LEN];
     uint8_t pkt[SEALED_LEN];
     memset(body, 0, sizeof(body));
@@ -849,18 +907,24 @@ static bool relay_send_cmd_locked(int index, uint8_t states, uint16_t pulse_ms)
     body[1] = states;
     body[2] = (uint8_t)pulse_ms;
     body[3] = (uint8_t)(pulse_ms >> 8);
-    body[4] = ++s_relay_gen[index];
+    if (fresh) s_relay_gen[index]++;
+    body[4] = s_relay_gen[index];
     uint32_t counter = ++s_relay_tx[index];
     seal(s_phones[index].key, RELAY_CMD_TYPE, s_phones[index].id, counter, body, pkt);
-    tx_push(link, pkt);
+    memcpy(link->tx_hi, pkt, SEALED_LEN);
+    link->tx_hi_valid = true;
     s_relay_tx_dirty |= (1u << index);
+    s_relay_wait[index] = true;
+    s_relay_wait_ms[index] = now_ms();
+    s_relay_wait_states[index] = states;
+    s_relay_wait_pulse[index] = pulse_ms;
     return true;
 }
 
 /** Cleartext write: type, id[4], key[16], name. Name is at most PHONE_NAME_MAX bytes. */
 static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
 {
-    if (!s_learn || len < 21) return;
+    if (len < 21) return;
     const uint8_t *id = payload + 1;
     const uint8_t *key = payload + 5;
     if (s_denied_valid && memcmp(s_denied_id, id, 4) == 0) return;
@@ -868,23 +932,49 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     if (s_pending_pair && memcmp(s_pending.id, id, 4) == 0 &&
         memcmp(s_pending.key, key, 16) == 0) {
         mark_link_seen();
+        /* Allow must use the link that is up now, not the first PAIR. */
+        if (s_rx_link) s_pending_conn = s_rx_link->handle;
         return;
     }
+    /* Keep the first pending request until the HU allows or denies it. */
+    if (s_pending_pair) return;
     int existing = find_phone(id);
     if (existing >= 0 && memcmp(s_phones[existing].key, key, 16) == 0) {
-        mark_link_seen();
-        /* A relay binds only on sealed packets and latches "paired" only on an
-         * inbound 0x30, so answer its repeated PAIR until it stops. */
-        if (s_phones[existing].kind == REC_KIND_RELAY) {
-            bind_phone(existing);
-            if (s_relay_desired_valid[existing]) {
-                relay_send_cmd_locked(existing, s_relay_desired[existing], 0);
-            } else {
-                relay_send_cmd_locked(existing, 0, 0);
+        /* Cleartext PAIR must not move an existing binding. A relay that
+         * still sends PAIR has not latched, so the 0x30 goes out now. */
+        if (s_phones[existing].kind != REC_KIND_RELAY) {
+            mark_link_seen();
+            return;
+        }
+        /* A matching key and a cleartext PAIR means the relay is not
+         * latched. paired is cleared only by a factory reset, which
+         * reboots the board, so it has no generation to adopt.
+         * A second link must not open the relay that is already online. */
+        phone_link_t *bound = link_by_phone_locked(existing);
+        if (bound != NULL && bound != s_rx_link) {
+            return;
+        }
+        if (s_rx_link && bound == NULL) {
+            s_rx_link->phone_index = existing;
+            s_rx_link->seen = true;
+        }
+        s_relay_need_latch[existing] = true;
+        s_adv_refresh = true;
+        s_relay_gen_synced[existing] = true;
+        if (!s_relay_wait[existing]) {
+            bool held = s_relay_hold_cmd[existing];
+            uint8_t st = held ? s_relay_hold_states[existing] : 0;
+            uint16_t pulse = held ? s_relay_hold_pulse[existing] : 0;
+            s_relay_wait_tries[existing] = 0;
+            if (!relay_send_cmd_locked(existing, st, pulse, true)) {
+                s_relay_gen_synced[existing] = false;
             }
         }
         return;
     }
+    /* A new phone or relay is only accepted while the learn window is open.
+     * An already allowed relay may still PAIR so its latch can go out. */
+    if (!s_learn) return;
 
     memset(&s_pending, 0, sizeof(s_pending));
     memcpy(s_pending.id, id, 4);
@@ -902,6 +992,9 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     memcpy(s_out_pair_id, s_pending.id, 4);
     memcpy(s_out_pair_name, s_pending.name, s_pending.name_len);
     s_out_pair_name[s_pending.name_len] = '\0';
+    s_out_pair_kind = s_pending.kind == REC_KIND_RELAY ? 1 : 0;
+    s_out_pair_conn = s_pending_conn;
+    s_out_pair_rssi = 0;
     s_out_pair = true;
 }
 
@@ -910,8 +1003,15 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
     const uint8_t *id = payload + 1;
     int index = find_phone(id);
     if (index < 0) return;
-    if (payload[0] == RELAY_STATE_TYPE && s_phones[index].kind != REC_KIND_RELAY) return;
-    bool bound = s_rx_link && s_rx_link->phone_index == index;
+    uint8_t wire = payload[0];
+    uint8_t kind = s_phones[index].kind;
+    if (wire == 2 || wire == 3) {
+        if (kind != REC_KIND_PHONE) return;
+    } else if (wire == RELAY_STATE_TYPE) {
+        if (kind != REC_KIND_RELAY) return;
+    } else {
+        return;
+    }
     uint8_t type = 0;
     uint32_t counter = 0;
     uint8_t body[BODY_LEN];
@@ -932,14 +1032,61 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
     } else if (type == 3) {
         note_refresh(index, counter, (uint16_t)(body[0] | (body[1] << 8)), body[2], now_ms());
     } else if (type == RELAY_STATE_TYPE) {
-        s_relay_actual[index] = body[0];
+        uint8_t actual = body[0] & 0x01;
+        uint8_t echoed = body[4];
+        s_relay_actual[index] = actual;
         s_relay_actual_valid[index] = true;
-        relay_report_locked(index, body[0], body[1],
+        /* The relay remembers the last generation. Copy it before any new command. */
+        if (!s_relay_gen_synced[index] && !s_relay_wait[index]) {
+            s_relay_gen[index] = echoed;
+        }
+        bool just_adopted = !s_relay_gen_synced[index] && !s_relay_wait[index];
+        s_relay_gen_synced[index] = true;
+        bool sent_now = false;
+        /* An echo of the generation we already sent confirms the latch.
+         * The report we just copied is not that echo. */
+        if (s_relay_need_latch[index] && !s_relay_hold_cmd[index] &&
+            !just_adopted && echoed == s_relay_gen[index]) {
+            s_relay_need_latch[index] = false;
+            s_adv_refresh = true;
+        } else if (s_relay_need_latch[index] && !s_relay_wait[index] &&
+                   !s_relay_hold_cmd[index]) {
+            s_relay_wait_tries[index] = 0;
+            sent_now = relay_send_cmd_locked(index, 0, 0, true);
+        }
+        if (echoed == s_relay_gen[index] && !sent_now) {
+            /* While forgetting, keep retrying until the coil is actually open. */
+            if (!(s_relay_forgetting[index] && actual != 0)) {
+                s_relay_wait[index] = false;
+            }
+        }
+        /* The relay opened itself. A keepalive that left before our latest
+         * command must not cancel that command. A forget still waits. */
+        if ((body[1] & RELAY_FLAG_SELF_OPEN) && echoed == s_relay_gen[index]) {
+            s_relay_desired_valid[index] = false;
+            if (!s_relay_forgetting[index]) {
+                s_relay_wait[index] = false;
+            }
+        }
+        if (s_relay_hold_cmd[index] && !s_relay_wait[index]) {
+            uint8_t st = s_relay_hold_states[index];
+            uint16_t pulse = s_relay_hold_pulse[index];
+            s_relay_wait_tries[index] = 0;
+            /* need_latch stays set until this generation is echoed. */
+            relay_send_cmd_locked(index, st, pulse, true);
+        }
+        if (s_relay_forgetting[index] && actual == 0 && echoed == s_relay_gen[index]) {
+            s_relay_drop_pending[index] = true;
+            s_relay_wait[index] = false;
+            return;
+        }
+        relay_report_locked(index, actual, body[1],
                             (uint16_t)(body[2] | ((uint16_t)body[3] << 8)));
-        /* First report of a fresh link: repeat the desired state so a relay that
-         * rebooted or reconnected ends in the state the HU last set. */
-        if (!bound && s_relay_desired_valid[index]) {
-            relay_send_cmd_locked(index, s_relay_desired[index], 0);
+        /* Repeat the latched state when this link is new or the relay disagrees. */
+        if (s_relay_desired_valid[index] &&
+            actual != (s_relay_desired[index] & 0x01) && !s_relay_wait[index]) {
+            s_relay_wait_tries[index] = 0;
+            relay_send_cmd_locked(index, s_relay_desired[index], 0, true);
         }
     }
 }
@@ -978,6 +1125,7 @@ bool ble_phone_learn_begin(uint32_t timeout_ms)
     s_learn = true;
     s_pending_pair = false;
     s_denied_valid = false;
+    s_adv_refresh = true;
     s_learn_deadline_ms = now_ms() + timeout_ms;
     ble_radio_unlock();
     return true;
@@ -989,6 +1137,7 @@ void ble_phone_learn_end(void)
     s_learn = false;
     s_pending_pair = false;
     s_out_pair = false;
+    s_adv_refresh = true;
     ble_radio_unlock();
 }
 
@@ -1020,12 +1169,17 @@ bool ble_phone_allow(const char *id_hex)
             if (ok) {
                 s_learn = false;
                 s_out_pair = false;
+                s_adv_refresh = true;
                 if (rec.kind == REC_KIND_RELAY) {
-                    /* The relay latches "paired" on the first 0x30. PAIR is
-                     * cleartext and binds no link, so bind the link that sent
-                     * the PAIR before pushing the latch command (open). */
+                    /* The relay latches "paired" on the first 0x30. The link
+                     * that wrote PAIR is the one the user just allowed. */
                     s_relay_desired[index] = 0;
                     s_relay_desired_valid[index] = false;
+                    s_relay_forgetting[index] = false;
+                    s_relay_need_latch[index] = true;
+                    /* Unpaired: no generation to adopt. Send on this link now. */
+                    s_relay_gen_synced[index] = true;
+                    s_relay_wait_tries[index] = 0;
                     links_ensure();
                     phone_link_t *link = link_by_conn(s_pending_conn);
                     if (link && link->phone_index != index) {
@@ -1034,8 +1188,12 @@ bool ble_phone_allow(const char *id_hex)
                         bind_phone(index);
                         s_rx_link = rx;
                     }
-                    ESP_LOGI(TAG, "relay %d latch cmd queued", index);
-                    relay_send_cmd_locked(index, 0, 0);
+                    if (relay_send_cmd_locked(index, 0, 0, true)) {
+                        ESP_LOGI(TAG, "relay %d latch queued", index);
+                    } else {
+                        s_relay_gen_synced[index] = false;
+                        ESP_LOGI(TAG, "relay %d latch armed", index);
+                    }
                 }
             }
         }
@@ -1065,6 +1223,60 @@ void ble_phone_deny(const char *id_hex)
     ble_radio_unlock();
 }
 
+/** Remove the record. A live link is kicked after the caller has finished with it. */
+static bool drop_record_locked(int index)
+{
+    if (index < 0 || index >= s_count) return false;
+    links_ensure();
+    bool relay = s_phones[index].kind == REC_KIND_RELAY;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (relay && s_links[i].phone_index == index) s_links[i].kick = true;
+    }
+    for (int i = index; i < s_count - 1; i++) {
+        s_phones[i] = s_phones[i + 1];
+    }
+    s_count--;
+    for (int i = index; i < BLE_DEVICE_MAX - 1; i++) {
+        s_relay_tx[i] = s_relay_tx[i + 1];
+        s_relay_desired[i] = s_relay_desired[i + 1];
+        s_relay_desired_valid[i] = s_relay_desired_valid[i + 1];
+        s_relay_actual[i] = s_relay_actual[i + 1];
+        s_relay_actual_valid[i] = s_relay_actual_valid[i + 1];
+        s_relay_gen[i] = s_relay_gen[i + 1];
+        s_relay_wait[i] = s_relay_wait[i + 1];
+        s_relay_wait_ms[i] = s_relay_wait_ms[i + 1];
+        s_relay_wait_tries[i] = s_relay_wait_tries[i + 1];
+        s_relay_wait_states[i] = s_relay_wait_states[i + 1];
+        s_relay_wait_pulse[i] = s_relay_wait_pulse[i + 1];
+        s_relay_need_latch[i] = s_relay_need_latch[i + 1];
+        s_relay_forgetting[i] = s_relay_forgetting[i + 1];
+        s_relay_drop_pending[i] = s_relay_drop_pending[i + 1];
+        s_relay_gen_synced[i] = s_relay_gen_synced[i + 1];
+        s_relay_hold_cmd[i] = s_relay_hold_cmd[i + 1];
+        s_relay_hold_states[i] = s_relay_hold_states[i + 1];
+        s_relay_hold_pulse[i] = s_relay_hold_pulse[i + 1];
+    }
+    s_relay_forgetting[s_count] = false;
+    s_relay_drop_pending[s_count] = false;
+    s_relay_gen_synced[s_count] = false;
+    s_relay_hold_cmd[s_count] = false;
+    for (int i = 0; i < s_wait_n; ) {
+        if (s_wait[i].index == index) {
+            for (int j = i; j < s_wait_n - 1; j++) s_wait[j] = s_wait[j + 1];
+            s_wait_n--;
+            continue;
+        }
+        if (s_wait[i].index > index) s_wait[i].index--;
+        i++;
+    }
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (s_links[i].phone_index == index) s_links[i].phone_index = -1;
+        else if (s_links[i].phone_index > index) s_links[i].phone_index--;
+    }
+    s_out_status = true;
+    return save_nvs();
+}
+
 bool ble_phone_forget(const char *id_hex)
 {
     uint8_t id[4];
@@ -1073,33 +1285,23 @@ bool ble_phone_forget(const char *id_hex)
     int index = find_phone(id);
     bool ok = false;
     if (index >= 0) {
-        for (int i = index; i < s_count - 1; i++) {
-            s_phones[i] = s_phones[i + 1];
-        }
-        s_count--;
-        for (int i = index; i < BLE_DEVICE_MAX - 1; i++) {
-            s_relay_tx[i] = s_relay_tx[i + 1];
-            s_relay_desired[i] = s_relay_desired[i + 1];
-            s_relay_desired_valid[i] = s_relay_desired_valid[i + 1];
-            s_relay_actual[i] = s_relay_actual[i + 1];
-            s_relay_actual_valid[i] = s_relay_actual_valid[i + 1];
-            s_relay_gen[i] = s_relay_gen[i + 1];
-        }
-        for (int i = 0; i < s_wait_n; ) {
-            if (s_wait[i].index == index) {
-                for (int j = i; j < s_wait_n - 1; j++) s_wait[j] = s_wait[j + 1];
-                s_wait_n--;
-                continue;
+        if (s_phones[index].kind == REC_KIND_RELAY && link_by_phone_locked(index)) {
+            /* Keep the record until the relay confirms the coil is open.
+             * Deleting it now would drop the link before 0x30 is applied. */
+            if (!s_relay_forgetting[index] || !s_relay_wait[index]) {
+                s_relay_forgetting[index] = true;
+                s_relay_desired[index] = 0;
+                s_relay_desired_valid[index] = false;
+                s_relay_need_latch[index] = false;
+                s_relay_wait_tries[index] = 0;
+                s_relay_wait_states[index] = 0;
+                s_relay_wait_pulse[index] = 0;
+                relay_send_cmd_locked(index, 0, 0, true);
             }
-            if (s_wait[i].index > index) s_wait[i].index--;
-            i++;
+            ok = true;
+        } else {
+            ok = drop_record_locked(index);
         }
-        links_ensure();
-        for (int i = 0; i < PHONE_LINK_MAX; i++) {
-            if (s_links[i].phone_index == index) s_links[i].phone_index = -1;
-            else if (s_links[i].phone_index > index) s_links[i].phone_index--;
-        }
-        ok = save_nvs();
     }
     ble_radio_unlock();
     return ok;
@@ -1161,12 +1363,16 @@ void ble_phone_poll(uint32_t t)
     bool send_pair = false;
     char pair_hex[9];
     char pair_name[PHONE_NAME_MAX + 1];
+    int pair_kind = 0;
+    uint16_t pair_conn = BLE_HS_CONN_HANDLE_NONE;
+    bool adv_refresh = false;
     cmd_out_t cmds[CMD_OUT_MAX];
     int cmd_n = 0;
     bool send_snap_req = false;
     bool send_status = false;
     uint8_t notes[PHONE_LINK_MAX][SEALED_LEN];
     uint16_t note_conn[PHONE_LINK_MAX];
+    bool note_hi[PHONE_LINK_MAX];
     int note_n = 0;
     uint16_t note_handle = 0;
     uint16_t drop_conn[PHONE_LINK_MAX];
@@ -1180,6 +1386,50 @@ void ble_phone_poll(uint32_t t)
         s_pending_pair = false;
         s_out_pair = false;
         s_out_status = true;
+        s_adv_refresh = true;
+    }
+    for (int i = 0; i < s_count; ) {
+        if (!s_relay_drop_pending[i]) {
+            i++;
+            continue;
+        }
+        drop_record_locked(i);
+    }
+    for (int i = 0; i < s_count; i++) {
+        if (s_phones[i].kind != REC_KIND_RELAY) continue;
+        if (s_relay_forgetting[i] && !s_relay_wait[i]) {
+            if (!link_by_phone_locked(i)) {
+                drop_record_locked(i);
+                i--;
+                continue;
+            }
+            s_relay_wait_tries[i] = 0;
+            s_relay_wait_states[i] = 0;
+            s_relay_wait_pulse[i] = 0;
+            relay_send_cmd_locked(i, 0, 0, true);
+            continue;
+        }
+        if (!s_relay_wait[i]) continue;
+        if (!link_by_phone_locked(i)) {
+            s_relay_wait[i] = false;
+            if (s_relay_forgetting[i]) {
+                drop_record_locked(i);
+                i--;
+            }
+            continue;
+        }
+        if ((uint32_t)(t - s_relay_wait_ms[i]) < 1000u) continue;
+        int cap = s_relay_wait_pulse[i] != 0 ? 3 : 8;
+        if (s_relay_wait_tries[i] >= cap) {
+            s_relay_wait[i] = false;
+            if (s_relay_forgetting[i]) {
+                drop_record_locked(i);
+                i--;
+            }
+            continue;
+        }
+        s_relay_wait_tries[i]++;
+        relay_send_cmd_locked(i, s_relay_wait_states[i], s_relay_wait_pulse[i], false);
     }
     if (s_snap_inflight && (uint32_t)(t - s_snap_req_ms) > SNAP_WAIT_MS) {
         s_snap_inflight = false;
@@ -1215,8 +1465,12 @@ void ble_phone_poll(uint32_t t)
         send_pair = true;
         id_to_hex(s_out_pair_id, pair_hex);
         memcpy(pair_name, s_out_pair_name, sizeof(pair_name));
+        pair_kind = s_out_pair_kind;
+        pair_conn = s_out_pair_conn;
         s_out_pair = false;
     }
+    adv_refresh = s_adv_refresh;
+    s_adv_refresh = false;
     cmd_n = s_out_cmd_n;
     if (cmd_n > 0) {
         memcpy(cmds, s_out_cmd, sizeof(cmd_out_t) * (size_t)cmd_n);
@@ -1238,20 +1492,36 @@ void ble_phone_poll(uint32_t t)
             link->seen = true;
             link->kick = false;
         }
-        if (link->tx_n > 0 && link->notify &&
-            link->mtu >= (uint16_t)(SEALED_LEN + 3) && note_n < PHONE_LINK_MAX) {
-            memcpy(notes[note_n], link->tx[0], SEALED_LEN);
-            if (link->tx_n > 1) {
-                memmove(link->tx[0], link->tx[1], (size_t)(link->tx_n - 1) * SEALED_LEN);
+        if (link->notify && link->mtu >= (uint16_t)(SEALED_LEN + 3) &&
+            note_n < PHONE_LINK_MAX &&
+            (link->tx_hi_valid || link->tx_n > 0)) {
+            if (link->tx_hi_valid) {
+                memcpy(notes[note_n], link->tx_hi, SEALED_LEN);
+                link->tx_hi_valid = false;
+                note_hi[note_n] = true;
+            } else {
+                memcpy(notes[note_n], link->tx[0], SEALED_LEN);
+                if (link->tx_n > 1) {
+                    memmove(link->tx[0], link->tx[1], (size_t)(link->tx_n - 1) * SEALED_LEN);
+                }
+                link->tx_n--;
+                note_hi[note_n] = false;
             }
-            link->tx_n--;
             note_conn[note_n++] = link->handle;
         }
     }
     ble_radio_unlock();
 
+    if (adv_refresh) {
+        if (ble_gap_adv_active()) ble_gap_adv_stop();
+        ble_phone_start_adv();
+    }
     if (send_pair) {
-        protocol_send_phone_pair(pair_hex, pair_name);
+        int8_t rssi = 0;
+        if (pair_conn != BLE_HS_CONN_HANDLE_NONE) {
+            ble_gap_conn_rssi(pair_conn, &rssi);
+        }
+        protocol_send_phone_pair(pair_hex, pair_name, pair_kind, rssi);
     }
     for (int i = 0; i < cmd_n; i++) {
         char hex[9];
@@ -1275,6 +1545,21 @@ void ble_phone_poll(uint32_t t)
         int rc = ble_gatts_notify_custom(note_conn[i], note_handle, om);
         if (rc != 0) {
             ESP_LOGW(TAG, "notify rc=%d", rc);
+            ble_radio_lock();
+            phone_link_t *link = link_by_conn(note_conn[i]);
+            if (link) {
+                if (note_hi[i]) {
+                    if (!link->tx_hi_valid) {
+                        memcpy(link->tx_hi, notes[i], SEALED_LEN);
+                        link->tx_hi_valid = true;
+                    }
+                } else if (link->tx_n < TX_MAX) {
+                    memmove(link->tx[1], link->tx[0], (size_t)link->tx_n * SEALED_LEN);
+                    memcpy(link->tx[0], notes[i], SEALED_LEN);
+                    link->tx_n++;
+                }
+            }
+            ble_radio_unlock();
         }
     }
     for (int i = 0; i < drop_n; i++) {
@@ -1340,17 +1625,29 @@ int ble_phone_relay_set(const char *id_hex, uint8_t mask, uint16_t pulse_ms)
     }
     ble_radio_lock();
     int matched = 0;
+    int queued = 0;
     for (int i = 0; i < s_count; i++) {
         if (s_phones[i].kind != REC_KIND_RELAY) continue;
         if (has_id && memcmp(s_phones[i].id, id, 4) != 0) continue;
+        if (s_relay_forgetting[i]) {
+            matched++;
+            continue;
+        }
         s_relay_desired[i] = mask;
         /* A pulse returns to open on its own, so it is not a state to restore. */
         s_relay_desired_valid[i] = pulse_ms == 0;
-        relay_send_cmd_locked(i, mask, pulse_ms);
+        s_relay_wait_tries[i] = 0;
+        /* A parked command has not gone on the air. Do not report it queued. */
+        if (relay_send_cmd_locked(i, mask, pulse_ms, true) && !s_relay_hold_cmd[i]) {
+            queued++;
+        }
         matched++;
     }
     ble_radio_unlock();
-    return matched;
+    if (matched == 0) return 0;
+    /* -2: the record exists but no link accepted the command. */
+    if (queued == 0) return -2;
+    return queued;
 }
 
 int ble_phone_relay_json(char *out, size_t cap)
@@ -1470,6 +1767,20 @@ static int start_adv_locked(void)
     fields.name = (uint8_t *)"TBox";
     fields.name_len = 4;
     fields.name_is_complete = 1;
+    /* Company id 0xFFFF. Bit0 stays set for the learn window and while a
+     * relay still needs its first latch: the board only reconnects then. */
+    bool learn_bit = s_learn;
+    if (!learn_bit) {
+        for (int i = 0; i < s_count; i++) {
+            if (s_phones[i].kind == REC_KIND_RELAY && s_relay_need_latch[i]) {
+                learn_bit = true;
+                break;
+            }
+        }
+    }
+    uint8_t mfg[3] = { 0xFF, 0xFF, learn_bit ? 0x01 : 0x00 };
+    fields.mfg_data = mfg;
+    fields.mfg_data_len = sizeof(mfg);
     int rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) return rc;
     memset(&params, 0, sizeof(params));

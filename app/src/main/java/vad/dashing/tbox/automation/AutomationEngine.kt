@@ -756,7 +756,13 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
                 )
 
             is AutomationTrigger.StateEquals ->
-                add(AutomationSignalKey(trigger.signal, trigger.source))
+                add(
+                    AutomationSignalKey(
+                        trigger.signal,
+                        trigger.source,
+                        relayId = trigger.relayId.trim().lowercase().ifBlank { null },
+                    ),
+                )
 
             is AutomationTrigger.Geofence,
             is AutomationTrigger.Solar,
@@ -794,7 +800,13 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
             )
 
         is AutomationCondition.State ->
-            add(AutomationSignalKey(condition.signal, condition.source))
+            add(
+                AutomationSignalKey(
+                    condition.signal,
+                    condition.source,
+                    relayId = condition.relayId.trim().lowercase().ifBlank { null },
+                ),
+            )
 
         is AutomationCondition.All -> condition.conditions.forEach(::addConditionInterests)
         is AutomationCondition.Any -> condition.conditions.forEach(::addConditionInterests)

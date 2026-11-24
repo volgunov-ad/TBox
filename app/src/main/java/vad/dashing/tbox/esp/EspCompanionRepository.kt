@@ -11,6 +11,9 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationTriggerEspGpioBtnEventBus
 
+/** Two relay keepalives (12 s). A quieter board is offline. */
+const val BLE_RELAY_ONLINE_MS = 24_000L
+
 data class EspDeviceInfo(
     val firmwareVersion: String = "",
     val gpioInCount: Int = 0,
@@ -360,6 +363,7 @@ object EspCompanionRepository {
             _pendingPhone.value = null
         }
         _bleRelays.value = relays
+        seedRelayLink(relays)
         replaceBleMacs(macs)
         val mac = normalizeEspBleMac(lastMac.orEmpty())
         if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
@@ -405,8 +409,43 @@ object EspCompanionRepository {
 
     fun bleRelayMask(id: String): Int = _bleRelayMasks.value[id.trim().lowercase(java.util.Locale.US)] ?: 0
 
-    fun bleRelayOnline(id: String): Boolean =
-        _bleRelayOnline.value.containsKey(id.trim().lowercase(java.util.Locale.US))
+    fun bleRelayMaskKnown(id: String): Boolean =
+        _bleRelayMasks.value.containsKey(id.trim().lowercase(java.util.Locale.US))
+
+    /**
+     * Seed mask and online time from `bleStatus` so a restarted Monitor does not
+     * wait for the next keepalive. An `online:false` entry drops the stamp.
+     */
+    private fun seedRelayLink(relays: List<EspRelayDevice>) {
+        val now = System.currentTimeMillis()
+        val ids = HashSet<String>(relays.size)
+        val masks = _bleRelayMasks.value.toMutableMap()
+        val onlineAt = _bleRelayOnline.value.toMutableMap()
+        for (relay in relays) {
+            val key = relay.id.trim().lowercase(java.util.Locale.US)
+            if (key.isEmpty()) continue
+            ids.add(key)
+            if (relay.online) {
+                masks[key] = relay.mask and 0xFF
+                onlineAt[key] = now
+            } else {
+                onlineAt.remove(key)
+            }
+        }
+        masks.keys.retainAll(ids)
+        onlineAt.keys.retainAll(ids)
+        _bleRelayMasks.value = masks
+        _bleRelayOnline.value = onlineAt
+    }
+
+    /**
+     * Online when a report arrived within two keepalives (12 s × 2).
+     * `bleStatus` with `online:true` counts, because the companion already knows the link.
+     */
+    fun bleRelayOnline(id: String, nowMs: Long = System.currentTimeMillis()): Boolean {
+        val at = _bleRelayOnline.value[id.trim().lowercase(java.util.Locale.US)] ?: return false
+        return at > 0L && nowMs - at <= BLE_RELAY_ONLINE_MS
+    }
 
     fun clearPendingPhone() {
         _pendingPhone.value = null

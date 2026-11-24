@@ -570,11 +570,15 @@ private fun StateTriggerFields(
                     } else {
                         trigger.startupBehavior
                     },
+                    relayId = bleRelayIdForSignal(signal),
                 ),
             )
         },
     )
     AutomationSignalValueHint(trigger.signal)
+    BleRelaySignalIdField(trigger.signal, trigger.relayId) {
+        onChange(trigger.copy(relayId = it))
+    }
     val descriptor = AutomationSignalCatalog.get(trigger.signal)
     val isForegroundApp = trigger.signal == AutomationSignalId.FOREGROUND_APP
     val isWifiSsid = trigger.signal == AutomationSignalId.WIFI_SSID

@@ -9,9 +9,9 @@ interface AutomationServiceActions {
     suspend fun setEspRelayMask(mask: Int): AutomationActionResult
     suspend fun toggleEspRelay(channel: Int): AutomationActionResult
     suspend fun pulseEspRelay(channel: Int, durationMillis: Long?): AutomationActionResult
-    suspend fun setEspBleRelayState(index: Int, on: Boolean): AutomationActionResult
-    suspend fun toggleEspBleRelay(index: Int): AutomationActionResult
-    suspend fun pulseEspBleRelay(index: Int, durationMillis: Long?): AutomationActionResult
+    suspend fun setEspBleRelayState(index: Int, on: Boolean, id: String = ""): AutomationActionResult
+    suspend fun toggleEspBleRelay(index: Int, id: String = ""): AutomationActionResult
+    suspend fun pulseEspBleRelay(index: Int, durationMillis: Long?, id: String = ""): AutomationActionResult
     suspend fun rebootGnssModule(): AutomationActionResult
     suspend fun setSimulatedLocationSourceLoss(enabled: Boolean): AutomationActionResult
     suspend fun setWifiModemMobileDataEnabled(enabled: Boolean): AutomationActionResult

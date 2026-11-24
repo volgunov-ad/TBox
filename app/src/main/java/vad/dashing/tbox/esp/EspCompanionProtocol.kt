@@ -41,7 +41,10 @@ object EspCompanionProtocol {
     const val OTA_IMAGE_MAGIC: Int = 0xE9
     const val OTA_CHUNK_MAX = 1024
     private const val OTA_FRAME_MAGIC0: Byte = 0xA5.toByte()
+    /** CAN-light, UM980 bridge, and OTA to companion firmware before 0.14. */
     private const val OTA_FRAME_MAGIC1: Byte = 0x5A.toByte()
+    /** OTA to companion 0.14+: a failed begin cannot be decoded as CAN frames. */
+    private const val OTA_FRAME_MAGIC_OTA: Byte = 0x5B.toByte()
 
     const val TYPE_HELLO = "hello"
     const val TYPE_HB = "hb"
@@ -148,6 +151,48 @@ object EspCompanionProtocol {
 
     fun encodeRelaySet(mask: Int): String =
         line(TYPE_RELAY_SET, mapOf("mask" to (mask and 0xFF)))
+
+    /** Wired pulse timed on the companion (firmware 0.14+). Older firmware latches the mask. */
+    fun encodeRelayPulse(channel: Int, pulseMs: Int): String =
+        line(
+            TYPE_RELAY_SET,
+            mapOf(
+                "ch" to channel.coerceIn(0, 7),
+                "pulseMs" to pulseMs.coerceIn(1, 65_535),
+            ),
+        )
+
+    /**
+     * Compare `major.minor.patch` (a leading `v` and a `-suffix` are ignored).
+     * Missing parts are 0. Positive when [fw] is newer than the target.
+     */
+    fun compareFirmware(fw: String, major: Int, minor: Int, patch: Int): Int {
+        val parts = fw.trim().removePrefix("v").removePrefix("V")
+            .substringBefore('-')
+            .substringBefore(' ')
+            .split('.')
+        fun part(index: Int): Int =
+            parts.getOrNull(index)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
+        val got = intArrayOf(part(0), part(1), part(2))
+        val want = intArrayOf(major, minor, patch)
+        for (i in 0..2) {
+            if (got[i] != want[i]) return got[i].compareTo(want[i])
+        }
+        return 0
+    }
+
+    fun firmwareAtLeast(fw: String, major: Int, minor: Int, patch: Int): Boolean =
+        compareFirmware(fw, major, minor, patch) >= 0
+
+    /** True for 0.0 … 0.8.x. Empty firmware is not treated as old. */
+    fun firmwareAllowsBlindOta(fw: String): Boolean {
+        if (fw.isBlank()) return false
+        return compareFirmware(fw, 0, 9, 0) < 0
+    }
+
+    /** Hide Wi-Fi and bridge passwords before they reach the protocol log. */
+    fun redactSecrets(line: String): String =
+        SECRET_FIELD.replace(line) { match -> "\"${match.groupValues[1]}\":\"***\"" }
 
     fun encodeUm980Cmd(cmd: String): String =
         line(TYPE_UM980_CMD, mapOf("cmd" to cmd))
@@ -266,12 +311,13 @@ object EspCompanionProtocol {
         line(TYPE_PHONE_FORGET, mapOf("id" to id.trim().lowercase(Locale.US)))
 
     /** Empty [id] targets every paired BLE relay board; pulseMs > 0 is a timed pulse. */
-    fun encodeRelayDevSet(id: String, mask: Int, pulseMs: Int = 0): String {
+    fun encodeRelayDevSet(id: String, mask: Int, pulseMs: Int = 0, req: Int = 0): String {
         val extras = linkedMapOf<String, Any>(
             "mask" to (mask and 0xFF),
             "pulseMs" to pulseMs.coerceIn(0, 0xFFFF),
         )
         if (id.isNotBlank()) extras["id"] = id.trim().lowercase(Locale.US)
+        if (req > 0) extras["req"] = req
         return line(TYPE_RELAY_DEV_SET, extras)
     }
 
@@ -471,17 +517,20 @@ object EspCompanionProtocol {
         return out
     }
 
-    /** Same framing as OTA chunks — reused for UM980 UART bridge and CAN light. */
+    /** Same framing as legacy OTA chunks — reused for UM980 UART bridge and CAN light. */
     fun encodeBridgeChunkFrame(payload: ByteArray): ByteArray = encodeOtaChunkFrame(payload)
 
-    /** Binary OTA frame: `0xA5 0x5A | u16be len | payload | u32be crc32(payload)`. */
-    fun encodeOtaChunkFrame(payload: ByteArray): ByteArray {
+    /**
+     * Binary frame: `0xA5 magic | u16be len | payload | u32be crc32(payload)`.
+     * [otaFraming] selects magic `0x5B` (companion 0.14+). Bridge and CAN light stay `0x5A`.
+     */
+    fun encodeOtaChunkFrame(payload: ByteArray, otaFraming: Boolean = false): ByteArray {
         require(payload.isNotEmpty() && payload.size <= OTA_CHUNK_MAX) {
             "OTA chunk size ${payload.size}"
         }
         val out = ByteArray(4 + payload.size + 4)
         out[0] = OTA_FRAME_MAGIC0
-        out[1] = OTA_FRAME_MAGIC1
+        out[1] = if (otaFraming) OTA_FRAME_MAGIC_OTA else OTA_FRAME_MAGIC1
         out[2] = ((payload.size shr 8) and 0xFF).toByte()
         out[3] = (payload.size and 0xFF).toByte()
         System.arraycopy(payload, 0, out, 4, payload.size)
@@ -544,7 +593,7 @@ object EspCompanionProtocol {
         return try {
             val o = JSONObject(trimmed)
             val v = o.optInt("v", PROTOCOL_VERSION)
-            if (v != PROTOCOL_VERSION) return null
+            if (v != PROTOCOL_VERSION) return EspMessage.UnsupportedProtocol(v)
             when (o.optString("t")) {
                 TYPE_HELLO -> {
                     val magSupported = o.has("mag") || o.has("magChip")
@@ -574,6 +623,7 @@ object EspCompanionProtocol {
                         ap = o.optBoolean("ap", false),
                         phone = o.optBoolean("phone", false),
                         bleRelay = o.optBoolean("bleRelay", false),
+                        relayHello = o.optBoolean("relayHello", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -604,7 +654,11 @@ object EspCompanionProtocol {
                     level = o.optInt("level", 0) != 0,
                     ms = o.optLong("ms", 0L),
                 )
-                TYPE_RELAY -> EspMessage.Relay(mask = o.optInt("mask", 0))
+                TYPE_RELAY -> EspMessage.Relay(
+                    mask = o.optInt("mask", 0),
+                    latched = if (o.has("latched")) o.optInt("latched", 0) else null,
+                    pulse = o.optInt("pulse", 0),
+                )
                 TYPE_UM980_RSP -> {
                     val arr = o.optJSONArray("lines") ?: JSONArray()
                     val lines = buildList {
@@ -703,6 +757,8 @@ object EspCompanionProtocol {
                 TYPE_PHONE_PAIR -> EspMessage.PhonePair(
                     id = o.optString("id", "").trim().lowercase(Locale.US),
                     name = o.optString("name", "").trim(),
+                    kind = o.optString("kind", "phone").trim().ifBlank { "phone" },
+                    rssi = o.optInt("rssi", 0),
                 )
                 TYPE_PHONE_CMD -> EspMessage.PhoneCmd(
                     id = o.optString("id", "").trim().lowercase(Locale.US),
@@ -726,6 +782,7 @@ object EspCompanionProtocol {
                     phase = o.optString("phase", ""),
                     ok = o.optBoolean("ok", false),
                     err = o.optString("err", "").ifBlank { null },
+                    req = if (o.has("req")) o.optInt("req") else null,
                 )
                 TYPE_AP_STATUS -> EspMessage.ApStatus(
                     on = o.optBoolean("on", false),
@@ -787,6 +844,8 @@ object EspCompanionProtocol {
                 val item = arr.optJSONObject(i) ?: continue
                 val id = item.optString("id", "").trim().lowercase(Locale.US)
                 if (id.isEmpty()) continue
+                val relay = item.optInt("r", 0) == 1 || item.optBoolean("r", false)
+                if (relay) continue
                 add(EspPhoneDevice(id = id, name = item.optString("name", "").trim()))
             }
         }
@@ -853,11 +912,15 @@ object EspCompanionProtocol {
         }
         return o.toString() + "\n"
     }
+
+    private val SECRET_FIELD = Regex("\"(huPsk|apPsk|psk)\"\\s*:\\s*\"[^\"]*\"")
 }
 
 data class EspPhoneDevice(
     val id: String,
     val name: String,
+    val kind: String = "",
+    val rssi: Int = 0,
 )
 
 /** Paired BLE relay board from `bleStatus.relays` (fw 0.13+). */
@@ -899,6 +962,11 @@ sealed class EspMessage {
         val phone: Boolean = false,
         /** Firmware 0.13+ BLE relay boards on the phone service. */
         val bleRelay: Boolean = false,
+        /**
+         * This hello reply is followed by a `relay` snapshot (fw 0.14.1+).
+         * Absent on older firmware, including 0.14.0 builds that do not send it.
+         */
+        val relayHello: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -927,7 +995,12 @@ sealed class EspMessage {
 
     data class GpioEvent(val channel: Int, val level: Boolean, val ms: Long) : EspMessage()
 
-    data class Relay(val mask: Int) : EspMessage()
+    data class Relay(
+        val mask: Int,
+        /** Held state. Null on firmware that only reports the driven mask. */
+        val latched: Int? = null,
+        val pulse: Int = 0,
+    ) : EspMessage()
 
     data class Um980Rsp(
         val cmd: String,
@@ -1018,7 +1091,12 @@ sealed class EspMessage {
     data class PhonePair(
         val id: String,
         val name: String,
+        val kind: String = "phone",
+        val rssi: Int = 0,
     ) : EspMessage()
+
+    /** `v` is not the version this build speaks. The line is not applied. */
+    data class UnsupportedProtocol(val version: Int) : EspMessage()
 
     data class PhoneCmd(
         val id: String,
@@ -1050,6 +1128,8 @@ sealed class EspMessage {
         val phase: String,
         val ok: Boolean,
         val err: String? = null,
+        /** Matches relayDevSet "req". Null when the companion did not echo one. */
+        val req: Int? = null,
     ) : EspMessage()
 
     data class ApStatus(

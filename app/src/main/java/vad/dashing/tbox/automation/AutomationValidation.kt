@@ -281,6 +281,7 @@ object AutomationValidator {
                     )
                 }
                 validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+                validateBleRelaySignalId(trigger.signal, trigger.relayId, "$path.relayId", issues)
             }
 
             is AutomationTrigger.Geofence -> {
@@ -443,6 +444,7 @@ object AutomationValidator {
                         issues,
                     )
                 }
+                validateBleRelaySignalId(condition.signal, condition.relayId, "$path.relayId", issues)
             }
 
             is AutomationCondition.TriggeredBy -> {
@@ -704,6 +706,26 @@ object AutomationValidator {
         }
     }
 
+    private fun validateBleRelaySignalId(
+        signal: AutomationSignalId,
+        relayId: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (signal != AutomationSignalId.ESP_BLE_RELAY_0 &&
+            signal != AutomationSignalId.ESP_BLE_RELAY_1
+        ) {
+            return
+        }
+        val id = relayId.trim()
+        if (id.isNotEmpty() && !id.matches(Regex("^[0-9a-fA-F]{8}$"))) {
+            issues += AutomationValidationIssue(
+                path,
+                ruEn("Id BLE-реле — 8 hex-символов", "BLE relay id is 8 hex characters"),
+            )
+        }
+    }
+
     private fun validateBuiltin(
         action: AutomationAction.Builtin,
         path: String,
@@ -719,11 +741,23 @@ object AutomationValidator {
             AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE,
             AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE,
             AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
-            -> if (action.intValue !in 0..1) {
-                issues += AutomationValidationIssue(
-                    "$path.intValue",
-                    ruEn("Недопустимый индекс BLE-реле (0 или 1)", "Invalid BLE relay index (0 or 1)"),
-                )
+            -> {
+                if (action.intValue !in 0..1) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        ruEn("Недопустимый индекс BLE-реле (0 или 1)", "Invalid BLE relay index (0 or 1)"),
+                    )
+                }
+                val raw = action.stringValue.trim()
+                val id = EspBleRelayActionEncoding.idOf(action)
+                val pulse = action.type == AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE
+                val idOk = raw.isEmpty() || id.isNotEmpty() || (pulse && raw.toLongOrNull() != null)
+                if (!idOk) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        ruEn("Id BLE-реле — 8 hex-символов", "BLE relay id is 8 hex characters"),
+                    )
+                }
             }
 
             AutomationBuiltinActionType.ESP_RELAY_SET ->

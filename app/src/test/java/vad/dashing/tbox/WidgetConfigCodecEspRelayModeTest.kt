@@ -43,6 +43,17 @@ class WidgetConfigCodecEspRelayModeTest {
     }
 
     @Test
+    fun roundTripsBleRelayIdAndLeavesOtherTilesBlank() {
+        val original = listOf(
+            FloatingDashboardWidgetConfig(dataKey = "espBleRelay0", espBleRelayId = "AABBCCDD"),
+            FloatingDashboardWidgetConfig(dataKey = "espRelay0", espBleRelayId = "AABBCCDD"),
+        )
+        val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
+        assertEquals("aabbccdd", parsed[0].espBleRelayId)
+        assertEquals("", parsed[1].espBleRelayId)
+    }
+
+    @Test
     fun ignoresUnknownModeKey() {
         val raw = """[{"dataKey":"espRelay0","espRelayMode":"nope"}]"""
         val parsed = parseWidgetConfigsFromString(raw)

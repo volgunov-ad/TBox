@@ -127,12 +127,19 @@ class TboxDataProvider(
         index: Int,
         yesLabel: String,
         noLabel: String,
+        id: String = "",
     ): StateFlow<String> = combine(
         vad.dashing.tbox.esp.EspCompanionRepository.bleRelayMasks,
         vad.dashing.tbox.esp.EspCompanionRepository.bleRelays,
     ) { masks, relays ->
-        val relay = relays.getOrNull(index) ?: return@combine ""
-        val closed = ((masks[relay.id] ?: relay.mask) and 1) != 0
+        val relay = if (id.isNotBlank()) {
+            relays.firstOrNull { it.id == id }
+                ?: return@combine context.getString(R.string.esp_ble_relay_missing)
+        } else {
+            relays.getOrNull(index) ?: return@combine ""
+        }
+        val mask = masks[relay.id] ?: return@combine "—"
+        val closed = (mask and 1) != 0
         valueToString(closed, booleanTrue = yesLabel, booleanFalse = noLabel)
     }.distinctUntilChanged().stateIn(
         scope = viewModel.viewModelScope,
@@ -178,6 +185,9 @@ class TboxDataProvider(
 
     private fun createFlowForKey(key: String, accuracy: Int?, dateTimeFormat: String): StateFlow<String> {
         fun eff(defaultDigits: Int) = effectiveDecimalPlaces(defaultDigits, accuracy)
+        if (key.startsWith("espBleRelayId:")) {
+            return bleRelayStateText(-1, yesLabel, noLabel, key.removePrefix("espBleRelayId:"))
+        }
         return when (key) {
             "voltage" -> combine(canViewModel.voltage, HuMcuBoardVoltage.state) { fromTbox, fromHeadUnit ->
                 valueToString(fromTbox ?: fromHeadUnit, eff(1))

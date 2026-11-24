@@ -579,14 +579,19 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> serviceActions.setEspBleRelayState(
             index = action.intValue,
             on = action.boolValue,
+            id = EspBleRelayActionEncoding.idOf(action),
         )
 
         AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE ->
-            serviceActions.toggleEspBleRelay(action.intValue)
+            serviceActions.toggleEspBleRelay(
+                index = action.intValue,
+                id = EspBleRelayActionEncoding.idOf(action),
+            )
 
         AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> serviceActions.pulseEspBleRelay(
             index = action.intValue,
-            durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
+            durationMillis = EspBleRelayActionEncoding.pulseMs(action),
+            id = EspBleRelayActionEncoding.idOf(action),
         )
 
         AutomationBuiltinActionType.MEDIA_PREVIOUS -> mediaAction(action) {

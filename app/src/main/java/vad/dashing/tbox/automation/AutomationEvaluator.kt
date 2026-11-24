@@ -478,7 +478,13 @@ class AutomationEvaluator(
 
                 is AutomationCondition.State -> {
                     val actual = (
-                        snapshot[AutomationSignalKey(condition.signal, condition.source)]
+                        snapshot[
+                            AutomationSignalKey(
+                                condition.signal,
+                                condition.source,
+                                relayId = condition.relayId.trim().lowercase().ifBlank { null },
+                            ),
+                        ]
                             as? AutomationSignalValue.State
                         )?.value ?: return false
                     AutomationSignalStateEncoding.stateMatches(condition.signal, actual, condition.expectedState)
@@ -739,7 +745,11 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
         source,
         mac = automationSignalMacOrNull(signal, mac),
     )
-    is AutomationTrigger.StateEquals -> AutomationSignalKey(signal, source)
+    is AutomationTrigger.StateEquals -> AutomationSignalKey(
+        signal,
+        source,
+        relayId = relayId.trim().lowercase().ifBlank { null },
+    )
     is AutomationTrigger.Geofence,
     is AutomationTrigger.Solar,
     -> AUTOMATION_GEO_DISPLAY_KEY

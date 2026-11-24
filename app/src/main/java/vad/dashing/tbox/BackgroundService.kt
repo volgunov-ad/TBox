@@ -43,7 +43,9 @@ import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
 import vad.dashing.tbox.speedcam.SpeedCamRepository
 import vad.dashing.tbox.speedcam.SpeedCamUiState
 import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
+import vad.dashing.tbox.esp.BleRelaySendResult
 import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.esp.EspRelayDevice
 import vad.dashing.tbox.hotspot.HuSoftApRouter
 import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
@@ -2130,6 +2132,50 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
+    private suspend fun runBleRelayCommand(
+        id: String,
+        index: Int,
+        needKnownMask: Boolean,
+        send: suspend (EspRelayDevice, EspCompanionManager) -> Pair<BleRelaySendResult, String>,
+    ): AutomationActionResult {
+        val manager = espCompanionManager
+            ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
+        val stored = id.trim().lowercase()
+        val relays = EspCompanionRepository.bleRelays.value
+        val relay = if (stored.isNotEmpty()) {
+            relays.firstOrNull { it.id == stored }
+        } else {
+            relays.getOrNull(index)
+        } ?: return AutomationActionResult.failure(
+            if (stored.isNotEmpty()) {
+                ruEn("BLE-реле не найдено", "BLE relay is missing")
+            } else {
+                ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired")
+            },
+        )
+        if (!EspCompanionRepository.bleRelayOnline(relay.id)) {
+            return AutomationActionResult.failure(ruEn("BLE-реле не на связи", "BLE relay is offline"))
+        }
+        if (needKnownMask && !EspCompanionRepository.bleRelayMaskKnown(relay.id)) {
+            return AutomationActionResult.failure(
+                ruEn("Состояние BLE-реле неизвестно", "BLE relay state is unknown"),
+            )
+        }
+        val (result, queued) = send(relay, manager)
+        return when (result) {
+            BleRelaySendResult.Queued -> AutomationActionResult.ok(queued)
+            BleRelaySendResult.Offline -> AutomationActionResult.failure(
+                ruEn("BLE-реле не на связи", "BLE relay is offline"),
+            )
+            BleRelaySendResult.NoRelay -> AutomationActionResult.failure(
+                ruEn("BLE-реле не найдено", "BLE relay is missing"),
+            )
+            BleRelaySendResult.Failed -> AutomationActionResult.failure(
+                ruEn("Команда BLE-реле не принята", "BLE relay command was rejected"),
+            )
+        }
+    }
+
     /** BLE relay target: board id string or 0-based index into the paired list. */
     private fun withBleRelayTarget(intent: Intent, block: (Any) -> Unit) {
         val id = intent.getStringExtra(EXTRA_ESP_BLE_RELAY_ID)?.trim().orEmpty()
@@ -2292,39 +2338,32 @@ class BackgroundService : Service() {
             override suspend fun setEspBleRelayState(
                 index: Int,
                 on: Boolean,
-            ): AutomationActionResult {
-                val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
-                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
-                manager.setBleRelayState(id, on)
-                return AutomationActionResult.ok(
-                    if (on) ruEn("BLE-реле замкнуто", "BLE relay closed") else ruEn("BLE-реле разомкнуто", "BLE relay open"),
-                )
+                id: String,
+            ): AutomationActionResult = runBleRelayCommand(id, index, needKnownMask = false) { relay, manager ->
+                val result = manager.setBleRelayAwait(relay.id, on)
+                result to if (on) {
+                    ruEn("Команда замыкания поставлена в очередь", "Close command queued")
+                } else {
+                    ruEn("Команда размыкания поставлена в очередь", "Open command queued")
+                }
             }
 
-            override suspend fun toggleEspBleRelay(index: Int): AutomationActionResult {
-                val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
-                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
-                manager.toggleBleRelay(id)
-                return AutomationActionResult.ok(ruEn("BLE-реле переключено", "BLE relay toggled"))
-            }
+            override suspend fun toggleEspBleRelay(index: Int, id: String): AutomationActionResult =
+                runBleRelayCommand(id, index, needKnownMask = true) { relay, manager ->
+                    val closed = (EspCompanionRepository.bleRelayMask(relay.id) and 1) != 0
+                    manager.setBleRelayAwait(relay.id, !closed) to
+                        ruEn("Команда переключения поставлена в очередь", "Toggle command queued")
+                }
 
             override suspend fun pulseEspBleRelay(
                 index: Int,
                 durationMillis: Long?,
-            ): AutomationActionResult {
-                val manager = espCompanionManager
-                    ?: return AutomationActionResult.failure(ruEn("ESP-компаньон недоступен", "ESP companion unavailable"))
-                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
-                    ?: return AutomationActionResult.failure(ruEn("BLE-реле $index не сопряжено", "BLE relay $index is not paired"))
-                manager.pulseBleRelay(
-                    id,
+                id: String,
+            ): AutomationActionResult = runBleRelayCommand(id, index, needKnownMask = false) { relay, manager ->
+                manager.pulseBleRelayAwait(
+                    relay.id,
                     durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
-                )
-                return AutomationActionResult.ok(ruEn("Импульс BLE-реле запущен", "BLE relay pulse started"))
+                ) to ruEn("Импульс поставлен в очередь", "Pulse queued")
             }
 
             override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {

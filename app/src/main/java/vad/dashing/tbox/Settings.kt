@@ -308,6 +308,11 @@ data class FloatingDashboardWidgetConfig(
      */
     val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
     /**
+     * Paired BLE relay board id for [espBleRelay0]/[espBleRelay1]. Empty keeps the
+     * index in the data key as a fallback for tiles saved before the id was stored.
+     */
+    val espBleRelayId: String = "",
+    /**
      * Cruise path for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY]:
      * [CruiseControlType.AUTO] / [CruiseControlType.ACC] / [CruiseControlType.CCS].
      */

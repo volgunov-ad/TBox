@@ -24,7 +24,16 @@ uint32_t relay_store_next_tx(void);
 
 /** Replay gate for inbound (0x30) counters: only strictly greater is accepted. */
 bool relay_store_rx_accept(uint32_t counter);
+/** Accept and persist the RX counter immediately (commands are rare). */
 void relay_store_commit_rx(uint32_t counter);
+
+/** False when NVS failed and the key is still all zeros. */
+bool relay_store_key_ok(void);
+
+/** Companion address learned from the first valid 0x30. */
+bool relay_store_has_peer(void);
+bool relay_store_peer_match(uint8_t addr_type, const uint8_t addr[6]);
+void relay_store_set_peer(uint8_t addr_type, const uint8_t addr[6]);
 
 uint8_t relay_store_mask(void);
 /** Written through to NVS immediately; command rate is tiny. */

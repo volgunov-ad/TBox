@@ -88,6 +88,8 @@ import vad.dashing.tbox.automation.floatingPanelVisibilityOpLabel
 import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
 import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.automation.EspBleRelayActionEncoding
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
@@ -761,6 +763,69 @@ internal fun defaultBuiltinAction(
 )
 
 @Composable
+private fun BleRelayTargetFields(
+    action: AutomationAction.Builtin,
+    onChange: (AutomationAction) -> Unit,
+    showPulse: Boolean,
+) {
+    AutomationIntField(
+        label = ruEn("Реле (0 или 1)", "Relay (0 or 1)"),
+        value = action.intValue,
+        onValueChange = { onChange(action.copy(intValue = it)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    val bleRelays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
+    LaunchedEffect(action.intValue, action.type, bleRelays) {
+        if (EspBleRelayActionEncoding.idText(action).isNotEmpty()) return@LaunchedEffect
+        val id = bleRelays.getOrNull(action.intValue)?.id.orEmpty()
+        if (id.isEmpty()) return@LaunchedEffect
+        onChange(
+            action.copy(
+                stringValue = EspBleRelayActionEncoding.pack(
+                    action.type,
+                    id,
+                    EspBleRelayActionEncoding.pulseText(action),
+                ),
+            ),
+        )
+    }
+    AutomationTextField(
+        value = EspBleRelayActionEncoding.idText(action),
+        onValueChange = { id ->
+            onChange(
+                action.copy(
+                    stringValue = EspBleRelayActionEncoding.pack(
+                        action.type,
+                        id,
+                        EspBleRelayActionEncoding.pulseText(action),
+                    ),
+                ),
+            )
+        },
+        label = ruEn("Id платы (пусто = индекс)", "Board id (empty = index)"),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (showPulse) {
+        AutomationTextField(
+            value = EspBleRelayActionEncoding.pulseText(action),
+            onValueChange = { ms ->
+                onChange(
+                    action.copy(
+                        stringValue = EspBleRelayActionEncoding.pack(
+                            action.type,
+                            EspBleRelayActionEncoding.idText(action),
+                            ms,
+                        ),
+                    ),
+                )
+            },
+            label = ruEn("Длительность, мс (пусто = стандарт)", "Duration, ms (empty = default)"),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 private fun BuiltinActionFields(
     action: AutomationAction.Builtin,
     apps: List<LaunchableAppEntry>,
@@ -830,37 +895,24 @@ private fun BuiltinActionFields(
             )
         }
 
-        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> AutomationDropdown(
-            label = ruEn("Канал BLE-реле", "BLE relay channel"),
-            value = action.boolValue,
-            options = listOf(true, false),
-            optionLabel = { if (it) ruEn("Замкнуть", "Energize") else ruEn("Разомкнуть", "De-energize") },
-            onValueChange = { onChange(action.copy(boolValue = it)) },
-        )
-
-        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> AutomationIntField(
-            label = ruEn("Реле (0 или 1)", "Relay (0 or 1)"),
-            value = action.intValue,
-            onValueChange = { onChange(action.copy(intValue = it)) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AutomationIntField(
-                label = ruEn("Реле (0 или 1)", "Relay (0 or 1)"),
-                value = action.intValue,
-                onValueChange = { onChange(action.copy(intValue = it)) },
-                modifier = Modifier.weight(1f),
+            AutomationDropdown(
+                label = ruEn("Канал BLE-реле", "BLE relay channel"),
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) ruEn("Замкнуть", "Energize") else ruEn("Разомкнуть", "De-energize") },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
             )
-            AutomationTextField(
-                value = action.stringValue,
-                onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = ruEn("Длительность, мс (пусто = стандарт)", "Duration, ms (empty = default)"),
-                modifier = Modifier.weight(1f),
-            )
+            BleRelayTargetFields(action, onChange, showPulse = false)
         }
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE ->
+            BleRelayTargetFields(action, onChange, showPulse = false)
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE ->
+            BleRelayTargetFields(action, onChange, showPulse = true)
 
         AutomationBuiltinActionType.MEDIA_PREVIOUS,
         AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
