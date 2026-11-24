@@ -381,6 +381,9 @@ class EspUsbSerialSession(
             EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
             WRITE_TIMEOUT_MS,
         )
+        /* usbIo is the single thread that also runs writeLine. This delayed
+         * end therefore lands before a hello reply can re-open CAN-light or
+         * the UM980 bridge. */
         usbIo.execute {
             try {
                 Thread.sleep(300)

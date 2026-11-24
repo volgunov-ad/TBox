@@ -623,6 +623,7 @@ object EspCompanionProtocol {
                         ap = o.optBoolean("ap", false),
                         phone = o.optBoolean("phone", false),
                         bleRelay = o.optBoolean("bleRelay", false),
+                        relayHello = o.optBoolean("relayHello", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -961,6 +962,11 @@ sealed class EspMessage {
         val phone: Boolean = false,
         /** Firmware 0.13+ BLE relay boards on the phone service. */
         val bleRelay: Boolean = false,
+        /**
+         * This hello reply is followed by a `relay` snapshot (fw 0.14.1+).
+         * Absent on older firmware, including 0.14.0 builds that do not send it.
+         */
+        val relayHello: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()

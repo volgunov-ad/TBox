@@ -932,6 +932,8 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     if (s_pending_pair && memcmp(s_pending.id, id, 4) == 0 &&
         memcmp(s_pending.key, key, 16) == 0) {
         mark_link_seen();
+        /* Allow must use the link that is up now, not the first PAIR. */
+        if (s_rx_link) s_pending_conn = s_rx_link->handle;
         return;
     }
     /* Keep the first pending request until the HU allows or denies it. */
@@ -946,8 +948,13 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
         }
         /* A matching key and a cleartext PAIR means the relay is not
          * latched. paired is cleared only by a factory reset, which
-         * reboots the board, so it has no generation to adopt. */
-        if (s_rx_link && link_by_phone_locked(existing) == NULL) {
+         * reboots the board, so it has no generation to adopt.
+         * A second link must not open the relay that is already online. */
+        phone_link_t *bound = link_by_phone_locked(existing);
+        if (bound != NULL && bound != s_rx_link) {
+            return;
+        }
+        if (s_rx_link && bound == NULL) {
             s_rx_link->phone_index = existing;
             s_rx_link->seen = true;
         }
@@ -1033,15 +1040,19 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
         if (!s_relay_gen_synced[index] && !s_relay_wait[index]) {
             s_relay_gen[index] = echoed;
         }
+        bool just_adopted = !s_relay_gen_synced[index] && !s_relay_wait[index];
         s_relay_gen_synced[index] = true;
         bool sent_now = false;
-        if (s_relay_need_latch[index] && !s_relay_wait[index] && !s_relay_hold_cmd[index]) {
-            s_relay_wait_tries[index] = 0;
-            sent_now = relay_send_cmd_locked(index, 0, 0, true);
-        } else if (s_relay_need_latch[index] && !s_relay_hold_cmd[index] &&
-                   echoed == s_relay_gen[index]) {
+        /* An echo of the generation we already sent confirms the latch.
+         * The report we just copied is not that echo. */
+        if (s_relay_need_latch[index] && !s_relay_hold_cmd[index] &&
+            !just_adopted && echoed == s_relay_gen[index]) {
             s_relay_need_latch[index] = false;
             s_adv_refresh = true;
+        } else if (s_relay_need_latch[index] && !s_relay_wait[index] &&
+                   !s_relay_hold_cmd[index]) {
+            s_relay_wait_tries[index] = 0;
+            sent_now = relay_send_cmd_locked(index, 0, 0, true);
         }
         if (echoed == s_relay_gen[index] && !sent_now) {
             /* While forgetting, keep retrying until the coil is actually open. */

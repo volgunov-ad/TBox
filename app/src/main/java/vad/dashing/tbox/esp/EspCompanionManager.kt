@@ -1364,6 +1364,11 @@ class EspCompanionManager(
                         bleRelay = msg.bleRelay,
                     )
                 )
+                /* Only firmware that promises a relay line may block toggles.
+                 * 0.14.0 and older never set relayHello, so they stay controllable. */
+                if (!msg.relayHello) {
+                    wiredRelaySeen = true
+                }
                 sendRememberedApCfg()
                 desiredWiredMask?.let { mask ->
                     writeLine(EspCompanionProtocol.encodeRelaySet(mask))

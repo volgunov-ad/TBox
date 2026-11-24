@@ -477,6 +477,11 @@ class EspCompanionProtocolTest {
             """{"v":1,"t":"hello","fw":"0.10.5","ble":true}""",
         ) as EspMessage.Hello
         assertFalse(oldHello.bleKey)
+        assertFalse(oldHello.relayHello)
+        val relayHello = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.14.1","relayHello":true}""",
+        ) as EspMessage.Hello
+        assertTrue(relayHello.relayHello)
 
         val status = EspCompanionProtocol.parseLine(
             """{"v":1,"t":"bleStatus","on":true,"learn":false,""" +

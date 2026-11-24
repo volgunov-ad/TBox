@@ -480,7 +480,7 @@ void protocol_send_hello(void)
                  "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
                  "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
                   "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,"
-                  "\"bleRelay\":true,\"ap\":true}\n",
+                  "\"bleRelay\":true,\"relayHello\":true,\"ap\":true}\n",
                   ESP_COMPANION_FW_VERSION,
                   ESP_COMPANION_GPIO_IN_COUNT,
                   ESP_COMPANION_RELAY_COUNT,
@@ -502,7 +502,7 @@ void protocol_send_hello(void)
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
                   "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,"
-                  "\"bleRelay\":true,\"ap\":true}\n",
+                  "\"bleRelay\":true,\"relayHello\":true,\"ap\":true}\n",
                   ESP_COMPANION_FW_VERSION,
                   ESP_COMPANION_GPIO_IN_COUNT,
                   ESP_COMPANION_RELAY_COUNT,
