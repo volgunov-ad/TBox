@@ -25,6 +25,7 @@
 #define MAX_CAMERAS 8
 #define STALL_REOPEN_MS 10000
 #define STALL_RETRY_MS 5000
+#define COPY_STATS_MS 30000
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
 #define BEAT "/data/local/tmp/camd-grab.beat"
@@ -106,6 +107,9 @@ struct Camera {
     void* shared;
     int sharedBytes;
     long long last_frame_ms;
+    long long copy_ns_sum;
+    long long copy_ns_max;
+    int copy_count;
 };
 
 static fn_initialize p_initialize = nullptr;
@@ -122,6 +126,7 @@ static long long next_try[10];
 
 static int map_shared(Camera* camera);
 static long long now_ms(void);
+static long long now_ns(void);
 
 static int camera_size(int id, int* width, int* height) {
     if (id == 0) { *width = 1488; *height = 616; return 1; }
@@ -329,7 +334,12 @@ static int grab(Camera* camera) {
     uint32_t* hdr = (uint32_t*)camera->shared;
     uint32_t slot = hdr[5] ^ 1u;
     uint8_t* dst = (uint8_t*)camera->shared + UYVY_HEADER + (size_t)slot * (size_t)camera->size;
+    long long copy_start = now_ns();
     memcpy(dst, camera->ptrs[frame.idx], (size_t)camera->size);
+    long long copy_ns = now_ns() - copy_start;
+    camera->copy_ns_sum += copy_ns;
+    if (copy_ns > camera->copy_ns_max) camera->copy_ns_max = copy_ns;
+    camera->copy_count += 1;
     int released = p_release_frame(camera->handle, frame.idx);
     if (released != 0) fprintf(stderr, "release_frame %u -> %d\n", frame.idx, released);
     __sync_synchronize();
@@ -350,6 +360,31 @@ static long long now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static long long now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+// The ION buffers are allocated without ION_FLAG_CACHED; the per-frame copy time shows
+// whether reading them is what loads the CPU.
+static void log_copy_stats(long long period_ms) {
+    for (int id = 0; id < 10; id++) {
+        Camera* camera = open_cameras[id];
+        if (!camera) continue;
+        int n = camera->copy_count;
+        double avg_ms = n > 0 ? (double)camera->copy_ns_sum / n / 1e6 : 0.0;
+        double max_ms = (double)camera->copy_ns_max / 1e6;
+        double fps = period_ms > 0 ? n * 1000.0 / (double)period_ms : 0.0;
+        fprintf(stderr, "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d\n",
+                id, n, fps, avg_ms, max_ms, camera->size);
+        ALOGI("copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms", id, n, fps, avg_ms, max_ms);
+        camera->copy_ns_sum = 0;
+        camera->copy_ns_max = 0;
+        camera->copy_count = 0;
+    }
 }
 
 static int read_desired(int* ids) {
@@ -421,11 +456,16 @@ int main(void) {
     int count = 0;
     long long last_beat_ms = -1000000;
     long long last_desired_ms = -1000000;
+    long long last_stats_ms = now_ms();
     while (1) {
         long long now = now_ms();
         if (now - last_beat_ms >= 1000) {
             beat();
             last_beat_ms = now;
+        }
+        if (now - last_stats_ms >= COPY_STATS_MS) {
+            log_copy_stats(now - last_stats_ms);
+            last_stats_ms = now;
         }
         if (now - last_desired_ms >= 250) {
             count = read_desired(ids);
