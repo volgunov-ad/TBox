@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.UiIconPaths
 
 class UiIconCatalogTest {
@@ -42,6 +43,15 @@ class UiIconCatalogTest {
             assertEquals(UiIconCategory.MAIN_SCREEN, entry?.category)
             assertEquals(drawable, entry?.drawableRes)
             assertEquals(key, UiIconCatalog.keyForDrawable(drawable))
+        }
+    }
+
+    @Test
+    fun everySupportedMediaPlayerIconIsInCatalog() {
+        SupportedMediaPlayer.entries.forEach { player ->
+            val key = UiIconCatalog.keyForDrawable(player.iconRes)
+            assertNotNull(player.name, key)
+            assertEquals(UiIconCategory.MEDIA, UiIconCatalog.entry(key!!)?.category)
         }
     }
 

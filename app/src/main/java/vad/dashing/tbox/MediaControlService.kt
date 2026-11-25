@@ -94,7 +94,7 @@ enum class SupportedMediaPlayer(
     HEAD_UNIT_RADIO(
         packageName = RADIO_PLAYER_PACKAGE,
         titleRes = R.string.media_player_head_unit_radio,
-        iconRes = R.drawable.player_fmplay
+        iconRes = R.drawable.player_head_unit_radio
     ),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
