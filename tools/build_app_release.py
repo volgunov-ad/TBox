@@ -81,7 +81,7 @@ def copy_apks(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build one first-party release APK")
-    parser.add_argument("--module", required=True, help="app, store, voice, phone, mqtt, dataresize, usbaudio, fwunlock, winpatch, camview, camd")
+    parser.add_argument("--module", required=True, help="app, store, voice, phone, mqtt, dataresize, usbaudio, fwunlock, winpatch, camview, camd, camdbench")
     parser.add_argument("--output-dir", required=True, type=Path, help="Directory outside the git repo")
     parser.add_argument("--flavors", help="ru, en, or ru+en (app and store only)")
     parser.add_argument("--build-type", default="release", choices=("release", "debug"))
