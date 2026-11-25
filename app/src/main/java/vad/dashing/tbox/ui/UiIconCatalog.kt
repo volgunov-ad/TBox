@@ -518,6 +518,7 @@ object UiIconCatalog {
             Triple("volume.mute", R.drawable.ic_media_volume_mute, "MUTE"),
             Triple("volume.audio", R.drawable.ic_media_volume_audio, "AUDIO"),
             Triple("player.bluetooth", R.drawable.player_bluetooth, "BLUETOOTH"),
+            Triple("player.radio", R.drawable.player_head_unit_radio, "RADIO"),
             Triple("player.unknown", R.drawable.player_unknown, "UNKNOWN PLAYER"),
         ).forEach { (state, drawable, label) ->
             addIcon(
