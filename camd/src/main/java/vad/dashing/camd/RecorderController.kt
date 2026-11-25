@@ -227,7 +227,7 @@ class RecorderController(
                 prefs.edit().putBoolean(PREF_ENABLED, true).apply()
                 _state.update { it.copy(enabled = true, message = "Включаю запись…") }
                 if (!enabledNow) {
-                    Thread({ startRecording() }, "camd-rec-start").apply { isDaemon = true; start() }
+                    Thread({ startWithRetry() }, "camd-rec-start").apply { isDaemon = true; start() }
                 }
             }
             RecorderEnableApi.Action.TURN_OFF -> {
@@ -378,7 +378,7 @@ class RecorderController(
         val wanted = prefs.getBoolean(PREF_ENABLED, false)
         Log.i(LOG_TAG, "автостарт: pref=$wanted активна=$enabledNow")
         if (!enabledNow && wanted) {
-            Thread({ startRecording() }, "camd-rec-boot").apply { isDaemon = true; start() }
+            Thread({ startWithRetry() }, "camd-rec-boot").apply { isDaemon = true; start() }
         }
     }
 
@@ -411,9 +411,29 @@ class RecorderController(
 
     // Start / stop -------------------------------------------------------------
 
-    private fun startRecording() {
+    /**
+     * A failed grabber start (mb_daemon busy with another app's script at boot, or not
+     * answering) is retried with growing pauses while the master switch stays on.
+     */
+    private fun startWithRetry() {
+        val pauses = RecorderStartRetry.PAUSES_MS
+        for (attempt in 0..pauses.size) {
+            if (attempt > 0) {
+                try {
+                    Thread.sleep(pauses[attempt - 1])
+                } catch (_: InterruptedException) {
+                    return
+                }
+            }
+            if (!prefs.getBoolean(PREF_ENABLED, false) || enabledNow) return
+            if (startRecording(retryInMs = pauses.getOrNull(attempt))) return
+        }
+    }
+
+    /** Returns true once recording runs (started now or already running). */
+    private fun startRecording(retryInMs: Long?): Boolean {
         synchronized(this) {
-            if (enabledNow) return
+            if (enabledNow) return true
             enabledNow = true
             val inputs = _state.value.inputs
             val folder = currentFolder()
@@ -430,13 +450,16 @@ class RecorderController(
                 enabledNow = false
                 windows.setRecorderActive(false)
                 windows.releaseRecorderInputs()
+                val reason = error.message ?: error.javaClass.simpleName
+                Log.i(LOG_TAG, "граббер не запустился: $reason, повтор через ${retryInMs ?: 0} мс")
                 _state.update {
                     it.copy(
-                        enabled = false,
-                        message = "Не удалось запустить граббер: ${error.message ?: error.javaClass.simpleName}",
+                        // The switch stays on while a retry is pending.
+                        enabled = retryInMs != null,
+                        message = RecorderStartRetry.message(reason, retryInMs),
                     )
                 }
-                return
+                return false
             }
             startEngines(inputs)
             Log.i(
@@ -450,6 +473,7 @@ class RecorderController(
                 )
             }
             startWatcher(inputs)
+            return true
         }
     }
 
