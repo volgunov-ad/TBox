@@ -27,7 +27,10 @@ class BenchScriptsTest {
         assertTrue(script.contains("${BenchScripts.SAMPLER} ${BenchScripts.RAW} ${BenchScripts.CTL} \$NONCE \$2 \$3"))
         assertTrue(script.contains("-s CamdRecorder:I CamdQcar:I"))
         val sampler = script.indexOf(BenchScripts.SAMPLER + " ")
-        assertTrue(script.indexOf("kill \$LOGCAT_PID") > sampler)
+        assertTrue(script.indexOf("while [ ! -f ${BenchScripts.LOGCAT_STOP} ]") in 0 until sampler)
+        assertTrue(script.indexOf("touch ${BenchScripts.LOGCAT_STOP}") > sampler)
+        assertTrue(script.indexOf("kill \$(cat ${BenchScripts.LOGCAT_PID})") > sampler)
+        assertTrue(script.contains("-d >> ${BenchScripts.LOGCAT}"))
         assertTrue(script.indexOf("echo \$NONCE > ${BenchScripts.DONE}") > sampler)
     }
 
