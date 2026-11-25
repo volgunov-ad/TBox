@@ -6,7 +6,7 @@
 # - push to preRelease: always builds Monitor ruDebug for a quick HU install
 #
 # A push does not build every module. Voice downloads models and camd builds
-# native code; those run only when someone picks the module by hand.
+# native code (camd, camdbench); those run only when someone picks the module by hand.
 
 name: Build APK
 
@@ -30,6 +30,7 @@ on:
           - winpatch
           - camview
           - camd
+          - camdbench
       flavor:
         description: Language flavor (app and store only)
         required: true

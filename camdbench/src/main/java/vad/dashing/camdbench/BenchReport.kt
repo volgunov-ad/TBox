@@ -1,0 +1,166 @@
+package vad.dashing.camdbench
+
+import java.util.Locale
+
+/** Everything one run knows besides the CPU samples. */
+class BenchRun(
+    val startedAt: String,
+    val camdVersion: String,
+    val grabVersion: String,
+    val statusStart: String,
+    val statusEnd: String,
+    val grabCopy: List<BenchLogs.GrabCopy>,
+    val recorderSegments: List<BenchLogs.RecorderSegment>,
+    val segmentFps: List<BenchLogs.SegmentFps>,
+    val recorderFolder: String?,
+    val notes: List<String> = emptyList(),
+)
+
+/**
+ * Human-readable report and the machine-readable summary (TSV) of one run.
+ * The summary is what [BenchCompare] reads back for the A/B comparison.
+ */
+object BenchReport {
+
+    private const val TOP_PROCESSES = 20
+    private const val TOP_THREADS = 25
+    private const val TOP_ZONES = 6
+
+    private val focus = listOf(BenchAccumulator.CAMD_APP, BenchAccumulator.CAMD_GRAB)
+
+    fun warnings(run: BenchRun, snapshot: BenchAccumulator.Snapshot): List<String> {
+        val result = ArrayList<String>()
+        val start = BenchLogs.statusFields(run.statusStart)
+        val end = BenchLogs.statusFields(run.statusEnd)
+        if (start["rec_active"] != "1" || end["rec_active"] != "1") {
+            result += "регистратор писал не всё время (rec_active в начале ${start["rec_active"] ?: "?"}, в конце ${end["rec_active"] ?: "?"}) — сравнение некорректно"
+        }
+        val windows = start["windows"]
+        if (windows != null && windows != "none") {
+            result += "были открыты окна камер ($windows) — они тоже грузят процессор; для чистого сравнения закройте окна"
+        }
+        if (snapshot.durationSec < 120) {
+            result += "замер короче 2 минут — цифры шумные"
+        }
+        if (!snapshot.ended) {
+            result += "сэмплер не дописал конец файла — замер мог оборваться"
+        }
+        return result + run.notes
+    }
+
+    fun text(run: BenchRun, s: BenchAccumulator.Snapshot): String = buildString {
+        appendLine("Тест нагрузки камер — отчёт")
+        appendLine("Начало: ${run.startedAt}")
+        appendLine("camd: ${run.camdVersion}, camd_grab: ${run.grabVersion}")
+        appendLine("Длительность: ${fmt(s.durationSec, 0)} с, выборок ${s.samples}, ядер ${s.cores}")
+        appendLine("STATUS в начале: ${run.statusStart}")
+        appendLine("STATUS в конце:  ${run.statusEnd}")
+        val warn = warnings(run, s)
+        if (warn.isNotEmpty()) {
+            appendLine()
+            warn.forEach { appendLine("ВНИМАНИЕ: $it") }
+        }
+
+        appendLine()
+        appendLine("== Процессор целиком ==")
+        appendLine("Занято в среднем: ${fmt(s.cpuBusyPct)} % всех ядер (≈ ${fmt(s.cpuBusyPct * s.cores / 100, 2)} ядра), пик за выборку ${fmt(s.cpuBusyMaxPct)} %")
+        val camd = s.process(BenchAccumulator.CAMD_APP)
+        val grab = s.process(BenchAccumulator.CAMD_GRAB)
+        appendLine("camd (приложение): ${fmt(camd?.avgPct ?: 0.0)} % ядра, пик ${fmt(camd?.maxPct ?: 0.0)} %")
+        appendLine("camd_grab (root):  ${fmt(grab?.avgPct ?: 0.0)} % ядра, пик ${fmt(grab?.maxPct ?: 0.0)} %")
+        appendLine("camd всего:        ${fmt((camd?.avgPct ?: 0.0) + (grab?.avgPct ?: 0.0))} % ядра")
+        appendLine("(% ядра — как в top: 100 % = одно ядро занято полностью)")
+
+        appendLine()
+        appendLine("== Процессы, топ $TOP_PROCESSES по среднему ==")
+        appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "процесс"))
+        s.processes.take(TOP_PROCESSES).forEach {
+            appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
+        }
+
+        appendLine()
+        appendLine("== Потоки camd и camd_grab ==")
+        appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "поток"))
+        s.threads.take(TOP_THREADS).filter { it.avgPct >= 0.05 }.forEach {
+            appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
+        }
+
+        appendLine()
+        appendLine("== Запись: фактическая частота кадров по готовым роликам ==")
+        if (run.recorderFolder == null) appendLine("папка регистратора не найдена")
+        else appendLine("папка: ${run.recorderFolder}")
+        val fps = BenchLogs.summarizeFps(run.segmentFps)
+        if (fps.isEmpty()) appendLine("готовых роликов за время замера нет (сегмент длиннее замера?)")
+        fps.forEach {
+            appendLine("cam${it.inputId}: ${fmt(it.fps)} кадр/с — роликов ${it.segments}, кадров ${it.frames}, ${fmt(it.seconds, 0)} с")
+        }
+        run.segmentFps.forEach {
+            appendLine("  ${it.file}: ${it.frames} кадров, ${fmt(it.seconds)} с, ${fmt(it.fps)} кадр/с")
+        }
+
+        appendLine()
+        appendLine("== camd_grab: копирование кадра (camd_grab 5+) ==")
+        val copy = BenchLogs.summarizeCopy(run.grabCopy)
+        if (copy.isEmpty()) appendLine("строк copy нет (старый camd_grab или граббер не работал)")
+        copy.forEach {
+            appendLine("вход ${it.inputId}: memcpy сред. ${fmt(it.avgMs, 2)} мс, макс ${fmt(it.maxMs, 2)} мс, ${fmt(it.fps)} кадр/с (${it.periods} периодов по 30 с)")
+        }
+
+        appendLine()
+        appendLine("== CamdRecorder: сегменты (camd 0.9.5+) ==")
+        if (run.recorderSegments.isEmpty()) appendLine("строк нет (старый camd или сегменты не закрывались)")
+        run.recorderSegments.forEach {
+            appendLine("cam${it.inputId} ${it.file}: кадров ${it.frames}, пропущено ${it.skipped}, ${fmt(it.seconds)} с")
+        }
+
+        appendLine()
+        appendLine("== Частоты ядер (средние) ==")
+        appendLine(s.freqMhz.mapIndexed { cpu, mhz -> "cpu$cpu ${fmt(mhz, 0)} МГц" }.joinToString(", "))
+        appendLine()
+        appendLine("== Температуры, самые горячие ==")
+        s.zones.sortedByDescending { it.maxC }.take(TOP_ZONES).forEach {
+            appendLine("${it.name}: сред. ${fmt(it.avgC)} °C, макс ${fmt(it.maxC)} °C")
+        }
+        appendLine()
+        appendLine("Минимум MemAvailable: ${s.memAvailableMinMb} МБ")
+    }
+
+    /** One record per line, tab-separated: `<kind>\t<key>\t<values…>`. */
+    fun summary(run: BenchRun, s: BenchAccumulator.Snapshot): String = buildString {
+        fun row(vararg cells: Any) = appendLine(cells.joinToString("\t"))
+        row("format", "1")
+        row("info", "started", run.startedAt)
+        row("info", "camd", run.camdVersion)
+        row("info", "grab", run.grabVersion)
+        row("info", "status_start", run.statusStart)
+        row("info", "status_end", run.statusEnd)
+        warnings(run, s).forEach { row("warn", "-", it) }
+        row("metric", "duration_s", fmt(s.durationSec, 0))
+        row("metric", "cores", s.cores)
+        row("metric", "cpu_busy_pct", fmt(s.cpuBusyPct, 2))
+        row("metric", "cpu_busy_max_pct", fmt(s.cpuBusyMaxPct, 2))
+        row("metric", "cpu_cores_used", fmt(s.cpuBusyPct * s.cores / 100, 3))
+        val camd = s.process(BenchAccumulator.CAMD_APP)?.avgPct ?: 0.0
+        val grab = s.process(BenchAccumulator.CAMD_GRAB)?.avgPct ?: 0.0
+        row("metric", "camd_app_pct", fmt(camd, 2))
+        row("metric", "camd_grab_pct", fmt(grab, 2))
+        row("metric", "camd_total_pct", fmt(camd + grab, 2))
+        row("metric", "mem_available_min_mb", s.memAvailableMinMb)
+        BenchLogs.summarizeFps(run.segmentFps).forEach {
+            row("fps", "cam${it.inputId}", fmt(it.fps, 2))
+        }
+        BenchLogs.summarizeCopy(run.grabCopy).forEach {
+            row("copy", "cam${it.inputId}", fmt(it.avgMs, 3), fmt(it.maxMs, 3))
+        }
+        val procNames = (s.processes.take(TOP_PROCESSES).map { it.name } + focus).distinct()
+        procNames.forEach { name ->
+            val u = s.process(name)
+            row("proc", name, fmt(u?.avgPct ?: 0.0, 2), fmt(u?.maxPct ?: 0.0, 2))
+        }
+        s.threads.take(TOP_THREADS).forEach {
+            row("thread", it.name, fmt(it.avgPct, 2), fmt(it.maxPct, 2))
+        }
+    }
+
+    fun fmt(value: Double, digits: Int = 1): String = String.format(Locale.US, "%.${digits}f", value)
+}

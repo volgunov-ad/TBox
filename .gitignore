@@ -53,6 +53,8 @@ voice/src/main/assets/vosk-model-*/
 
 # camd root grabber, copied into assets by CMake
 camd/src/main/assets/camd_grab
+# camdbench root sampler, copied into assets by CMake
+camdbench/src/main/assets/camdbench_sampler
 
 hu_perf_results/
 

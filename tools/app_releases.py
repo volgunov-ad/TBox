@@ -143,6 +143,16 @@ APPS: tuple[AppRelease, ...] = (
         "camd",
     ),
     AppRelease(
+        "camdbench",
+        "Тест нагрузки камер",
+        "camdbench",
+        "camdbench/build.gradle.kts",
+        "gradle",
+        "camdbench/Changelog.dm",
+        (),
+        "camdbench",
+    ),
+    AppRelease(
         "dclinstall",
         "Установка DCL",
         "dclinstall",

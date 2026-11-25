@@ -191,6 +191,15 @@ Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done:
 ./gradlew :camd:assembleRelease
 ```
 
+### Camera CPU benchmark (`:camdbench`)
+
+Separate test app **Тест нагрузки камер** (`vad.dashing.camdbench`, `arm64-v8a`) for A/B CPU measurements of `:camd` while the dashcam records. A root sampler `camdbench_sampler` (started through `mb_daemon`) records `/proc` CPU of all processes plus `camd` / `camd_grab` threads, core frequencies, temperatures; the app writes `report.txt` / `summary.tsv` / raw data to `Download/camdbench/` and compares two runs on screen. Actual recording fps is measured from segments finished during the run. Procedure and report format: [docs/CAMDBENCH_RU.md](docs/CAMDBENCH_RU.md).
+
+```
+./gradlew :camdbench:testDebugUnitTest
+./gradlew :camdbench:assembleRelease
+```
+
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).

@@ -2,7 +2,7 @@
 
 Отдельное приложение `vad.dashing.camd`. Ему отдают команды TBox Monitor и нештатный лаунчер DCL. Само оно не встроено ни в одно из них.
 
-Инструкция вендору DCL по TCP API окон: [DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md). Факты про головное устройство: [CAMERAS_A9_RU.md](CAMERAS_A9_RU.md). Штатная калибровка AVM и новые виды camd по ней: [CAMD_CALIBRATION_RU.md](CAMD_CALIBRATION_RU.md). Сокет `ais_server` пускает только root. Один вход камеры держит один клиент. Штатный процесс `AVMapp` уже держит входы 4, 5, 8 и 9. `avm_sharecamera` и callback SDK — уже обработанный кадр с наложенными элементами, для окон и записи его не используем. Нужен чистый кадр сенсора, буфер `qcarcam_get_frame`.
+Инструкция вендору DCL по TCP API окон: [DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md). Факты про головное устройство: [CAMERAS_A9_RU.md](CAMERAS_A9_RU.md). Штатная калибровка AVM и новые виды camd по ней: [CAMD_CALIBRATION_RU.md](CAMD_CALIBRATION_RU.md). Замер нагрузки процессора при записи и сравнение версий: [CAMDBENCH_RU.md](CAMDBENCH_RU.md). Сокет `ais_server` пускает только root. Один вход камеры держит один клиент. Штатный процесс `AVMapp` уже держит входы 4, 5, 8 и 9. `avm_sharecamera` и callback SDK — уже обработанный кадр с наложенными элементами, для окон и записи его не используем. Нужен чистый кадр сенсора, буфер `qcarcam_get_frame`.
 
 ## Зачем
 
