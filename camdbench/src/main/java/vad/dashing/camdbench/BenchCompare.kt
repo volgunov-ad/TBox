@@ -5,6 +5,9 @@ import java.util.Locale
 /** Side-by-side comparison of two runs from their `summary.tsv`. */
 object BenchCompare {
 
+    private const val THREADS_PER_APP = 12
+    private const val MIN_SHOWN_PCT = 0.05
+
     class Summary(
         val info: Map<String, String>,
         val warnings: List<String>,
@@ -75,9 +78,21 @@ object BenchCompare {
         header("Процессы, % ядра")
         rankedKeys(a.proc, b.proc, 15).forEach { row(it, a.proc[it], b.proc[it]) }
 
+        val ours = rankedKeys(a.proc.filterKeys(OurApps::isOurs), b.proc.filterKeys(OurApps::isOurs), Int.MAX_VALUE)
         appendLine()
-        header("Потоки camd и camd_grab, % ядра")
-        rankedKeys(a.threads, b.threads, 20).forEach { row(it, a.threads[it], b.threads[it]) }
+        header("Наши приложения и DCL, % ядра")
+        ours.forEach { row(it, a.proc[it], b.proc[it]) }
+
+        ours.forEach { owner ->
+            val threadsA = a.threads.filterKeys { OurApps.ownerOf(it) == owner }
+            val threadsB = b.threads.filterKeys { OurApps.ownerOf(it) == owner }
+            val keys = rankedKeys(threadsA, threadsB, THREADS_PER_APP)
+                .filter { maxOf(threadsA[it] ?: 0.0, threadsB[it] ?: 0.0) >= MIN_SHOWN_PCT }
+            if (keys.isEmpty()) return@forEach
+            appendLine()
+            header("Потоки ${OurApps.label(owner)}, % ядра")
+            keys.forEach { row(it.substringAfter('/'), threadsA[it], threadsB[it]) }
+        }
         appendLine()
         appendLine("«—» — значения нет в этом замере (старая версия его не пишет или процесс не работал).")
     }

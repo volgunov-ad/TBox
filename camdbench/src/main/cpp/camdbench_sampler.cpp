@@ -12,7 +12,8 @@
 //   Z <zone> <millideg>          thermal zone temperature
 //   M <kb>                       MemAvailable
 //   P <pid> <ticks> <name>       process utime+stime, only when changed
-//   H <pid> <tid> <ticks> <name> thread of camd / camd_grab, only when changed
+//   H <pid> <tid> <ticks> <name> thread of our apps (vad.dashing.*, DCL ras.dashing.*,
+//                                camd_grab, dclwm), only when changed
 //   E                            end of run
 // Stops when <ctl> no longer reads "run <nonce>" or after <max_sec>.
 
@@ -107,6 +108,15 @@ static const char* process_name(int pid, const char* comm, long long start) {
         const char* base = strrchr(cmd, '/');
         name = base ? base + 1 : cmd;
     }
+    // The DCL window helper is a bare app_process; only its class name tells it apart.
+    if (strncmp(name, "app_process", 11) == 0) {
+        for (int i = (int)strlen(cmd) + 1; i < n; i += (int)strlen(cmd + i) + 1) {
+            if (strncmp(cmd + i, "vad.dashing.dclwm", 17) == 0) {
+                name = "dclwm";
+                break;
+            }
+        }
+    }
     char clean[NAME_LEN];
     snprintf(clean, sizeof(clean), "%.*s", NAME_LEN - 1, name[0] ? name : comm);
     sanitize(clean);
@@ -122,9 +132,8 @@ static const char* process_name(int pid, const char* comm, long long start) {
 }
 
 static int watched(const char* name) {
-    if (strcmp(name, "camd_grab") == 0) return 1;
-    if (strcmp(name, "vad.dashing.camd") == 0) return 1;
-    return strncmp(name, "vad.dashing.camd:", 17) == 0;
+    if (strcmp(name, "camd_grab") == 0 || strcmp(name, "dclwm") == 0) return 1;
+    return strncmp(name, "vad.dashing.", 12) == 0 || strncmp(name, "ras.dashing.", 12) == 0;
 }
 
 // Returns 1 when the id must be printed: first sample, new process/thread, or ticks changed.
