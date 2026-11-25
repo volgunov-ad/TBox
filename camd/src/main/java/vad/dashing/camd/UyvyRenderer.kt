@@ -292,6 +292,7 @@ internal class UyvyRenderer(
         var mappedLength = 0L
         var source: RandomAccessFile? = null
         var pixels: ByteBuffer? = null
+        var directUpload = true
         var lastSeq = 0
         var uploadedWidth = 0
         var uploadedHeight = 0
@@ -339,45 +340,61 @@ internal class UyvyRenderer(
                 }
                 idle = 0
                 val bytes = published.slotBytes
-                val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
-                    pixels = it
-                }
-                copy.clear()
-                val viewBuffer = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-                viewBuffer.position(UYVY_HEADER + published.slot * bytes)
-                viewBuffer.limit(UYVY_HEADER + published.slot * bytes + bytes)
-                copy.put(viewBuffer)
-                if (buffer.getInt(16) != published.seq) continue
-                idle = 0
-                copy.position(0)
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
-                if (uploadedWidth != published.width || uploadedHeight != published.height) {
-                    GLES20.glTexImage2D(
-                        GLES20.GL_TEXTURE_2D,
-                        0,
-                        GLES20.GL_RGBA,
-                        published.width / 2,
-                        published.height,
-                        0,
-                        GLES20.GL_RGBA,
-                        GLES20.GL_UNSIGNED_BYTE,
-                        copy,
-                    )
-                    uploadedWidth = published.width
-                    uploadedHeight = published.height
+                val slotView = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                slotView.position(UYVY_HEADER + published.slot * bytes)
+                slotView.limit(UYVY_HEADER + published.slot * bytes + bytes)
+                val upload = if (directUpload) {
+                    slotView.slice()
                 } else {
-                    GLES20.glTexSubImage2D(
-                        GLES20.GL_TEXTURE_2D,
-                        0,
-                        0,
-                        0,
-                        published.width / 2,
-                        published.height,
-                        GLES20.GL_RGBA,
-                        GLES20.GL_UNSIGNED_BYTE,
-                        copy,
-                    )
+                    val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
+                        pixels = it
+                    }
+                    copy.clear()
+                    copy.put(slotView)
+                    copy.position(0)
+                    copy
                 }
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
+                val uploaded = runCatching {
+                    if (uploadedWidth != published.width || uploadedHeight != published.height) {
+                        GLES20.glTexImage2D(
+                            GLES20.GL_TEXTURE_2D,
+                            0,
+                            GLES20.GL_RGBA,
+                            published.width / 2,
+                            published.height,
+                            0,
+                            GLES20.GL_RGBA,
+                            GLES20.GL_UNSIGNED_BYTE,
+                            upload,
+                        )
+                        uploadedWidth = published.width
+                        uploadedHeight = published.height
+                    } else {
+                        GLES20.glTexSubImage2D(
+                            GLES20.GL_TEXTURE_2D,
+                            0,
+                            0,
+                            0,
+                            published.width / 2,
+                            published.height,
+                            GLES20.GL_RGBA,
+                            GLES20.GL_UNSIGNED_BYTE,
+                            upload,
+                        )
+                    }
+                }
+                if (uploaded.isFailure) {
+                    if (!directUpload) throw uploaded.exceptionOrNull()!!
+                    // A read-only mapping the GL binding cannot take: fall back to a private copy.
+                    warnGl("direct texture upload failed, copying frames", uploaded.exceptionOrNull())
+                    directUpload = false
+                    uploadedWidth = 0
+                    continue
+                }
+                // GL has taken the pixels once the call returns. If the grabber moved on meanwhile it
+                // may have been writing into this slot, so the frame is dropped and the newer one drawn.
+                if (buffer.getInt(16) != published.seq) continue
                 drawCurrent(published)
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
