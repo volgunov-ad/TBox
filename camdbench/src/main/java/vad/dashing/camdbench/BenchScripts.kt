@@ -13,6 +13,8 @@ object BenchScripts {
     const val RUN = "$WORK/run.sh"
     const val RAW = "$WORK/raw.txt"
     const val LOGCAT = "$WORK/logcat.txt"
+    const val LOGCAT_PID = "$WORK/logcat.pid"
+    const val LOGCAT_STOP = "$WORK/logcat.stop"
     const val CAMD_PREFS = "$WORK/camd_prefs.xml"
     const val DONE = "$WORK/done"
     const val ARM = "$WORK/arm"
@@ -25,6 +27,8 @@ object BenchScripts {
     const val AUTORUN = "/sdcard/autorun.sh"
     const val AUTORUN_FLAG = "/sdcard/autorun.flag"
     const val AUTORUN_PROP = "vendor.autorun.sdcard.logfile"
+
+    private const val LOGCAT_FILTER = "-v time -s CamdRecorder:I CamdQcar:I"
 
     const val INTERVAL_MS = 2_000L
 
@@ -39,7 +43,7 @@ object BenchScripts {
         "mkdir -p $WORK",
         "chmod 777 $WORK",
         "ps -A | grep camdbench_sampler | grep -v grep | while read user pid rest; do kill \$pid; done",
-        "rm -f $RAW $LOGCAT $DONE $CAMD_PREFS",
+        "rm -f $RAW $LOGCAT $LOGCAT_PID $LOGCAT_STOP $DONE $CAMD_PREFS",
         "cp $SAMPLER_STAGED $SAMPLER",
         "chmod 755 $SAMPLER",
         "cp $RUN_STAGED $RUN",
@@ -57,10 +61,22 @@ object BenchScripts {
         "NONCE=\$1",
         "cp $CAMD_PREFS_SOURCE $CAMD_PREFS 2>/dev/null",
         "chmod 644 $CAMD_PREFS 2>/dev/null",
-        "logcat -v time -T 1 -s CamdRecorder:I CamdQcar:I > $LOGCAT 2>&1 &",
-        "LOGCAT_PID=\$!",
+        // logcat readers get dropped by logd ("read: unexpected EOF!"), so restart them;
+        // the final dump backfills the gap, duplicates are removed when parsing.
+        "(",
+        "  while [ ! -f $LOGCAT_STOP ]; do",
+        "    logcat $LOGCAT_FILTER -T 1 >> $LOGCAT 2>&1 &",
+        "    echo \$! > $LOGCAT_PID",
+        "    wait \$!",
+        "    sleep 1",
+        "  done",
+        ") &",
         "$SAMPLER $RAW $CTL \$NONCE \$2 \$3",
-        "kill \$LOGCAT_PID",
+        "touch $LOGCAT_STOP",
+        "kill \$(cat $LOGCAT_PID) 2>/dev/null",
+        "sleep 2",
+        "kill \$(cat $LOGCAT_PID) 2>/dev/null",
+        "logcat $LOGCAT_FILTER -d >> $LOGCAT 2>&1",
         "chmod 644 $RAW $LOGCAT",
         "echo \$NONCE > $DONE",
         "chmod 644 $DONE",

@@ -76,6 +76,8 @@ class BenchReportTest {
         val camdRow = text.lines().first { it.startsWith("camd (приложение), % ядра") }
         assertTrue(camdRow, camdRow.contains("50.00") && camdRow.contains("40.00") && camdRow.contains("-10.00") && camdRow.contains("0.80"))
         assertTrue(text, text.contains("0.9.5 (23)"))
+        val othersRow = text.lines().first { it.startsWith("Всё остальное (не camd)") }
+        assertTrue(othersRow, othersRow.contains("120.00"))
     }
 
     @Test
