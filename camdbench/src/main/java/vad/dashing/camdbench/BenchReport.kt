@@ -23,7 +23,8 @@ class BenchRun(
 object BenchReport {
 
     private const val TOP_PROCESSES = 20
-    private const val TOP_THREADS = 25
+    private const val TOP_THREADS_PER_APP = 15
+    private const val MIN_SHOWN_PCT = 0.05
     private const val TOP_ZONES = 6
 
     private val focus = listOf(BenchAccumulator.CAMD_APP, BenchAccumulator.CAMD_GRAB)
@@ -78,11 +79,27 @@ object BenchReport {
             appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
         }
 
+        val ours = s.processes.filter { OurApps.isOurs(it.name) }
         appendLine()
-        appendLine("== Потоки camd и camd_grab ==")
-        appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "поток"))
-        s.threads.take(TOP_THREADS).filter { it.avgPct >= 0.05 }.forEach {
-            appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
+        appendLine("== Наши приложения и DCL ==")
+        appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "процесс"))
+        ours.forEach {
+            appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, OurApps.label(it.name)))
+        }
+        appendLine(String.format(Locale.US, "%8.1f %8s  %s", ours.sumOf { it.avgPct }, "", "всего"))
+
+        val threadsByOwner = s.threads.groupBy { OurApps.ownerOf(it.name) }
+        ours.filter { it.avgPct >= MIN_SHOWN_PCT }.forEach { process ->
+            val threads = threadsByOwner[process.name].orEmpty()
+                .filter { it.avgPct >= MIN_SHOWN_PCT }
+                .take(TOP_THREADS_PER_APP)
+            if (threads.isEmpty()) return@forEach
+            appendLine()
+            appendLine("== Потоки ${OurApps.label(process.name)}: ${fmt(process.avgPct)} % ядра ==")
+            appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "поток"))
+            threads.forEach {
+                appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
+            }
         }
 
         appendLine()
@@ -152,13 +169,17 @@ object BenchReport {
         BenchLogs.summarizeCopy(run.grabCopy).forEach {
             row("copy", "cam${it.inputId}", fmt(it.avgMs, 3), fmt(it.maxMs, 3))
         }
-        val procNames = (s.processes.take(TOP_PROCESSES).map { it.name } + focus).distinct()
+        val procNames = (
+            s.processes.take(TOP_PROCESSES).map { it.name } + focus + s.processes.map { it.name }.filter(OurApps::isOurs)
+        ).distinct()
         procNames.forEach { name ->
             val u = s.process(name)
             row("proc", name, fmt(u?.avgPct ?: 0.0, 2), fmt(u?.maxPct ?: 0.0, 2))
         }
-        s.threads.take(TOP_THREADS).forEach {
-            row("thread", it.name, fmt(it.avgPct, 2), fmt(it.maxPct, 2))
+        s.threads.groupBy { OurApps.ownerOf(it.name) }.values.forEach { threads ->
+            threads.take(TOP_THREADS_PER_APP).forEach {
+                row("thread", it.name, fmt(it.avgPct, 2), fmt(it.maxPct, 2))
+            }
         }
     }
 

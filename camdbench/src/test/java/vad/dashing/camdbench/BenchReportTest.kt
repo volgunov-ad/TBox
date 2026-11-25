@@ -88,4 +88,46 @@ class BenchReportTest {
         val copyRow = text.lines().first { it.startsWith("cam4") }
         assertTrue(copyRow, copyRow.contains("—"))
     }
+
+    @Test
+    fun ourAppsAndDclGetProcessAndThreadSections() {
+        val acc = BenchAccumulator()
+        listOf(
+            "K 100", "N 8", "T 0 0", "C 0 0",
+            "P 30 0 vad.dashing.tbox", "H 30 31 0 main", "H 30 32 0 mbcan-state-apply",
+            "P 40 0 ras.dashing.tbox.launcher", "H 40 41 0 RenderThread",
+            "P 50 0 dclwm", "P 60 0 surfaceflinger",
+            "T 100000 0", "C 80000 60000",
+            "P 30 2000 vad.dashing.tbox", "H 30 31 1500 main", "H 30 32 500 mbcan-state-apply",
+            "P 40 1000 ras.dashing.tbox.launcher", "H 40 41 1000 RenderThread",
+            "P 50 100 dclwm", "P 60 3000 surfaceflinger",
+            "E",
+        ).forEach(acc::feed)
+        val s = acc.snapshot()
+        val text = BenchReport.text(run(), s)
+        assertTrue(text, text.contains("== Наши приложения и DCL =="))
+        assertTrue(text, text.contains("vad.dashing.tbox (TBox Monitor)"))
+        assertTrue(text, text.contains("dclwm (DCL окна, root)"))
+        assertTrue(text, text.contains("== Потоки ras.dashing.tbox.launcher (DCL лаунчер): 10.0 % ядра =="))
+        assertTrue(text, text.contains("vad.dashing.tbox/mbcan-state-apply"))
+        val ours = text.substringAfter("== Наши приложения и DCL ==").substringBefore("\n\n")
+        assertTrue(ours, !ours.contains("surfaceflinger"))
+        assertTrue(ours, ours.lines().last().contains("31.0") && ours.lines().last().contains("всего"))
+
+        val a = BenchCompare.parse(BenchReport.summary(run(), s))
+        assertEquals(5.0, a.threads.getValue("vad.dashing.tbox/mbcan-state-apply"), 1e-9)
+        val compare = BenchCompare.text(a, a, "a", "b")
+        assertTrue(compare, compare.contains("== Наши приложения и DCL, % ядра =="))
+        assertTrue(compare, compare.contains("== Потоки vad.dashing.tbox (TBox Monitor), % ядра =="))
+        val row = compare.lines().first { it.startsWith("mbcan-state-apply") }
+        assertTrue(row, row.contains("5.00") && row.contains("+0.00"))
+    }
+
+    @Test
+    fun labelsKeepServiceProcessSuffix() {
+        assertEquals("vad.dashing.tbox:api (TBox Monitor, api)", OurApps.label("vad.dashing.tbox:api"))
+        assertEquals("system_server", OurApps.label("system_server"))
+        assertTrue(OurApps.isOurs("vad.dashing.voice"))
+        assertTrue(!OurApps.isOurs("com.wt.launcher3"))
+    }
 }
