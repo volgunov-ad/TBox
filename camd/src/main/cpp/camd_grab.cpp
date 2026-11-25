@@ -90,6 +90,15 @@ struct IonNew {
     uint32_t unused;
 };
 #define ION_IOC_ALLOC_NEW _IOWR('I', 0, struct IonNew)
+#define ION_FLAG_CACHED 1u
+
+struct DmaBufSync {
+    uint64_t flags;
+};
+#define DMA_BUF_SYNC_READ 1ull
+#define DMA_BUF_SYNC_START 0ull
+#define DMA_BUF_SYNC_END 4ull
+#define DMA_BUF_IOCTL_SYNC _IOW('b', 0, struct DmaBufSync)
 
 struct Camera {
     int id;
@@ -101,6 +110,7 @@ struct Camera {
     qcarcam_hndl_t handle;
     int started;
     int fds[5];
+    int cached[5];
     void* ptrs[5];
     qcarcam_buffer_t buffers[5];
     qcarcam_buffers_t list;
@@ -109,6 +119,7 @@ struct Camera {
     long long last_frame_ms;
     long long copy_ns_sum;
     long long copy_ns_max;
+    long long sync_ns_sum;
     int copy_count;
 };
 
@@ -123,6 +134,9 @@ static fn_release_frame p_release_frame = nullptr;
 
 static Camera* open_cameras[10];
 static long long next_try[10];
+// Set when the kernel refuses DMA_BUF_IOCTL_SYNC on a cached buffer: without cache
+// maintenance the CPU would read stale lines, so that input goes back to uncached ION.
+static int uncached_only[10];
 
 static int map_shared(Camera* camera);
 static long long now_ms(void);
@@ -135,20 +149,33 @@ static int camera_size(int id, int* width, int* height) {
     return 0;
 }
 
-static int alloc_dma(int ion, int bytes) {
+// Uncached ION reads at ~200 MB/s on this HU (8-12 ms per 2 MB frame). A cached buffer
+// is read through the CPU cache after DMA_BUF_IOCTL_SYNC invalidates it.
+static int alloc_dma(int ion, int bytes, int want_cached, int* cached) {
     static const uint32_t heaps[] = { 1u << 25, 1u, 1u << 4, 1u << 1, 1u << 26, 1u << 27 };
-    for (unsigned i = 0; i < sizeof(heaps) / sizeof(heaps[0]); i++) {
-        struct IonNew data;
-        memset(&data, 0, sizeof(data));
-        data.len = (uint64_t)bytes;
-        data.heap_id_mask = heaps[i];
-        if (ioctl(ion, ION_IOC_ALLOC_NEW, &data) == 0 && (int)data.fd >= 0) {
-            fprintf(stderr, "ion heap 0x%x fd %d\n", heaps[i], (int)data.fd);
-            return (int)data.fd;
+    for (int pass = want_cached ? 0 : 1; pass < 2; pass++) {
+        uint32_t flags = pass == 0 ? ION_FLAG_CACHED : 0u;
+        for (unsigned i = 0; i < sizeof(heaps) / sizeof(heaps[0]); i++) {
+            struct IonNew data;
+            memset(&data, 0, sizeof(data));
+            data.len = (uint64_t)bytes;
+            data.heap_id_mask = heaps[i];
+            data.flags = flags;
+            if (ioctl(ion, ION_IOC_ALLOC_NEW, &data) == 0 && (int)data.fd >= 0) {
+                fprintf(stderr, "ion heap 0x%x flags 0x%x fd %d\n", heaps[i], flags, (int)data.fd);
+                *cached = flags != 0u;
+                return (int)data.fd;
+            }
         }
     }
     fprintf(stderr, "ion alloc errno=%d\n", errno);
     return -1;
+}
+
+static int dma_sync(int fd, uint64_t flags) {
+    struct DmaBufSync sync;
+    sync.flags = flags;
+    return ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
 }
 
 static void release_camera(Camera* camera) {
@@ -216,7 +243,7 @@ static Camera* open_camera(int id) {
     camera->stride = width * 2;
     camera->size = camera->stride * height;
     for (int i = 0; i < 5; i++) {
-        int fd = alloc_dma(ion, camera->size);
+        int fd = alloc_dma(ion, camera->size, !uncached_only[id], &camera->cached[i]);
         camera->fds[i] = fd;
         if (fd < 0) {
             close(ion);
@@ -334,10 +361,27 @@ static int grab(Camera* camera) {
     uint32_t* hdr = (uint32_t*)camera->shared;
     uint32_t slot = hdr[5] ^ 1u;
     uint8_t* dst = (uint8_t*)camera->shared + UYVY_HEADER + (size_t)slot * (size_t)camera->size;
+    int fd = camera->fds[frame.idx];
+    int cached = camera->cached[frame.idx];
     long long copy_start = now_ns();
+    if (cached && dma_sync(fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ) != 0) {
+        int syncErrno = errno;
+        fprintf(stderr, "dma sync %d errno=%d, reopen uncached\n", camera->id, syncErrno);
+        ALOGE("dma sync %d errno=%d, reopen uncached", camera->id, syncErrno);
+        p_release_frame(camera->handle, frame.idx);
+        uncached_only[camera->id] = 1;
+        return -1;
+    }
+    long long sync_ns = now_ns() - copy_start;
     memcpy(dst, camera->ptrs[frame.idx], (size_t)camera->size);
+    if (cached) {
+        long long end_start = now_ns();
+        dma_sync(fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
+        sync_ns += now_ns() - end_start;
+    }
     long long copy_ns = now_ns() - copy_start;
     camera->copy_ns_sum += copy_ns;
+    camera->sync_ns_sum += sync_ns;
     if (copy_ns > camera->copy_ns_max) camera->copy_ns_max = copy_ns;
     camera->copy_count += 1;
     int released = p_release_frame(camera->handle, frame.idx);
@@ -368,8 +412,13 @@ static long long now_ns(void) {
     return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
-// The ION buffers are allocated without ION_FLAG_CACHED; the per-frame copy time shows
-// whether reading them is what loads the CPU.
+// avg covers the whole read of a frame: cache sync (cached buffers only) plus memcpy.
+static int cached_slots(const Camera* camera) {
+    int n = 0;
+    for (int i = 0; i < 5; i++) n += camera->cached[i] ? 1 : 0;
+    return n;
+}
+
 static void log_copy_stats(long long period_ms) {
     for (int id = 0; id < 10; id++) {
         Camera* camera = open_cameras[id];
@@ -377,12 +426,16 @@ static void log_copy_stats(long long period_ms) {
         int n = camera->copy_count;
         double avg_ms = n > 0 ? (double)camera->copy_ns_sum / n / 1e6 : 0.0;
         double max_ms = (double)camera->copy_ns_max / 1e6;
+        double sync_ms = n > 0 ? (double)camera->sync_ns_sum / n / 1e6 : 0.0;
         double fps = period_ms > 0 ? n * 1000.0 / (double)period_ms : 0.0;
-        fprintf(stderr, "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d\n",
-                id, n, fps, avg_ms, max_ms, camera->size);
-        ALOGI("copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms", id, n, fps, avg_ms, max_ms);
+        int cached = cached_slots(camera);
+        fprintf(stderr, "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d cached=%d/5 sync=%.2f ms\n",
+                id, n, fps, avg_ms, max_ms, camera->size, cached, sync_ms);
+        ALOGI("copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms cached=%d/5 sync=%.2f ms",
+              id, n, fps, avg_ms, max_ms, cached, sync_ms);
         camera->copy_ns_sum = 0;
         camera->copy_ns_max = 0;
+        camera->sync_ns_sum = 0;
         camera->copy_count = 0;
     }
 }
@@ -491,7 +544,13 @@ int main(void) {
         }
         int got = 0;
         for (int id = 0; id < 10; id++) {
-            if (open_cameras[id] && open_cameras[id]->handle && grab(open_cameras[id])) got = 1;
+            if (!open_cameras[id] || !open_cameras[id]->handle) continue;
+            int grabbed = grab(open_cameras[id]);
+            if (grabbed > 0) got = 1;
+            if (grabbed < 0) {
+                release_camera(open_cameras[id]);
+                open_cameras[id] = nullptr;
+            }
         }
         // An input that went silent (stock AVM grabbed it back, ais_server restart) is
         // reopened instead of leaving the window on its last frame forever.
