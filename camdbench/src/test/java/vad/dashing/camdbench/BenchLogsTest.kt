@@ -40,6 +40,12 @@ class BenchLogsTest {
     }
 
     @Test
+    fun finalLogcatDumpDoesNotDoubleSegments() {
+        val line = "11-25 10:03:00.123 I/CamdRecorder( 1234): cam4 cam4_2026-11-25_10-00-00.mp4: кадров 4498, пропущено 2, 180.0 с\n"
+        assertEquals(1, BenchLogs.parseRecorderSegments(line + "read: unexpected EOF!\n" + line).size)
+    }
+
+    @Test
     fun segmentNames() {
         assertEquals(4, BenchLogs.segmentInput("cam4_2026-11-25_10-00-00.mp4"))
         assertEquals(5, BenchLogs.segmentInput("cam5_2026-11-25_10-00-00_2.mp4"))

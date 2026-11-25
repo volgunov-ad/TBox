@@ -61,7 +61,7 @@ object BenchLogs {
             m.groupValues[4].toInt(),
             m.groupValues[5].toDouble(),
         )
-    }.toList()
+    }.distinctBy { it.inputId to it.file }.toList()
 
     fun segmentInput(fileName: String): Int? =
         segmentNameRegex.matchEntire(fileName)?.groupValues?.get(1)?.toIntOrNull()

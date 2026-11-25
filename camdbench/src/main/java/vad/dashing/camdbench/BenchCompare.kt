@@ -61,6 +61,7 @@ object BenchCompare {
         appendLine()
         header("Итог")
         metricLabels.forEach { (key, label) -> row(label, a.metrics[key], b.metrics[key]) }
+        row("Всё остальное (не camd), % ядра", othersPct(a), othersPct(b))
 
         appendLine()
         header("Фактическая частота записи, кадр/с")
@@ -79,6 +80,13 @@ object BenchCompare {
         rankedKeys(a.threads, b.threads, 20).forEach { row(it, a.threads[it], b.threads[it]) }
         appendLine()
         appendLine("«—» — значения нет в этом замере (старая версия его не пишет или процесс не работал).")
+    }
+
+    /** Load outside camd; when it differs a lot, the total CPU of the two runs is not comparable. */
+    private fun othersPct(s: Summary): Double? {
+        val cores = s.metrics["cpu_cores_used"] ?: return null
+        val camd = s.metrics["camd_total_pct"] ?: return null
+        return cores * 100 - camd
     }
 
     /** Keys from both runs, ordered by the larger of the two values. */
