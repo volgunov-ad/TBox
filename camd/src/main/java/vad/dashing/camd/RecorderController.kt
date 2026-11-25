@@ -31,6 +31,7 @@ class RecorderController(
         val sosFolder: String = "",
         val sosPrevious: Int = DEFAULT_SOS_PREVIOUS,
         val segmentSec: Int = DEFAULT_SEGMENT_SEC,
+        val fpsDivisor: Int = 1,
         val sosRunning: Boolean = false,
         val repairRunning: Boolean = false,
     )
@@ -61,6 +62,7 @@ class RecorderController(
             sosFolder = prefs.getString(PREF_SOS_FOLDER, "").orEmpty(),
             sosPrevious = prefs.getInt(PREF_SOS_PREVIOUS, DEFAULT_SOS_PREVIOUS),
             segmentSec = prefs.getInt(PREF_SEGMENT_SEC, DEFAULT_SEGMENT_SEC),
+            fpsDivisor = RecorderFps.normalize(prefs.getInt(RecorderFps.PREF_DIVISOR, 1)),
             message = if (prefs.getBoolean(PREF_ENABLED, false)) {
                 "Регистратор включён — начнёт запись автоматически"
             } else {
@@ -99,6 +101,14 @@ class RecorderController(
         val clampedSec = (RecorderFiles.SEGMENT_OPTIONS_MS.firstOrNull { it >= ms } ?: RecorderFiles.SEGMENT_MS).toInt() / 1000
         prefs.edit().putInt(PREF_SEGMENT_SEC, clampedSec).apply()
         _state.update { it.copy(segmentSec = clampedSec) }
+    }
+
+    /** Recording rate as a sensor-rate divisor ([RecorderFps]); the grabber thins frames from the next start. */
+    fun setFpsDivisor(divisor: Int) {
+        if (enabledNow) return
+        val normalized = RecorderFps.normalize(divisor)
+        prefs.edit().putInt(RecorderFps.PREF_DIVISOR, normalized).apply()
+        _state.update { it.copy(fpsDivisor = normalized) }
     }
 
     /** Emergency-save destination; can be changed anytime, even while recording. */
@@ -146,7 +156,7 @@ class RecorderController(
                     if (params == null) {
                         SegmentRepairEngine.Outcome(candidate.file, false, "нет целого ролика этой камеры для образца")
                     } else {
-                        SegmentRepairEngine.repair(candidate, params)
+                        SegmentRepairEngine.repair(candidate, params, RecorderFps.fps(_state.value.fpsDivisor))
                     }.also { outcome ->
                         Log.i(LOG_TAG, "repair: ${candidate.file.name}: ${outcome.detail}")
                     }
@@ -506,6 +516,7 @@ class RecorderController(
                         updateRunState(RunState.WAITING_MEDIA, message)
                     },
                     segmentMs = ::segmentLengthMs,
+                    fpsDivisor = _state.value.fpsDivisor,
                 )
                 engines[inputId] = engine
                 engine.start()

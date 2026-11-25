@@ -42,7 +42,11 @@ internal class RecorderEngine(
     private val onSegmentError: (String) -> Unit = onError,
     /** Segment wall-clock length; re-read per segment, so a settings change applies to the next segment. */
     private val segmentMs: () -> Long = { RecorderFiles.SEGMENT_MS },
+    /** Records every [fpsDivisor]-th sensor frame ([RecorderFps]). */
+    private val fpsDivisor: Int = 1,
 ) : Thread("camd-rec-$inputId") {
+
+    private val frameMs = RecorderFps.frameMs(fpsDivisor)
 
     @Volatile
     private var running = true
@@ -176,6 +180,7 @@ internal class RecorderEngine(
         var mappedLength = 0L
         var pixels: ByteBuffer? = null
         var lastSeq = 0
+        var lastFrameNo = 0
         var uploadedWidth = 0
         var uploadedHeight = 0
         var correction = CamdLensCorrectionStore.load(prefs, inputId)
@@ -193,16 +198,13 @@ internal class RecorderEngine(
                 val statNow = System.currentTimeMillis()
                 val recheck = statNow - lastStatMs >= RecorderPacing.STAT_INTERVAL_MS
                 if (recheck) lastStatMs = statNow
-                val read = readFrame(source, mapped, mappedIno, mappedLength, pixels, lastSeq, recheck)
+                val read = readFrame(source, mapped, mappedIno, mappedLength, pixels, lastSeq, lastFrameNo, recheck)
                 source = read.source
                 mapped = read.buffer
                 mappedIno = read.inode
                 mappedLength = read.length
                 pixels = read.pixels
-                val prevSeq = lastSeq
-                if (read.slot != null) {
-                    lastSeq = read.slot.seq
-                }
+                lastSeq = read.seenSeq
 
                 if (codec == null) {
                     if (read.slot == null) {
@@ -211,8 +213,8 @@ internal class RecorderEngine(
                     }
                     val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, read.slot.width, read.slot.height).apply {
                         setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                        setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE)
-                        setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
+                        setInteger(MediaFormat.KEY_BIT_RATE, RecorderFps.bitRate(fpsDivisor))
+                        setInteger(MediaFormat.KEY_FRAME_RATE, RecorderFps.encoderFps(fpsDivisor))
                         setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
                     }
                     val created = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -241,7 +243,8 @@ internal class RecorderEngine(
                         lastLensMs = now
                     }
                     lastFrameMs = now
-                    if (frames > 0) skipped += RecorderPacing.skippedBetween(prevSeq, read.slot.seq)
+                    if (frames > 0) skipped += RecorderPacing.skippedFrames(read.slot.frameNo, lastFrameNo, fpsDivisor)
+                    lastFrameNo = read.slot.frameNo
                     frames += 1
                     uploadAndDraw(gl, read.slot, correction, pixels!!)
                     val format = drain(eos = false)
@@ -251,7 +254,7 @@ internal class RecorderEngine(
                         muxerStarted = true
                     }
                 }
-                Thread.sleep(RecorderPacing.sleepMs(System.currentTimeMillis() - lastFrameMs))
+                Thread.sleep(RecorderPacing.sleepMs(System.currentTimeMillis() - lastFrameMs, frameMs))
             }
         } finally {
             try {
@@ -503,6 +506,8 @@ internal class RecorderEngine(
         val pixels: ByteBuffer?,
         val slot: UyvySlot?,
         val seqChanged: Boolean,
+        /** Newest grabber seq looked at, including a frame passed over for the rate. */
+        val seenSeq: Int,
     )
 
     private fun readFrame(
@@ -512,6 +517,7 @@ internal class RecorderEngine(
         mappedLength: Long,
         pixels: ByteBuffer?,
         lastSeq: Int,
+        lastFrameNo: Int,
         recheck: Boolean,
     ): FrameRead {
         var src = source
@@ -529,31 +535,34 @@ internal class RecorderEngine(
             }
         }
         if (src == null) {
-            if (!frame.isFile) return FrameRead(null, null, 0, 0, pixels, null, false)
+            if (!frame.isFile) return FrameRead(null, null, 0, 0, pixels, null, false, lastSeq)
             val probe = runCatching { RandomAccessFile(frame, "r") }.getOrNull()
-                ?: return FrameRead(null, null, 0, 0, pixels, null, false)
+                ?: return FrameRead(null, null, 0, 0, pixels, null, false, lastSeq)
             val stat = runCatching { android.system.Os.fstat(probe.fd) }.getOrNull()
             val length = runCatching { probe.length() }.getOrDefault(0L)
             if (stat == null || length < UYVY_HEADER) {
                 runCatching { probe.close() }
-                return FrameRead(null, null, 0, 0, pixels, null, false)
+                return FrameRead(null, null, 0, 0, pixels, null, false, lastSeq)
             }
             val mappedNew = runCatching {
                 probe.channel.map(FileChannel.MapMode.READ_ONLY, 0, length).order(ByteOrder.LITTLE_ENDIAN)
             }.getOrNull()
             if (mappedNew == null) {
                 runCatching { probe.close() }
-                return FrameRead(null, null, 0, 0, pixels, null, false)
+                return FrameRead(null, null, 0, 0, pixels, null, false, lastSeq)
             }
             src = probe
             buf = mappedNew
             ino = stat.st_ino
             len = length
         }
-        val mappedBuf = buf ?: return FrameRead(src, buf, ino, len, pixels, null, false)
+        val mappedBuf = buf ?: return FrameRead(src, buf, ino, len, pixels, null, false, lastSeq)
         val slot = readUyvySlot(mappedBuf)
         if (slot == null || slot.seq == lastSeq) {
-            return FrameRead(src, buf, ino, len, pixels, null, false)
+            return FrameRead(src, buf, ino, len, pixels, null, false, lastSeq)
+        }
+        if (!RecorderPacing.accept(slot.frameNo, lastFrameNo, fpsDivisor)) {
+            return FrameRead(src, buf, ino, len, pixels, null, false, slot.seq)
         }
         val bytes = slot.slotBytes
         val copy = pixels?.takeIf { it.capacity() == bytes }
@@ -564,29 +573,25 @@ internal class RecorderEngine(
         view.limit(UYVY_HEADER + slot.slot * bytes + bytes)
         copy.put(view)
         if (mappedBuf.getInt(16) != slot.seq) {
-            return FrameRead(src, buf, ino, len, copy, null, false)
+            return FrameRead(src, buf, ino, len, copy, null, false, lastSeq)
         }
         copy.position(0)
-        return FrameRead(src, buf, ino, len, copy, slot, true)
+        return FrameRead(src, buf, ino, len, copy, slot, true, slot.seq)
     }
 
     companion object {
-        private const val BIT_RATE = 6_000_000
-        private const val TARGET_FPS = RecorderPacing.TARGET_FPS
         private const val LOG_TAG = "CamdRecorder"
     }
 }
 
 /**
- * Poll schedule of the recorder thread. The sensor delivers [TARGET_FPS]; after a frame
- * the thread sleeps until shortly before the next one is due and then polls finely, so
- * a frame is neither skipped nor waited on with ~100 wakeups per second.
+ * Poll schedule and frame choice of the recorder thread. After an encoded frame the
+ * thread sleeps until shortly before the next one is due and then polls finely, so a
+ * frame is neither missed nor waited on with ~100 wakeups per second.
  */
 internal object RecorderPacing {
-    const val TARGET_FPS = 25
-    const val FRAME_MS = 1000L / TARGET_FPS
-    /** First poll after a frame; the margin covers grabber loop jitter with several cameras. */
-    const val EXPECT_MS = FRAME_MS - 15
+    /** First poll comes this long before the next frame is due; covers grabber loop jitter with several cameras. */
+    const val EXPECT_MARGIN_MS = 15L
     const val POLL_MS = 5L
     /** No frame for this long — the input is silent, poll lazily. */
     const val SILENT_MS = 500L
@@ -594,13 +599,29 @@ internal object RecorderPacing {
     /** How often the frame file is re-stat'ed for a grabber reopen (new inode/size). */
     const val STAT_INTERVAL_MS = 1000L
 
-    /** Grabber frames lost between two encoded ones; a reopened grabber restarts seq, which is not a loss. */
-    fun skippedBetween(prevSeq: Int, seq: Int): Int = (seq - prevSeq - 1).coerceAtLeast(0)
+    fun sleepMs(sinceFrameMs: Long, frameMs: Long): Long {
+        val expect = frameMs - EXPECT_MARGIN_MS
+        return when {
+            sinceFrameMs < 0 -> POLL_MS
+            sinceFrameMs < expect -> expect - sinceFrameMs
+            sinceFrameMs < SILENT_MS.coerceAtLeast(frameMs * 3) -> POLL_MS
+            else -> SILENT_POLL_MS
+        }
+    }
 
-    fun sleepMs(sinceFrameMs: Long): Long = when {
-        sinceFrameMs < 0 -> POLL_MS
-        sinceFrameMs < EXPECT_MS -> EXPECT_MS - sinceFrameMs
-        sinceFrameMs < SILENT_MS -> POLL_MS
-        else -> SILENT_POLL_MS
+    /**
+     * Whether the grabber frame with sensor number [frameNo] is the next one to record.
+     * The grabber already thins frames for a camera without a window; with a window open
+     * it publishes every frame and the choice is made here. Numbers are 0 from an old
+     * grabber and restart after a reopen — such a frame is taken.
+     */
+    fun accept(frameNo: Int, lastFrameNo: Int, divisor: Int): Boolean =
+        divisor <= 1 || frameNo <= 0 || lastFrameNo <= 0 || frameNo <= lastFrameNo ||
+            frameNo - lastFrameNo >= divisor
+
+    /** Recording-rate frames lost between two encoded ones. */
+    fun skippedFrames(frameNo: Int, lastFrameNo: Int, divisor: Int): Int {
+        if (frameNo <= 0 || lastFrameNo <= 0 || frameNo <= lastFrameNo) return 0
+        return ((frameNo - lastFrameNo) / divisor.coerceAtLeast(1) - 1).coerceAtLeast(0)
     }
 }

@@ -239,6 +239,7 @@ class MainActivity : ComponentActivity() {
                         onRecorderSosFolder = recorder::setSosFolder,
                         onRecorderSosPrevious = recorder::setSosPrevious,
                         onRecorderSegmentSec = recorder::setSegmentSec,
+                        onRecorderFpsDivisor = recorder::setFpsDivisor,
                         onRecorderEmergencySave = { recorder.requestEmergencySave() },
                         onRecorderRepair = { recorder.requestSegmentRepair() },
                         onInput = controller::setInput,
@@ -950,6 +951,7 @@ private fun CamdScreen(
     onRecorderSosFolder: (String) -> Unit,
     onRecorderSosPrevious: (Int) -> Unit,
     onRecorderSegmentSec: (Int) -> Unit,
+    onRecorderFpsDivisor: (Int) -> Unit,
     onRecorderEmergencySave: () -> Unit,
     onRecorderRepair: () -> Unit,
     onInput: (Int) -> Unit,
@@ -1066,6 +1068,7 @@ private fun CamdScreen(
                 onSosFolder = onRecorderSosFolder,
                 onSosPrevious = onRecorderSosPrevious,
                 onSegmentSec = onRecorderSegmentSec,
+                onFpsDivisor = onRecorderFpsDivisor,
                 onEmergencySave = onRecorderEmergencySave,
                 onRepair = onRecorderRepair,
             )
@@ -1341,6 +1344,7 @@ private fun RecorderTab(
     onSosFolder: (String) -> Unit,
     onSosPrevious: (Int) -> Unit,
     onSegmentSec: (Int) -> Unit,
+    onFpsDivisor: (Int) -> Unit,
     onEmergencySave: () -> Unit,
     onRepair: () -> Unit,
 ) {
@@ -1508,6 +1512,29 @@ private fun RecorderTab(
         }
     }
     Text(
+        "Частота записи",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RecorderFps.DIVISORS.forEach { divisor ->
+            FilterChip(
+                selected = recorderState.fpsDivisor == divisor,
+                onClick = { onFpsDivisor(divisor) },
+                enabled = !recorderState.enabled,
+                label = {
+                    Text(
+                        "${RecorderFps.label(divisor)} кадр/с",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                },
+            )
+        }
+    }
+    Text(
         "Короткие сегменты надёжнее при обрыве питания: незакрытый ролик теряется целиком. " +
             "Изменение применяется с нового сегмента и только при выключенной записи.",
         style = MaterialTheme.typography.bodyLarge,
@@ -1593,6 +1620,8 @@ private fun RecorderTab(
         "Занято ${String.format(Locale.US, "%.1f", recorderState.usedBytes / 1_000_000_000.0)} ГБ " +
             "из ${recorderState.quotaGb} ГБ. " +
             "Сегменты по ${recorderState.segmentSec} сек (moov пишется при закрытии), при превышении квоты старейшие удаляются. " +
+            "${RecorderFps.label(recorderState.fpsDivisor)} кадр/с, ${RecorderFps.bitRateLabel(recorderState.fpsDivisor)} Мбит/с на камеру; " +
+            "без открытого окна камеры граббер копирует только записываемые кадры. " +
             "Запись идёт с коррекциями камеры (вкладка «Камеры»), без поворотов и вырезок пресетов.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -4,6 +4,8 @@ import java.nio.ByteBuffer
 
 internal const val UYVY_MAGIC = 0x31765955
 internal const val UYVY_HEADER = 64
+/** Per-slot sensor frame numbers in the header: slot 0 at 32, slot 1 at 36. */
+internal const val UYVY_FRAME_NO = 32
 
 internal class UyvySlot(
     val width: Int,
@@ -11,6 +13,8 @@ internal class UyvySlot(
     val slot: Int,
     val slotBytes: Int,
     val seq: Int,
+    /** Sensor frame number of this slot (grabber 7+), 0 from an older grabber. */
+    val frameNo: Int = 0,
 )
 
 /**
@@ -33,5 +37,5 @@ internal fun readUyvySlot(buffer: ByteBuffer): UyvySlot? {
     if (stride != width * 2 || slotBytes != stride * height) return null
     val end = UYVY_HEADER.toLong() + (slot + 1).toLong() * slotBytes.toLong()
     if (end > buffer.capacity()) return null
-    return UyvySlot(width, height, slot, slotBytes, seq1)
+    return UyvySlot(width, height, slot, slotBytes, seq1, buffer.getInt(UYVY_FRAME_NO + slot * 4))
 }

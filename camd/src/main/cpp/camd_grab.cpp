@@ -32,6 +32,9 @@
 #define FRAME_RAM "/mnt/camd-ram"
 #define UYVY_MAGIC 0x31765955u
 #define UYVY_HEADER 64
+// hdr[8 + slot]: sensor frame number of that slot; the recorder picks every N-th by it.
+#define UYVY_FRAME_NO_WORD 8
+#define MAX_DIVISOR 25
 
 typedef void* qcarcam_hndl_t;
 typedef int qcarcam_ret_t;
@@ -117,6 +120,10 @@ struct Camera {
     void* shared;
     int sharedBytes;
     long long last_frame_ms;
+    // Publish every divisor-th sensor frame; the rest are released without the copy.
+    int divisor;
+    uint32_t frame_no;
+    int dropped;
     long long copy_ns_sum;
     long long copy_ns_max;
     long long sync_ns_sum;
@@ -358,6 +365,14 @@ static int grab(Camera* camera) {
         p_release_frame(camera->handle, frame.idx);
         return 0;
     }
+    camera->frame_no += 1;
+    if (camera->frame_no == 0) camera->frame_no = 1;
+    if (camera->divisor > 1 && camera->frame_no % (uint32_t)camera->divisor != 0) {
+        p_release_frame(camera->handle, frame.idx);
+        camera->dropped += 1;
+        camera->last_frame_ms = now_ms();
+        return 1;
+    }
     uint32_t* hdr = (uint32_t*)camera->shared;
     uint32_t slot = hdr[5] ^ 1u;
     uint8_t* dst = (uint8_t*)camera->shared + UYVY_HEADER + (size_t)slot * (size_t)camera->size;
@@ -386,6 +401,7 @@ static int grab(Camera* camera) {
     camera->copy_count += 1;
     int released = p_release_frame(camera->handle, frame.idx);
     if (released != 0) fprintf(stderr, "release_frame %u -> %d\n", frame.idx, released);
+    hdr[UYVY_FRAME_NO_WORD + slot] = camera->frame_no;
     __sync_synchronize();
     hdr[5] = slot;
     __sync_synchronize();
@@ -429,10 +445,14 @@ static void log_copy_stats(long long period_ms) {
         double sync_ms = n > 0 ? (double)camera->sync_ns_sum / n / 1e6 : 0.0;
         double fps = period_ms > 0 ? n * 1000.0 / (double)period_ms : 0.0;
         int cached = cached_slots(camera);
-        fprintf(stderr, "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d cached=%d/5 sync=%.2f ms\n",
-                id, n, fps, avg_ms, max_ms, camera->size, cached, sync_ms);
-        ALOGI("copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms cached=%d/5 sync=%.2f ms",
-              id, n, fps, avg_ms, max_ms, cached, sync_ms);
+        int divisor = camera->divisor > 1 ? camera->divisor : 1;
+        fprintf(stderr,
+                "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d cached=%d/5 sync=%.2f ms "
+                "every=%d skipped=%d\n",
+                id, n, fps, avg_ms, max_ms, camera->size, cached, sync_ms, divisor, camera->dropped);
+        ALOGI("copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms cached=%d/5 sync=%.2f ms every=%d skipped=%d",
+              id, n, fps, avg_ms, max_ms, cached, sync_ms, divisor, camera->dropped);
+        camera->dropped = 0;
         camera->copy_ns_sum = 0;
         camera->copy_ns_max = 0;
         camera->sync_ns_sum = 0;
@@ -440,15 +460,21 @@ static void log_copy_stats(long long period_ms) {
     }
 }
 
-static int read_desired(int* ids) {
+// Line: `<id>` or `<id> <divisor>`.
+static int read_desired(int* ids, int* divisors) {
     FILE* file = fopen(DESIRED, "r");
     if (!file) return 0;
     int count = 0;
     char line[32];
     while (count < MAX_CAMERAS && fgets(line, sizeof(line), file)) {
-        int id = atoi(line);
-        if (id == 0 && line[0] != '0') continue;
-        ids[count++] = id;
+        int id = 0;
+        int divisor = 1;
+        int fields = sscanf(line, "%d %d", &id, &divisor);
+        if (fields < 1) continue;
+        if (fields < 2 || divisor < 1 || divisor > MAX_DIVISOR) divisor = 1;
+        ids[count] = id;
+        divisors[count] = divisor;
+        count++;
     }
     fclose(file);
     return count;
@@ -506,6 +532,7 @@ int main(void) {
     }
     if (init_client() != 0) return 1;
     int ids[MAX_CAMERAS];
+    int divisors[MAX_CAMERAS];
     int count = 0;
     long long last_beat_ms = -1000000;
     long long last_desired_ms = -1000000;
@@ -521,7 +548,7 @@ int main(void) {
             last_stats_ms = now;
         }
         if (now - last_desired_ms >= 250) {
-            count = read_desired(ids);
+            count = read_desired(ids, divisors);
             last_desired_ms = now;
         }
         for (int id = 0; id < 10; id++) {
@@ -541,6 +568,9 @@ int main(void) {
             fprintf(stderr, "open %d -> %s\n", id, opened ? "ok" : "fail");
             if (opened) open_cameras[id] = opened;
             else next_try[id] = now + 2000;
+        }
+        for (int n = 0; n < count; n++) {
+            if (known_id(ids[n]) && open_cameras[ids[n]]) open_cameras[ids[n]]->divisor = divisors[n];
         }
         int got = 0;
         for (int id = 0; id < 10; id++) {

@@ -859,6 +859,14 @@ class CamdPortTest {
 
 class GrabDesiredIdsTest {
     @Test
+    fun recorderOnlyInputsGetTheDivisorShownOnesStayFull() {
+        assertEquals(listOf("4 2", "5 2", "8"), GrabDesiredIds.lines(listOf(40), listOf(4, 5), 2))
+        assertEquals(listOf("4", "5"), GrabDesiredIds.lines(emptyList(), listOf(4, 5), 1))
+        assertEquals(listOf("8"), GrabDesiredIds.lines(listOf(8), listOf(8), 5))
+        assertEquals(emptyList<String>(), GrabDesiredIds.lines(emptyList(), emptyList(), 2))
+    }
+
+    @Test
     fun mapsStockOpenIdsToPhysicalAndUnionsRecorder() {
         assertEquals(
             sortedSetOf(8, 4),

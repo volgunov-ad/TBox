@@ -16,6 +16,15 @@ class UyvyFrameTest {
         assertEquals(1, slot?.slot)
         assertEquals(1280 * 2 * 800, slot?.slotBytes)
         assertEquals(3, slot?.seq)
+        assertEquals(0, slot?.frameNo)
+    }
+
+    @Test
+    fun frameNumberIsReadForThePublishedSlot() {
+        val buffer = header(width = 1280, height = 800, seq = 3, slot = 1)
+        buffer.putInt(UYVY_FRAME_NO, 40)
+        buffer.putInt(UYVY_FRAME_NO + 4, 42)
+        assertEquals(42, readUyvySlot(buffer)?.frameNo)
     }
 
     @Test

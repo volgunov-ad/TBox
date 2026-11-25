@@ -704,8 +704,8 @@ class CameraWindows(private val context: Context) {
             recorderActive -> recorderInputsPref()
             else -> emptySet()
         }
-        val ids = GrabDesiredIds.compute(openIds, recorderIds)
-        val text = ids.joinToString("\n")
+        val divisor = RecorderFps.normalize(prefs.getInt(RecorderFps.PREF_DIVISOR, 1))
+        val text = GrabDesiredIds.lines(openIds, recorderIds, divisor).joinToString("\n")
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
 

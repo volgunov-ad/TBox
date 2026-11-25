@@ -8,18 +8,18 @@ import android.media.MediaMuxer
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import kotlin.math.roundToInt
 
 /**
  * Android-side half of the 0.8.7 repair: writes a playable MP4 around the samples
  * [SegmentRepair] found in a moov-less segment. Codec parameters (csd-0/csd-1,
  * resolution) come from the most recent intact segment of the same camera — the fixed
  * pipeline encodes everything with the same settings, so a sibling file always matches;
- * timestamps are synthesized at [TARGET_FPS]. The source file is deleted only after a
+ * timestamps are synthesized at the current recording rate. The source file is deleted only after a
  * successful remux (rename `.mp4` → `.broken` keeps the evidence on failure).
  */
 internal object SegmentRepairEngine {
 
-    private const val TARGET_FPS = RecorderPacing.TARGET_FPS
     private const val MAX_SAMPLES = 15000 // 10 min at 25 fps — sanity cap
 
     /** Result row for one file. */
@@ -33,6 +33,7 @@ internal object SegmentRepairEngine {
     fun repair(
         candidate: SegmentRepair.Candidate,
         codecParams: MediaFormat,
+        fps: Double,
         onProgress: (String) -> Unit = {},
     ): Outcome {
         val file = candidate.file
@@ -57,9 +58,9 @@ internal object SegmentRepairEngine {
                     MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface,
                 )
-                setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps.roundToInt())
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
-                setInteger(MediaFormat.KEY_DURATION, samples.size * 1_000_000 / TARGET_FPS)
+                setLong(MediaFormat.KEY_DURATION, (samples.size * 1_000_000L / fps).toLong())
                 setByteBuffer("csd-0", csd0.duplicate())
                 setByteBuffer("csd-1", csd1.duplicate())
             }
@@ -91,8 +92,8 @@ internal object SegmentRepairEngine {
                     buffer.flip()
                     info.set(0, sample.size, ptsUs, if (sample.keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
                     active.writeSampleData(track, buffer, info)
-                    ptsUs += 1_000_000L / TARGET_FPS
                     written++
+                    ptsUs = (written * 1_000_000L / fps).toLong()
                 }
             }
             active.stop()
