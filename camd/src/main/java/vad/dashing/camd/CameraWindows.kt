@@ -713,7 +713,10 @@ class CameraWindows(private val context: Context) {
         val autorun = File(DaemonScripts.AUTORUN)
         waitForeignAutorun(autorun)
         autorun.writeText(script)
-        exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
+        // With the trigger still armed by another app, mb_daemon runs and deletes the
+        // script the moment it lands, so chmod finds no file. The nonce marker below
+        // is the real answer.
+        runCatching { exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN)) }
         File(DaemonScripts.AUTORUN_FLAG).createNewFile()
         exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, ""))
         Thread.sleep(300)
