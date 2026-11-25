@@ -11,11 +11,13 @@ import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES20
+import android.util.Log
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
+import java.util.Locale
 
 /**
  * Headless dashcam pipeline for one camera: reads the grabber's shared UYVY file,
@@ -49,7 +51,7 @@ internal class RecorderEngine(
      * Set by the emergency save ([RecorderController.requestEmergencySave]): the current
      * in-flight segment closes immediately through the normal finally path —
      * signalEndOfInputStream → muxer.stop() writes the moov → onSegmentClosed — and the
-     * next segment starts fresh. Delay is one render frame (~50 ms).
+     * next segment starts fresh. Delay is one render frame (~40 ms).
      */
     @Volatile
     private var closeNow = false
@@ -178,19 +180,26 @@ internal class RecorderEngine(
         var uploadedHeight = 0
         var correction = CamdLensCorrectionStore.load(prefs, inputId)
         var lastLensMs = 0L
-        var lastRenderMs = 0L
+        var lastFrameMs = System.currentTimeMillis()
+        var lastStatMs = 0L
+        var frames = 0
+        var skipped = 0
         val segmentLengthMs = segmentMs()
         val segmentStart = System.currentTimeMillis()
         closeNow = false
 
         try {
             while (running && !closeNow && System.currentTimeMillis() - segmentStart < segmentLengthMs) {
-                val read = readFrame(source, mapped, mappedIno, mappedLength, pixels, lastSeq)
+                val statNow = System.currentTimeMillis()
+                val recheck = statNow - lastStatMs >= RecorderPacing.STAT_INTERVAL_MS
+                if (recheck) lastStatMs = statNow
+                val read = readFrame(source, mapped, mappedIno, mappedLength, pixels, lastSeq, recheck)
                 source = read.source
                 mapped = read.buffer
                 mappedIno = read.inode
                 mappedLength = read.length
                 pixels = read.pixels
+                val prevSeq = lastSeq
                 if (read.slot != null) {
                     lastSeq = read.slot.seq
                 }
@@ -226,12 +235,14 @@ internal class RecorderEngine(
                 }
 
                 val now = System.currentTimeMillis()
-                if (read.slot != null && read.seqChanged && now - lastRenderMs >= FRAME_INTERVAL_MS) {
+                if (read.slot != null && read.seqChanged) {
                     if (now - lastLensMs >= 500) {
                         correction = CamdLensCorrectionStore.load(prefs, inputId)
                         lastLensMs = now
                     }
-                    lastRenderMs = now
+                    lastFrameMs = now
+                    if (frames > 0) skipped += RecorderPacing.skippedBetween(prevSeq, read.slot.seq)
+                    frames += 1
                     uploadAndDraw(gl, read.slot, correction, pixels!!)
                     val format = drain(eos = false)
                     if (format != null && track == -1 && muxer != null) {
@@ -239,9 +250,8 @@ internal class RecorderEngine(
                         muxer.start()
                         muxerStarted = true
                     }
-                } else {
-                    Thread.sleep(8)
                 }
+                Thread.sleep(RecorderPacing.sleepMs(System.currentTimeMillis() - lastFrameMs))
             }
         } finally {
             try {
@@ -262,6 +272,12 @@ internal class RecorderEngine(
             } catch (_: Throwable) {
                 segment.delete()
             }
+            val seconds = (System.currentTimeMillis() - segmentStart) / 1000.0
+            Log.i(
+                LOG_TAG,
+                "cam$inputId ${segment.name}: кадров $frames, пропущено $skipped, " +
+                    "%.1f с".format(Locale.US, seconds),
+            )
             currentSegment = null
             runCatching { muxer?.release() }
             runCatching { codec?.release() }
@@ -496,12 +512,13 @@ internal class RecorderEngine(
         mappedLength: Long,
         pixels: ByteBuffer?,
         lastSeq: Int,
+        recheck: Boolean,
     ): FrameRead {
         var src = source
         var buf = mapped
         var ino = mappedIno
         var len = mappedLength
-        if (src != null && buf != null) {
+        if (src != null && buf != null && recheck) {
             val stat = runCatching { android.system.Os.stat(frame.absolutePath) }.getOrNull()
             if (stat == null || stat.st_ino != ino || stat.st_size != len) {
                 runCatching { src.close() }
@@ -555,7 +572,35 @@ internal class RecorderEngine(
 
     companion object {
         private const val BIT_RATE = 6_000_000
-        private const val TARGET_FPS = 20
-        private const val FRAME_INTERVAL_MS = 50L
+        private const val TARGET_FPS = RecorderPacing.TARGET_FPS
+        private const val LOG_TAG = "CamdRecorder"
+    }
+}
+
+/**
+ * Poll schedule of the recorder thread. The sensor delivers [TARGET_FPS]; after a frame
+ * the thread sleeps until shortly before the next one is due and then polls finely, so
+ * a frame is neither skipped nor waited on with ~100 wakeups per second.
+ */
+internal object RecorderPacing {
+    const val TARGET_FPS = 25
+    const val FRAME_MS = 1000L / TARGET_FPS
+    /** First poll after a frame; the margin covers grabber loop jitter with several cameras. */
+    const val EXPECT_MS = FRAME_MS - 15
+    const val POLL_MS = 5L
+    /** No frame for this long — the input is silent, poll lazily. */
+    const val SILENT_MS = 500L
+    const val SILENT_POLL_MS = 30L
+    /** How often the frame file is re-stat'ed for a grabber reopen (new inode/size). */
+    const val STAT_INTERVAL_MS = 1000L
+
+    /** Grabber frames lost between two encoded ones; a reopened grabber restarts seq, which is not a loss. */
+    fun skippedBetween(prevSeq: Int, seq: Int): Int = (seq - prevSeq - 1).coerceAtLeast(0)
+
+    fun sleepMs(sinceFrameMs: Long): Long = when {
+        sinceFrameMs < 0 -> POLL_MS
+        sinceFrameMs < EXPECT_MS -> EXPECT_MS - sinceFrameMs
+        sinceFrameMs < SILENT_MS -> POLL_MS
+        else -> SILENT_POLL_MS
     }
 }

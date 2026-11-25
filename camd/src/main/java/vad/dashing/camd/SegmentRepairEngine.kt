@@ -19,8 +19,8 @@ import java.nio.ByteBuffer
  */
 internal object SegmentRepairEngine {
 
-    private const val TARGET_FPS = 20
-    private const val MAX_SAMPLES = 12000 // 10 min at 20 fps — sanity cap
+    private const val TARGET_FPS = RecorderPacing.TARGET_FPS
+    private const val MAX_SAMPLES = 15000 // 10 min at 25 fps — sanity cap
 
     /** Result row for one file. */
     data class Outcome(val file: File, val ok: Boolean, val detail: String)

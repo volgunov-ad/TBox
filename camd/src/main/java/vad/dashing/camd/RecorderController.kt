@@ -523,8 +523,12 @@ class RecorderController(
 
     private fun startWatcher(inputs: Set<Int>) {
         watcher = Thread({
+            var pass = 0
             while (enabledNow) {
-                recountBytes()
+                // Every closed segment already recounts; this pass only catches outside
+                // changes (files deleted by hand), and a full listing of a FUSE folder
+                // with hundreds of segments is not free.
+                if (pass++ % RECOUNT_EVERY_PASSES == 0) recountBytes()
                 // Restart engines that died; parked (waiting-media) ones stay alive.
                 // enabledNow is re-checked under the lock: stopEngines() may have cleared
                 // the map while this pass was counting bytes.
@@ -607,6 +611,8 @@ class RecorderController(
         const val DEFAULT_SOS_PREVIOUS = 1
         const val DEFAULT_SEGMENT_SEC = 180
         private const val LOG_TAG = "CamdRecorder"
+        /** Watcher passes are 5 s apart: the folder is re-listed once a minute. */
+        private const val RECOUNT_EVERY_PASSES = 12
         private const val PREF_ENABLED = "recorder_enabled"
         private const val PREF_FOLDER = "recorder_folder"
         private const val PREF_QUOTA_GB = "recorder_quota_gb"

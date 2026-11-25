@@ -52,21 +52,18 @@ object RecorderFiles {
 
     /** Everything the quota owns (segments and repair leftovers), oldest first. */
     fun listQuotaFiles(dir: File): List<File> =
-        dir.listFiles()?.filter { it.isFile && isQuotaFile(it) }?.sortedWith(
-            compareBy(
-                { matchTimestamp(it) },
-                { it.name },
-            ),
-        ) ?: emptyList()
+        sortOldestFirst(dir.listFiles()?.filter { isQuotaFile(it) && it.isFile })
 
     /** Own segments sorted oldest first (the name embeds the start timestamp). */
     fun listSegments(dir: File): List<File> =
-        dir.listFiles()?.filter { it.isFile && isOwnSegment(it) }?.sortedWith(
-            compareBy(
-                { matchTimestamp(it) },
-                { it.name },
-            ),
-        ) ?: emptyList()
+        sortOldestFirst(dir.listFiles()?.filter { isOwnSegment(it) && it.isFile })
+
+    /** The regex runs once per file, not once per comparison: folders hold hundreds of segments. */
+    private fun sortOldestFirst(files: List<File>?): List<File> =
+        files.orEmpty()
+            .map { it to segmentOrderKey(it) }
+            .sortedWith { a, b -> compareKeys(a.second, b.second) }
+            .map { it.first }
 
     private fun matchTimestamp(file: File): String {
         val match = SEGMENT_REGEX.matchEntire(file.name)
@@ -75,7 +72,8 @@ object RecorderFiles {
         return match.groupValues[2]
     }
 
-    fun totalBytes(dir: File): Long = listQuotaFiles(dir).sumOf { it.length() }
+    fun totalBytes(dir: File): Long =
+        dir.listFiles()?.sumOf { if (isQuotaFile(it)) it.length() else 0L } ?: 0L
 
     /**
      * Deletes own oldest segments until the folder fits [quotaBytes] and the volume

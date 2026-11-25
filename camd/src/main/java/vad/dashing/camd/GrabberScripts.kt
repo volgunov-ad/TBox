@@ -11,7 +11,7 @@ object GrabberScripts {
     const val BINARY = "${DaemonScripts.PACKAGE_FILES}/camd_grab.new"
     const val RUN = "/data/local/tmp/camd_grab"
     const val VERSION_FILE = "/data/local/tmp/camd_grab.ver"
-    const val GRAB_VERSION = "4"
+    const val GRAB_VERSION = "5"
     const val BEAT = "/data/local/tmp/camd-grab.beat"
     const val LOG = "/data/local/tmp/camd-grab.log"
     const val ARM = "/data/local/tmp/camd-grab.arm"
