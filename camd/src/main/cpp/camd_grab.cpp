@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,9 +24,17 @@
 #define QCARCAM_VERSION 0x00000404u
 #define FRAME_TIMEOUT_NS 15000000ull
 #define MAX_CAMERAS 8
-#define STALL_REOPEN_MS 10000
-#define STALL_RETRY_MS 5000
+#define STALL_REOPEN_MS 4000
+// Frames come every 40 ms; asking ais_server well before that only times out, and each
+// timeout is three error lines in logcat.
+#define POLL_AFTER_FRAME_MS 25
+#define POLL_RETRY_MS 3
+#define POLL_SILENT_MS 50
 #define COPY_STATS_MS 30000
+#define QCARCAM_RET_TIMEOUT 6
+// Uniform-frame probe: an 8x8 grid of UYVY pairs; all within this spread = one colour.
+#define PROBE_GRID 8
+#define PROBE_SPREAD 6
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
 #define BEAT "/data/local/tmp/camd-grab.beat"
@@ -124,6 +133,19 @@ struct Camera {
     int divisor;
     uint32_t frame_no;
     int dropped;
+    long long opened_ms;
+    int got_first;
+    unsigned int last_flags;
+    int last_error;
+    // Consecutive one-colour frames and the colour of the first of them.
+    int uniform_run;
+    long long uniform_since_ms;
+    int uniform_y;
+    int uniform_u;
+    int uniform_v;
+    // Held open only to keep its AVM group streaming: frames are released uncopied.
+    int publish;
+    long long next_poll_ms;
     long long copy_ns_sum;
     long long copy_ns_max;
     long long sync_ns_sum;
@@ -144,9 +166,34 @@ static long long next_try[10];
 // Set when the kernel refuses DMA_BUF_IOCTL_SYNC on a cached buffer: without cache
 // maintenance the CPU would read stale lines, so that input goes back to uncached ION.
 static int uncached_only[10];
+static int stall_count[10];
+static const long long STALL_RETRY_MS[] = { 1000, 5000, 15000, 30000 };
+
+// Inputs 4, 5, 8 and 9 share one MAX96712 deserializer. Starting any of them makes
+// ais_server restart all four links ("starting slave c4" x4), and streams already
+// running on the other three often stop until reopened. So the four are opened together
+// and kept open while any of them is needed.
+static int avm_group(int id) {
+    return id == 4 || id == 5 || id == 8 || id == 9;
+}
 
 static int map_shared(Camera* camera);
 static long long now_ms(void);
+static void probe_uniform(Camera* camera, const uint8_t* frame);
+
+// Every grab log line starts with the wall time so it lines up with logcat.
+static void grab_log(const char* format, ...) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm tm;
+    localtime_r(&ts.tv_sec, &tm);
+    fprintf(stderr, "%02d-%02d %02d:%02d:%02d.%03ld ", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
+            tm.tm_sec, ts.tv_nsec / 1000000);
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
 static long long now_ns(void);
 
 static int camera_size(int id, int* width, int* height) {
@@ -169,13 +216,13 @@ static int alloc_dma(int ion, int bytes, int want_cached, int* cached) {
             data.heap_id_mask = heaps[i];
             data.flags = flags;
             if (ioctl(ion, ION_IOC_ALLOC_NEW, &data) == 0 && (int)data.fd >= 0) {
-                fprintf(stderr, "ion heap 0x%x flags 0x%x fd %d\n", heaps[i], flags, (int)data.fd);
+                grab_log("ion heap 0x%x flags 0x%x fd %d\n", heaps[i], flags, (int)data.fd);
                 *cached = flags != 0u;
                 return (int)data.fd;
             }
         }
     }
-    fprintf(stderr, "ion alloc errno=%d\n", errno);
+    grab_log("ion alloc errno=%d\n", errno);
     return -1;
 }
 
@@ -209,7 +256,7 @@ static void release_camera(Camera* camera) {
 static int init_client(void) {
     void* library = dlopen("/system/lib64/libais_client.so", RTLD_NOW);
     if (!library) {
-        fprintf(stderr, "dlopen libais_client.so: %s\n", dlerror());
+        grab_log("dlopen libais_client.so: %s\n", dlerror());
         return -1;
     }
     p_initialize = (fn_initialize)dlsym(library, "qcarcam_initialize");
@@ -221,7 +268,7 @@ static int init_client(void) {
     p_get_frame = (fn_get_frame)dlsym(library, "qcarcam_get_frame");
     p_release_frame = (fn_release_frame)dlsym(library, "qcarcam_release_frame");
     if (!p_initialize || !p_open || !p_s_buffers || !p_start || !p_get_frame || !p_release_frame) {
-        fprintf(stderr, "qcarcam symbols missing\n");
+        grab_log("qcarcam symbols missing\n");
         return -2;
     }
     qcarcam_init_t init;
@@ -229,7 +276,7 @@ static int init_client(void) {
     init.version = QCARCAM_VERSION;
     init.debug_tag = "camd";
     int ret = p_initialize(&init);
-    fprintf(stderr, "qcarcam_initialize -> %d\n", ret);
+    grab_log("qcarcam_initialize -> %d\n", ret);
     ALOGI("qcarcam_initialize -> %d", ret);
     return ret;
 }
@@ -240,7 +287,7 @@ static Camera* open_camera(int id) {
     if (!camera_size(id, &width, &height)) return nullptr;
     int ion = open("/dev/ion", O_RDONLY | O_CLOEXEC);
     if (ion < 0) {
-        fprintf(stderr, "open /dev/ion errno=%d\n", errno);
+        grab_log("open /dev/ion errno=%d\n", errno);
         return nullptr;
     }
     Camera* camera = (Camera*)calloc(1, sizeof(Camera));
@@ -268,7 +315,7 @@ static Camera* open_camera(int id) {
                 inode = (unsigned long long)st.st_ino;
                 stSize = (long long)st.st_size;
             }
-            fprintf(stderr,
+            grab_log(
                     "mmap ion id=%d slot=%d failed errno=%d inode=%llu st_size=%lld map_size=%d\n",
                     id, i, mapErrno, inode, stSize, camera->size);
             ALOGE("mmap ion id=%d slot=%d failed errno=%d inode=%llu st_size=%lld map_size=%d",
@@ -291,26 +338,27 @@ static Camera* open_camera(int id) {
     camera->list.n_buffers = 5;
     camera->handle = p_open((unsigned)id);
     if (!camera->handle) {
-        fprintf(stderr, "qcarcam_open %d failed\n", id);
+        grab_log("qcarcam_open %d failed\n", id);
         release_camera(camera);
         return nullptr;
     }
     int buffers = p_s_buffers(camera->handle, &camera->list);
-    fprintf(stderr, "qcarcam_s_buffers %d -> %d\n", id, buffers);
+    grab_log("qcarcam_s_buffers %d -> %d\n", id, buffers);
     if (buffers != 0) {
         release_camera(camera);
         return nullptr;
     }
     int started = p_start(camera->handle);
-    fprintf(stderr, "qcarcam_start %d -> %d\n", id, started);
+    grab_log("qcarcam_start %d -> %d\n", id, started);
     if (started != 0) {
         release_camera(camera);
         return nullptr;
     }
     camera->started = 1;
     camera->last_frame_ms = now_ms();
+    camera->opened_ms = camera->last_frame_ms;
     if (map_shared(camera) != 0) {
-        fprintf(stderr, "uyvy map %d failed errno=%d\n", id, errno);
+        grab_log("uyvy map %d failed errno=%d\n", id, errno);
         release_camera(camera);
         return nullptr;
     }
@@ -359,14 +407,46 @@ static int map_shared(Camera* camera) {
 static int grab(Camera* camera) {
     qcarcam_frame_info_t frame;
     memset(&frame, 0, sizeof(frame));
+    long long polled_ms = now_ms();
+    if (polled_ms < camera->next_poll_ms) return 0;
     int ret = p_get_frame(camera->handle, &frame, FRAME_TIMEOUT_NS, 0);
-    if (ret != 0) return 0;
+    if (ret != 0) {
+        long long silent_ms = now_ms() - camera->last_frame_ms;
+        camera->next_poll_ms = now_ms() + (silent_ms > 200 ? POLL_SILENT_MS : POLL_RETRY_MS);
+        if (ret != QCARCAM_RET_TIMEOUT && ret != camera->last_error) {
+            grab_log("get_frame %d -> %d\n", camera->id, ret);
+            ALOGE("get_frame %d -> %d", camera->id, ret);
+        }
+        camera->last_error = ret;
+        return 0;
+    }
+    if (camera->last_error != 0 && camera->last_error != QCARCAM_RET_TIMEOUT) {
+        grab_log("get_frame %d ok again after %d\n", camera->id, camera->last_error);
+    }
+    camera->last_error = 0;
     if (frame.idx >= 5 || !camera->ptrs[frame.idx] || camera->ptrs[frame.idx] == MAP_FAILED || !camera->shared) {
+        grab_log("frame %d: bad idx %u\n", camera->id, frame.idx);
         p_release_frame(camera->handle, frame.idx);
         return 0;
     }
+    camera->next_poll_ms = now_ms() + POLL_AFTER_FRAME_MS;
+    if (!camera->got_first) {
+        camera->got_first = 1;
+        stall_count[camera->id] = 0;
+        grab_log("first frame %d: %lld ms after start\n", camera->id, now_ms() - camera->opened_ms);
+    }
+    if (frame.flags != camera->last_flags) {
+        grab_log("frame %d flags 0x%x -> 0x%x\n", camera->id, camera->last_flags, frame.flags);
+        ALOGI("frame %d flags 0x%x -> 0x%x", camera->id, camera->last_flags, frame.flags);
+        camera->last_flags = frame.flags;
+    }
     camera->frame_no += 1;
     if (camera->frame_no == 0) camera->frame_no = 1;
+    if (!camera->publish) {
+        p_release_frame(camera->handle, frame.idx);
+        camera->last_frame_ms = now_ms();
+        return 1;
+    }
     if (camera->divisor > 1 && camera->frame_no % (uint32_t)camera->divisor != 0) {
         p_release_frame(camera->handle, frame.idx);
         camera->dropped += 1;
@@ -381,7 +461,7 @@ static int grab(Camera* camera) {
     long long copy_start = now_ns();
     if (cached && dma_sync(fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ) != 0) {
         int syncErrno = errno;
-        fprintf(stderr, "dma sync %d errno=%d, reopen uncached\n", camera->id, syncErrno);
+        grab_log("dma sync %d errno=%d, reopen uncached\n", camera->id, syncErrno);
         ALOGE("dma sync %d errno=%d, reopen uncached", camera->id, syncErrno);
         p_release_frame(camera->handle, frame.idx);
         uncached_only[camera->id] = 1;
@@ -400,7 +480,8 @@ static int grab(Camera* camera) {
     if (copy_ns > camera->copy_ns_max) camera->copy_ns_max = copy_ns;
     camera->copy_count += 1;
     int released = p_release_frame(camera->handle, frame.idx);
-    if (released != 0) fprintf(stderr, "release_frame %u -> %d\n", frame.idx, released);
+    if (released != 0) grab_log("release_frame %u -> %d\n", frame.idx, released);
+    probe_uniform(camera, dst);
     hdr[UYVY_FRAME_NO_WORD + slot] = camera->frame_no;
     __sync_synchronize();
     hdr[5] = slot;
@@ -411,9 +492,44 @@ static int grab(Camera* camera) {
     return 1;
 }
 
-static int wanted(const int* ids, int count, int id) {
-    for (int i = 0; i < count; i++) if (ids[i] == id) return 1;
-    return 0;
+// Logs where a run of one-colour frames (no video from the camera side, an unfilled
+// buffer) starts and ends, with its Y/U/V: all-zero UYVY paints green, Y41/U240/V110 blue.
+static void probe_uniform(Camera* camera, const uint8_t* frame) {
+    int min_y = 255, max_y = 0, min_u = 255, max_u = 0, min_v = 255, max_v = 0;
+    int pairs_per_row = camera->width / 2;
+    for (int gy = 0; gy < PROBE_GRID; gy++) {
+        int row = (camera->height * (2 * gy + 1)) / (2 * PROBE_GRID);
+        for (int gx = 0; gx < PROBE_GRID; gx++) {
+            int pair = (pairs_per_row * (2 * gx + 1)) / (2 * PROBE_GRID);
+            const uint8_t* p = frame + (size_t)row * (size_t)camera->stride + (size_t)pair * 4;
+            int u = p[0], y = p[1], v = p[2];
+            if (y < min_y) min_y = y;
+            if (y > max_y) max_y = y;
+            if (u < min_u) min_u = u;
+            if (u > max_u) max_u = u;
+            if (v < min_v) min_v = v;
+            if (v > max_v) max_v = v;
+        }
+    }
+    int uniform = max_y - min_y <= PROBE_SPREAD && max_u - min_u <= PROBE_SPREAD && max_v - min_v <= PROBE_SPREAD;
+    if (uniform) {
+        if (camera->uniform_run == 0) {
+            camera->uniform_since_ms = now_ms();
+            camera->uniform_y = (min_y + max_y) / 2;
+            camera->uniform_u = (min_u + max_u) / 2;
+            camera->uniform_v = (min_v + max_v) / 2;
+            grab_log("uniform %d start: Y=%d U=%d V=%d frame_no=%u\n", camera->id, camera->uniform_y,
+                 camera->uniform_u, camera->uniform_v, camera->frame_no);
+            ALOGI("uniform %d start: Y=%d U=%d V=%d", camera->id, camera->uniform_y, camera->uniform_u,
+                  camera->uniform_v);
+        }
+        camera->uniform_run += 1;
+    } else if (camera->uniform_run > 0) {
+        grab_log("uniform %d end: %d frames, %lld ms, Y=%d U=%d V=%d\n", camera->id, camera->uniform_run,
+             now_ms() - camera->uniform_since_ms, camera->uniform_y, camera->uniform_u, camera->uniform_v);
+        ALOGI("uniform %d end: %d frames", camera->id, camera->uniform_run);
+        camera->uniform_run = 0;
+    }
 }
 
 static long long now_ms(void) {
@@ -439,6 +555,10 @@ static void log_copy_stats(long long period_ms) {
     for (int id = 0; id < 10; id++) {
         Camera* camera = open_cameras[id];
         if (!camera) continue;
+        if (!camera->publish) {
+            grab_log("held %d: open for the AVM group, frame_no=%u\n", id, camera->frame_no);
+            continue;
+        }
         int n = camera->copy_count;
         double avg_ms = n > 0 ? (double)camera->copy_ns_sum / n / 1e6 : 0.0;
         double max_ms = (double)camera->copy_ns_max / 1e6;
@@ -446,7 +566,7 @@ static void log_copy_stats(long long period_ms) {
         double fps = period_ms > 0 ? n * 1000.0 / (double)period_ms : 0.0;
         int cached = cached_slots(camera);
         int divisor = camera->divisor > 1 ? camera->divisor : 1;
-        fprintf(stderr,
+        grab_log(
                 "copy %d: frames=%d fps=%.1f avg=%.2f ms max=%.2f ms bytes=%d cached=%d/5 sync=%.2f ms "
                 "every=%d skipped=%d\n",
                 id, n, fps, avg_ms, max_ms, camera->size, cached, sync_ms, divisor, camera->dropped);
@@ -511,17 +631,17 @@ static void ensure_ram(void) {
         return;
     }
     if (mount("tmpfs", FRAME_RAM, "tmpfs", 0, "size=48m,mode=777") != 0) {
-        fprintf(stderr, "tmpfs %s errno=%d\n", FRAME_RAM, errno);
+        grab_log("tmpfs %s errno=%d\n", FRAME_RAM, errno);
         return;
     }
     chmod(FRAME_RAM, 0777);
-    fprintf(stderr, "tmpfs %s\n", FRAME_RAM);
+    grab_log("tmpfs %s\n", FRAME_RAM);
 }
 
 int main(void) {
     signal(SIGHUP, SIG_IGN);
     setvbuf(stderr, nullptr, _IONBF, 0);
-    fprintf(stderr, "camd_grab start\n");
+    grab_log("camd_grab start\n");
     ensure_ram();
     for (int id = 0; id < 10; id++) {
         char path[128];
@@ -551,26 +671,38 @@ int main(void) {
             count = read_desired(ids, divisors);
             last_desired_ms = now;
         }
+        int want[10] = { 0 };
+        int want_divisor[10] = { 0 };
+        int group_wanted = 0;
+        for (int n = 0; n < count; n++) {
+            if (!known_id(ids[n])) continue;
+            want[ids[n]] = 1;
+            want_divisor[ids[n]] = divisors[n];
+            if (avm_group(ids[n])) group_wanted = 1;
+        }
+        int need[10];
+        for (int id = 0; id < 10; id++) need[id] = want[id] || (group_wanted && avm_group(id));
         for (int id = 0; id < 10; id++) {
-            if (!open_cameras[id]) continue;
-            if (wanted(ids, count, id)) continue;
+            if (!open_cameras[id] || need[id]) continue;
             char path[128];
             snprintf(path, sizeof(path), FRAME_RAM "/camd-uyvy-%d", id);
             unlink(path);
             release_camera(open_cameras[id]);
             open_cameras[id] = nullptr;
+            grab_log("close %d\n", id);
         }
-        for (int n = 0; n < count; n++) {
-            int id = ids[n];
-            if (!known_id(id) || open_cameras[id]) continue;
-            if (next_try[id] > now) continue;
+        for (int id = 0; id < 10; id++) {
+            if (!need[id] || open_cameras[id] || next_try[id] > now) continue;
             Camera* opened = open_camera(id);
-            fprintf(stderr, "open %d -> %s\n", id, opened ? "ok" : "fail");
+            grab_log("open %d -> %s%s\n", id, opened ? "ok" : "fail", want[id] ? "" : " (held for the AVM group)");
             if (opened) open_cameras[id] = opened;
             else next_try[id] = now + 2000;
         }
-        for (int n = 0; n < count; n++) {
-            if (known_id(ids[n]) && open_cameras[ids[n]]) open_cameras[ids[n]]->divisor = divisors[n];
+        for (int id = 0; id < 10; id++) {
+            Camera* camera = open_cameras[id];
+            if (!camera) continue;
+            camera->publish = want[id];
+            camera->divisor = want_divisor[id];
         }
         int got = 0;
         for (int id = 0; id < 10; id++) {
@@ -583,16 +715,27 @@ int main(void) {
             }
         }
         // An input that went silent (stock AVM grabbed it back, ais_server restart) is
-        // reopened instead of leaving the window on its last frame forever.
+        // reopened instead of leaving the window on its last frame forever. A held AVM
+        // input does not count; a shown one takes its whole group down and back up, since
+        // reopening one of them alone would restart the links of the other three.
         now = now_ms();
         for (int id = 0; id < 10; id++) {
             Camera* camera = open_cameras[id];
-            if (!camera || now - camera->last_frame_ms < STALL_REOPEN_MS) continue;
-            fprintf(stderr, "stall %d: no frames for %lld ms, reopen\n", id, now - camera->last_frame_ms);
+            if (!camera || !camera->publish || now - camera->last_frame_ms < STALL_REOPEN_MS) continue;
+            int stalls = stall_count[id] < 4 ? stall_count[id] : 3;
+            long long retry_ms = STALL_RETRY_MS[stalls];
+            stall_count[id] += 1;
+            grab_log("stall %d: no frames for %lld ms (frame_no=%u, uniform run %d), reopen%s in %lld ms\n", id,
+                     now - camera->last_frame_ms, camera->frame_no, camera->uniform_run,
+                     avm_group(id) ? " AVM group" : "", retry_ms);
             ALOGI("stall %d: reopen", id);
-            release_camera(camera);
-            open_cameras[id] = nullptr;
-            next_try[id] = now + STALL_RETRY_MS;
+            for (int other = 0; other < 10; other++) {
+                if (other != id && !(avm_group(id) && avm_group(other))) continue;
+                if (!open_cameras[other]) continue;
+                release_camera(open_cameras[other]);
+                open_cameras[other] = nullptr;
+                next_try[other] = now + retry_ms;
+            }
         }
         long long idle_us = (got || count > 0) ? 4000 : 200000;
         usleep((useconds_t)idle_us);

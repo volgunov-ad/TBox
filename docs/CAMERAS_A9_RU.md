@@ -29,6 +29,8 @@
 
 `ais_server` пишет кадр сенсору `max96712mb` (десериализатор) и `imx390`. Живой AVM-кадр из лога: fmt `0x7080102`, 1280×800, stride 2560, 25 fps. Stride 2560 = 1280×2, это UYVY.
 
+Входы 4, 5, 8, 9 — четыре линии (VC 0–3) одного `max96712mb` на CSI 0x2. На каждый `qcarcam_start` любого из них `ais_server` вызывает `max96712mb_sensor_start_stream`: «starting slave c4» и `imx390_start_link` для всех четырёх линий. Логи camdbench 25.11.2026: после `open 4` или `open 5` входы 8 и 9 переставали отдавать кадры до переоткрытия через 10 с. Вывод: эти входы открывать вместе и не закрывать по одному.
+
 Рядом с сокетами лежат однобайтные файлы-метки, не сокеты: `/early_services/dev/socket/fdavminit`, `fdomsinit`. В строках библиотек есть ещё `fddmsinit` и `fdapainit`; в момент проверки на диске их не было. `libmbcamera_avm.so` читает оттуда тип привода (`Avm camera nDriveValue`).
 
 Общая память превью (раздел `earlydata`, он rw):

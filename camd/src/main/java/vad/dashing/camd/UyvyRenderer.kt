@@ -324,6 +324,7 @@ internal class UyvyRenderer(
                 if (published == null || published.seq == lastSeq) {
                     if (sawFrame && !stalled && System.currentTimeMillis() - lastFrameMs > STALL_MS) {
                         stalled = true
+                        runCatching { Log.i(TAG, "нет кадров input=$inputId seq=$lastSeq") }
                         main.post { onStall(true) }
                     }
                     if (lastSettingsVersion != settingsVersion) {
@@ -380,9 +381,11 @@ internal class UyvyRenderer(
                 drawCurrent(published)
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
-                lastFrameMs = System.currentTimeMillis()
+                val pauseMs = System.currentTimeMillis() - lastFrameMs
+                lastFrameMs += pauseMs
                 if (stalled) {
                     stalled = false
+                    runCatching { Log.i(TAG, "кадры вернулись input=$inputId seq=${published.seq} пауза $pauseMs мс") }
                     main.post { onStall(false) }
                 }
                 if (!sawFrame) {
