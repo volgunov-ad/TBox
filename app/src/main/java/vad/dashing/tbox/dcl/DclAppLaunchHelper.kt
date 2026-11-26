@@ -13,9 +13,9 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Launches an app via DCL with raw-startActivity fallback when the API is unavailable
- * or the selected mode lacks capability / returns unsupported-class errors (design §3.1).
- * Never auto-clears the DCL-environment preference.
+ * Launches an app via DCL with raw-startActivity fallback when the API is unavailable,
+ * the launcher package/process is dead, or the selected mode lacks capability / returns
+ * unsupported-class errors (design §3.1). Never auto-clears the DCL-environment preference.
  */
 object DclAppLaunchHelper {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -31,11 +31,28 @@ object DclAppLaunchHelper {
         if (pkg.isBlank()) return
         val appContext = context.applicationContext
         scope.launch {
-            if (dclModeCapabilityMissing(mode, DclLauncherApiRepository.capabilities.value)) {
+            val capabilityMissing =
+                dclModeCapabilityMissing(mode, DclLauncherApiRepository.capabilities.value)
+            val packageInstalled = DclLauncherLiveness.isPackageInstalled(appContext)
+            val processDead = DclLauncherLiveness.processLikelyDead(appContext)
+            if (dclShouldBypassBinderForRawFallback(
+                    packageInstalled = packageInstalled,
+                    processLikelyDead = processDead,
+                    capabilityMissing = capabilityMissing,
+                )
+            ) {
+                val reason = when {
+                    !packageInstalled -> "launcher package missing"
+                    processDead -> "launcher process dead"
+                    else -> "capability missing for mode=$mode"
+                }
+                if (!packageInstalled || processDead) {
+                    DclLauncherApiRepository.markUnavailable(reason)
+                }
                 TboxRepository.addLog(
                     "WARN",
                     "DCL",
-                    "capability missing for mode=$mode — raw launch for $pkg",
+                    "$reason — raw launch for $pkg",
                 )
                 runRawFallback(appContext, pkg, onRawFallback)
                 return@launch
@@ -63,6 +80,9 @@ object DclAppLaunchHelper {
                                 ?: result.error.errorCode
                                 ?: "DCL launch error"
                         DclCallResult.Unavailable -> "API unavailable"
+                    }
+                    if (result == DclCallResult.Unavailable) {
+                        DclLauncherApiRepository.markUnavailable("launchApp unavailable")
                     }
                     TboxRepository.addLog(
                         "WARN",
@@ -161,23 +181,49 @@ object DclAppLaunchHelper {
         packageName: String,
         mode: String,
         activityClass: String? = null,
-    ): Boolean =
-        withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS) {
-            withContext(Dispatchers.IO) {
-                val result = DclLauncherApiClient.launchAppBlocking(
-                    context = context.applicationContext,
-                    packageName = packageName,
-                    mode = mode,
-                    activityClass = activityClass,
+    ): Boolean {
+        val appContext = context.applicationContext
+        val capabilityMissing =
+            dclModeCapabilityMissing(mode, DclLauncherApiRepository.capabilities.value)
+        val packageInstalled = DclLauncherLiveness.isPackageInstalled(appContext)
+        val processDead = DclLauncherLiveness.processLikelyDead(appContext)
+        if (dclShouldBypassBinderForRawFallback(
+                packageInstalled = packageInstalled,
+                processLikelyDead = processDead,
+                capabilityMissing = capabilityMissing,
+            )
+        ) {
+            if (!packageInstalled || processDead) {
+                DclLauncherApiRepository.markUnavailable(
+                    when {
+                        !packageInstalled -> "launcher package missing"
+                        else -> "launcher process dead"
+                    },
                 )
+            }
+            return false
+        }
+        return withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS) {
+            withContext(Dispatchers.IO) {
+                val result = runCatching {
+                    DclLauncherApiClient.launchAppBlocking(
+                        context = appContext,
+                        packageName = packageName,
+                        mode = mode,
+                        activityClass = activityClass,
+                    )
+                }.getOrElse { DclCallResult.Unavailable }
                 when (result) {
                     is DclCallResult.Ok -> result.value.success
-                    is DclCallResult.Error,
-                    DclCallResult.Unavailable,
-                    -> false
+                    is DclCallResult.Error -> false
+                    DclCallResult.Unavailable -> {
+                        DclLauncherApiRepository.markUnavailable("launchModeBlocking unavailable")
+                        false
+                    }
                 }
             }
         } ?: false
+    }
 
     fun launchRaw(context: Context, packageName: String) {
         try {

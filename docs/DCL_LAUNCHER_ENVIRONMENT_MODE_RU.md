@@ -25,6 +25,8 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 | Automation `LaunchApplication` | parity с ярлыком |
 | Freeform / VD / stock | UI disable для **нового** выбора; сохранённые конфиги работают |
 | API Unavailable / missing capability / `unsupported`/`internal` | raw `startActivity` + toast/journal; toggle **не** сбрасывается |
+| DCL process dead / package missing (conservative process-list check) | skip Binder → same raw `startActivity`; clear cached caps/`available` so next launch does not wait on a hung provider |
+| Binder `DeadObjectException` / any provider exception | treated as Unavailable → raw fallback; Main cold redirect always `completeNormalOnCreate` on failure |
 | `busy` / `not_installed` / target errors | toast only (no raw fallback) |
 | Main `app_area` | DCL `app_area` → иначе Adayo stock → иначе fullscreen |
 | Main `full_width` | DCL `full_width` → иначе `app_area` → Adayo → fullscreen |
