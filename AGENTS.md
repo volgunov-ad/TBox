@@ -191,9 +191,9 @@ Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done:
 ./gradlew :camd:assembleRelease
 ```
 
-### Camera CPU benchmark (`:camdbench`)
+### HU CPU benchmark (`:camdbench`)
 
-Separate test app **Тест нагрузки камер** (`vad.dashing.camdbench`, `arm64-v8a`) for A/B CPU measurements of `:camd` while the dashcam records. A root sampler `camdbench_sampler` (started through `mb_daemon`) records `/proc` CPU of all processes plus `camd` / `camd_grab` threads, core frequencies, temperatures; the app writes `report.txt` / `summary.tsv` / raw data to `Download/camdbench/` and compares two runs on screen. Actual recording fps is measured from segments finished during the run. Procedure and report format: [docs/CAMDBENCH_RU.md](docs/CAMDBENCH_RU.md).
+Separate test app **Нагрузка ГУ** (`vad.dashing.camdbench`, `arm64-v8a`; named «Тест нагрузки камер» before 1.3.0) for A/B CPU measurements of the HU: per-core load, all processes, threads of our apps (`vad.dashing.*`), the DCL launcher and `dclwm` with their cpuset / allowed cores / per-core time, and — when `:camd` takes part — dashcam fps and grabber copy time. A root sampler `camdbench_sampler` (started through `mb_daemon`) reads `/proc`, core frequencies, temperatures; the app writes `report.txt` / `summary.tsv` / raw data to `Download/camdbench/` and compares two runs on screen. Actual recording fps is measured from segments finished during the run. Procedure and report format: [docs/CAMDBENCH_RU.md](docs/CAMDBENCH_RU.md).
 
 ```
 ./gradlew :camdbench:testDebugUnitTest

@@ -9,7 +9,7 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * One measurement: starts the root sampler, tails its output while camd records, stops
+ * One measurement: starts the root sampler, tails its output while the HU runs, stops
  * it, then writes the report folder into Downloads/camdbench.
  */
 class BenchSession(private val context: Context, private val plannedSec: Int) {
@@ -107,6 +107,7 @@ class BenchSession(private val context: Context, private val plannedSec: Int) {
 
         val camd = snapshot.process(BenchAccumulator.CAMD_APP)?.avgPct ?: 0.0
         val grab = snapshot.process(BenchAccumulator.CAMD_GRAB)?.avgPct ?: 0.0
+        val ours = snapshot.processes.filter { OurApps.isOurs(it.name) }.sumOf { it.avgPct }
         val warn = BenchReport.warnings(run, snapshot)
         BenchState.update {
             it.copy(
@@ -114,7 +115,8 @@ class BenchSession(private val context: Context, private val plannedSec: Int) {
                 message = if (warn.isEmpty()) "Готово" else "Готово, но: " + warn.joinToString("; "),
                 resultFolder = out.absolutePath,
                 resultHeadline = "Процессор ${BenchReport.fmt(snapshot.cpuBusyPct)} % всех ядер · " +
-                    "camd ${BenchReport.fmt(camd)} % ядра · camd_grab ${BenchReport.fmt(grab)} % ядра · " +
+                    "наши и DCL ${BenchReport.fmt(ours)} % ядра · " +
+                    (if (BenchReport.camdInvolved(run, snapshot)) "camd ${BenchReport.fmt(camd + grab)} % ядра · " else "") +
                     "${BenchReport.fmt(snapshot.durationSec, 0)} с",
             )
         }

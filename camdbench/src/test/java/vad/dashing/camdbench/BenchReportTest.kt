@@ -169,4 +169,21 @@ class BenchReportTest {
         assertTrue(compare, compare.contains("доля времени по ядрам"))
         assertTrue(compare, compare.lines().any { it.startsWith("cpu7") && it.contains("15.00") })
     }
+
+    @Test
+    fun runWithoutCamdHasNoCamdSectionsOrRecorderWarnings() {
+        val idle = run(statusStart = "OK windows=4 rec_active=0", statusEnd = "OK windows=none rec_active=0")
+        val noCamd = BenchRun(
+            startedAt = idle.startedAt, camdVersion = "не установлен", grabVersion = "?",
+            statusStart = idle.statusStart, statusEnd = idle.statusEnd, grabCopy = emptyList(),
+            recorderSegments = emptyList(), segmentFps = emptyList(), recorderFolder = null,
+        )
+        val s = snapshot(camdTicks = 0, grabTicks = 0)
+        assertTrue(BenchReport.warnings(noCamd, s).isEmpty())
+        val text = BenchReport.text(noCamd, s)
+        assertTrue(text, text.startsWith("Нагрузка ГУ — отчёт"))
+        assertTrue(text, !text.contains("== Камеры ГУ (camd) =="))
+        assertTrue(text, !text.contains("STATUS в начале"))
+        assertTrue(text, text.indexOf("== Наши приложения и DCL ==") < text.indexOf("== Процессы, топ"))
+    }
 }
