@@ -5,10 +5,12 @@ DEX=$DIR/rootsvc.dex
 LOG=$DIR/rootsvc.log
 STATE=$DIR/state
 PIDFILE=$DIR/supervisor.pid
+HELPERS=$DIR/helpers
 MAIN=vad.dashing.rootsvc.daemon.ServiceMain
 
-mkdir -p "$DIR"
-chmod 700 "$DIR"
+mkdir -p "$DIR" "$HELPERS"
+# 0711 so non-root clients (watchdog, Monitor, camd) can traverse and read state/.ver
+chmod 711 "$DIR" "$HELPERS"
 echo $$ > "$PIDFILE"
 chmod 644 "$PIDFILE"
 
@@ -21,9 +23,14 @@ reset_fails() {
   WINDOW_START=$(date +%s)
 }
 
+write_state() {
+  echo "$1" > "$STATE"
+  chmod 644 "$STATE"
+}
+
 while true; do
   if [ ! -f "$DEX" ]; then
-    echo "missing dex" > "$STATE"
+    write_state "missing dex"
     exit 1
   fi
   export CLASSPATH="$DEX"
@@ -37,18 +44,18 @@ while true; do
   if [ "$code" -eq 42 ]; then
     # Dex refreshed — restart immediately.
     reset_fails
-    echo "upgraded" > "$STATE"
+    write_state "upgraded"
     continue
   fi
   if [ "$code" -eq 43 ]; then
     # admin.restart — deliberate, not a crash.
     reset_fails
-    echo "restarted" > "$STATE"
+    write_state "restarted"
     continue
   fi
   FAILS=$((FAILS + 1))
   if [ "$FAILS" -gt 6 ]; then
-    echo "crashloop" > "$STATE"
+    write_state "crashloop"
     exit 2
   fi
   # Pick backoff by fail count.

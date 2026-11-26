@@ -91,4 +91,15 @@ public final class WireCodec {
         }
         return o.optString(key, null);
     }
+
+    /** Keep the last {@code limit} UTF-16 code units (stdout/stderr caps for {@code script.run}). */
+    public static String truncateTail(String text, int limit) {
+        if (text == null) {
+            return "";
+        }
+        if (limit <= 0 || text.length() <= limit) {
+            return text;
+        }
+        return text.substring(text.length() - limit);
+    }
 }

@@ -25,7 +25,7 @@ object RootChannel {
                 .put("body", script)
                 .put("timeoutMs", 15_000L)
             val result = runCatching {
-                RootSvcClient.call(RootSvcProtocol.CMD_SCRIPT_RUN, args, 15_000L)
+                RootSvcClient.callWithBootWait(RootSvcProtocol.CMD_SCRIPT_RUN, args, 15_000L)
             }.getOrElse { error ->
                 RootSvcResult.unavailable("call: ${error.message}")
             }

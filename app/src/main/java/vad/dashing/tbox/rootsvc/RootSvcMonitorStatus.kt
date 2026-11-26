@@ -120,6 +120,7 @@ object RootSvcMonitor {
             return parseHelloFallback(hello, installed, pkgVer)
         }
         val up = RootSvcClient.isUp()
+        val stateText = readStateFile()
         return RootSvcMonitorStatus(
             packageInstalled = true,
             packageVersion = pkgVer,
@@ -127,10 +128,21 @@ object RootSvcMonitor {
             serverVersion = null,
             proto = null,
             uptimeMs = null,
-            state = null,
-            crashloop = false,
+            state = stateText.ifEmpty { null },
+            crashloop = stateText == "crashloop",
             detail = statusResult.err ?: statusResult.reason ?: hello.reason,
         )
+    }
+
+    /** Readable when DIR is 0711 and state is 0644 (rootsvc 1.0.3+). */
+    private fun readStateFile(): String {
+        return try {
+            val file = java.io.File(RootSvcProtocol.STATE_PATH)
+            if (!file.canRead()) return ""
+            file.readText().trim()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     /** Blocking. Restart if up; otherwise force-ensure. */

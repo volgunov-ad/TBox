@@ -39,10 +39,11 @@ public final class HelperRegistry {
         if (!sha256.equals(actual)) {
             return ServiceMain.errorJson(null, RootSvcProtocol.ERR_BAD_ARGS, "sha256 mismatch");
         }
-        File destDir = new File(RootSvcProtocol.DIR + "/helpers");
+        File destDir = new File(RootSvcProtocol.HELPERS_DIR);
         if (!destDir.exists() && !destDir.mkdirs()) {
             return ServiceMain.errorJson(null, RootSvcProtocol.ERR_FAILED, "mkdir helpers");
         }
+        chmod(destDir.getAbsolutePath(), "711");
         File dest = new File(destDir, name);
         File verFile = new File(destDir, name + ".ver");
         Helper existing = helpers.get(name);
@@ -54,6 +55,7 @@ public final class HelperRegistry {
             copy(src, dest);
             dest.setExecutable(true, false);
             write(verFile, version);
+            chmod(verFile.getAbsolutePath(), "644");
             Process process;
             if ("dex".equals(kind)) {
                 if (mainClass.length() == 0) {
@@ -65,12 +67,12 @@ public final class HelperRegistry {
                         mainClass);
                 pb.environment().put("CLASSPATH", dest.getAbsolutePath());
                 pb.redirectErrorStream(true);
-                pb.redirectOutput(new File(RootSvcProtocol.DIR + "/helpers/" + name + ".log"));
+                pb.redirectOutput(new File(RootSvcProtocol.HELPERS_DIR + "/" + name + ".log"));
                 process = pb.start();
             } else {
                 ProcessBuilder pb = new ProcessBuilder(dest.getAbsolutePath());
                 pb.redirectErrorStream(true);
-                pb.redirectOutput(new File(RootSvcProtocol.DIR + "/helpers/" + name + ".log"));
+                pb.redirectOutput(new File(RootSvcProtocol.HELPERS_DIR + "/" + name + ".log"));
                 process = pb.start();
             }
             helpers.put(name, new Helper(name, process, version));
@@ -156,6 +158,17 @@ public final class HelperRegistry {
             out.write(text.getBytes("UTF-8"));
         } finally {
             out.close();
+        }
+    }
+
+    private static void chmod(String path, String mode) {
+        try {
+            Process process = new ProcessBuilder("chmod", mode, path)
+                    .redirectErrorStream(true)
+                    .start();
+            process.waitFor();
+        } catch (Exception ignored) {
+            // best-effort
         }
     }
 
