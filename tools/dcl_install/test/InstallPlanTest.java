@@ -326,10 +326,19 @@ public final class InstallPlanTest {
             return "setup does not grant rootsvc storage";
         }
         if (!setup.contains(InstallPlan.ROOTSVC_A11Y)) return "setup does not enable rootsvc a11y";
-        int rootsvc = setup.indexOf("pm install -r -g -t '/sdcard/dcl_install/rootsvc.apk'");
-        if (rootsvc < 0) return "rootsvc install line missing or still has -d";
         if (setup.contains("pm install -r -d -g -t '/sdcard/dcl_install/rootsvc.apk'")) {
             return "rootsvc install still allows downgrade (-d)";
+        }
+        if (!setup.contains("if pm path vad.dashing.rootsvc >/dev/null; then")) {
+            return "rootsvc install is not guarded by pm path";
+        }
+        if (!setup.contains("echo WARN rootsvc_keep_installed")) {
+            return "existing rootsvc install failure is still fatal";
+        }
+        int keep = setup.indexOf("echo WARN rootsvc_keep_installed");
+        int fail = setup.indexOf("fail rootsvc");
+        if (keep < 0 || fail < 0 || fail < keep) {
+            return "missing-package install must still fail rootsvc";
         }
         String listeners = InstallPlan.bootListenersOnlyScript();
         if (!listeners.contains(InstallPlan.DCL_ACCESSIBILITY)) return "listeners script lost DCL a11y";

@@ -227,8 +227,16 @@ final class InstallPlan {
     /** Install/ensure the shared root watchdog; remove the legacy UsbMount package. */
     private static void appendRootsvc(StringBuilder sh) {
         sh.append("echo STEP rootsvc\n");
-        // No -d: must not downgrade a newer rootsvc already installed from Store.
-        sh.append("pm install -r -g -t ").append(q(PAYLOAD_DIR + "/rootsvc.apk")).append(" || fail rootsvc\n");
+        // No -d: never downgrade a newer Store build. If rootsvc is already installed and
+        // pm install fails (VERSION_DOWNGRADE), keep the newer package and continue.
+        // Fail only when the package is missing and install did not succeed.
+        sh.append("if pm path ").append(ROOTSVC).append(" >/dev/null; then\n");
+        sh.append("  pm install -r -g -t ").append(q(PAYLOAD_DIR + "/rootsvc.apk"));
+        sh.append(" || echo WARN rootsvc_keep_installed\n");
+        sh.append("else\n");
+        sh.append("  pm install -r -g -t ").append(q(PAYLOAD_DIR + "/rootsvc.apk"));
+        sh.append(" || fail rootsvc\n");
+        sh.append("fi\n");
         sh.append("pm grant ").append(ROOTSVC).append(' ').append(PERM_WRITE_STORAGE);
         sh.append(" || echo WARN grant_rootsvc_storage\n");
         sh.append("pm grant ").append(ROOTSVC).append(' ').append(PERM_READ_STORAGE);
