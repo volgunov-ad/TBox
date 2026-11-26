@@ -1,1 +1,2 @@
 dataresize/src/main/assets/*.sh text eol=lf
+rootsvc/src/main/assets/*.sh text eol=lf
