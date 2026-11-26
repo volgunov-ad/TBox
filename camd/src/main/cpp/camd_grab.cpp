@@ -555,7 +555,8 @@ static void log_copy_stats(long long period_ms) {
     for (int id = 0; id < 10; id++) {
         Camera* camera = open_cameras[id];
         if (!camera) continue;
-        if (!camera->publish) {
+        // A window shown for part of the period still reports (and resets) its copies.
+        if (!camera->publish && camera->copy_count == 0 && camera->dropped == 0) {
             grab_log("held %d: open for the AVM group, frame_no=%u\n", id, camera->frame_no);
             continue;
         }

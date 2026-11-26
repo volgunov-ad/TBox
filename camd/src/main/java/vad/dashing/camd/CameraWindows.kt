@@ -11,7 +11,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.TextureView
+import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -797,7 +797,9 @@ class CameraWindows(private val context: Context) {
         shape: CamdShape,
     ) {
         val root: FrameLayout = FrameLayout(context)
-        val picture: TextureView = TextureView(context)
+        // SurfaceFlinger composes the camera surface directly; a TextureView made the app's
+        // RenderThread redraw the whole window on every camera frame.
+        val picture: SurfaceView = SurfaceView(context)
         val caption: TextView = TextView(context)
         val params: WindowManager.LayoutParams
         private val closeButton: TextView
@@ -805,7 +807,7 @@ class CameraWindows(private val context: Context) {
         private val renderer: UyvyRenderer
 
         init {
-            picture.isOpaque = false
+            picture.holder.setFormat(PixelFormat.TRANSLUCENT)
             applyShapeBackground(shape)
             root.addView(
                 picture,

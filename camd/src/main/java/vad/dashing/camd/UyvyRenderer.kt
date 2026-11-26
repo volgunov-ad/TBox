@@ -1,6 +1,5 @@
 package vad.dashing.camd
 
-import android.graphics.SurfaceTexture
 import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.EGLContext
@@ -11,7 +10,8 @@ import android.os.Handler
 import android.system.Os
 import android.util.Log
 import android.view.Surface
-import android.view.TextureView
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -27,7 +27,7 @@ import java.nio.channels.FileChannel
  * Two slots follow the 64-byte header. `seq` grows only after `slot` is published.
  */
 internal class UyvyRenderer(
-    private val view: TextureView,
+    private val view: SurfaceView,
     private val frame: File,
     private val main: Handler,
     initialRotation: Int = 0,
@@ -42,7 +42,7 @@ internal class UyvyRenderer(
     /** true when frames stopped arriving after the first one, false when they resume. */
     private val onStall: (Boolean) -> Unit = {},
     private val onFirstFrame: () -> Unit,
-) : TextureView.SurfaceTextureListener {
+) : SurfaceHolder.Callback {
 
     private val mirror = stockView?.mirror ?: false
 
@@ -77,10 +77,6 @@ internal class UyvyRenderer(
     private var settingsVersion = 0L
     private var thread: Thread? = null
 
-    /** Set when the view gave up its SurfaceTexture while the GL thread was still alive. */
-    @Volatile
-    private var releaseOnExit: SurfaceTexture? = null
-
     fun setRotation(degrees: Int) {
         rotation = ((degrees % 360) + 360) % 360
         settingsVersion += 1
@@ -113,10 +109,10 @@ internal class UyvyRenderer(
 
     fun start() {
         started = true
-        view.surfaceTextureListener = this
-        if (view.isAvailable) {
-            val surface = view.surfaceTexture ?: return
-            onSurfaceTextureAvailable(surface, view.width, view.height)
+        view.holder.addCallback(this)
+        val surface = view.holder.surface
+        if (surface != null && surface.isValid && view.width > 0 && view.height > 0) {
+            startThread(surface, view.width, view.height)
         }
     }
 
@@ -127,13 +123,28 @@ internal class UyvyRenderer(
         joinThread()
     }
 
-    override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+    override fun surfaceCreated(holder: SurfaceHolder) = Unit
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        surfaceWidth = width.coerceAtLeast(1)
+        surfaceHeight = height.coerceAtLeast(1)
+        settingsVersion += 1
+        startThread(holder.surface, width, height)
+    }
+
+    // The holder's Surface is gone once this returns, so the GL thread must be stopped first.
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        token += 1
+        running = false
+        joinThread()
+    }
+
+    private fun startThread(surface: Surface, width: Int, height: Int) {
         if (!started) return
         val previous = thread
         if (previous != null && previous.isAlive) return
         surfaceWidth = width.coerceAtLeast(1)
         surfaceHeight = height.coerceAtLeast(1)
-        surface.setDefaultBufferSize(surfaceWidth, surfaceHeight)
         val myToken = token
         running = true
         thread = Thread({ render(surface, myToken) }, "camd-gl").apply {
@@ -142,53 +153,27 @@ internal class UyvyRenderer(
         }
     }
 
-    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-        surfaceWidth = width.coerceAtLeast(1)
-        surfaceHeight = height.coerceAtLeast(1)
-        surface.setDefaultBufferSize(surfaceWidth, surfaceHeight)
-    }
-
-    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-        token += 1
-        running = false
-        joinThread()
-        if (thread?.isAlive != true) return true
-        // Returning false hands ownership to us: the GL thread releases it on exit.
-        releaseOnExit = surface
-        if (thread?.isAlive != true && releaseOnExit === surface) {
-            releaseOnExit = null
-            return true
-        }
-        return false
-    }
-
-    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
-
     private fun joinThread() {
         val worker = thread ?: return
         runCatching { worker.join(1_000) }
         if (!worker.isAlive) thread = null
     }
 
-    private fun render(surfaceTexture: SurfaceTexture, myToken: Long) {
-        val window = Surface(surfaceTexture)
+    private fun render(window: Surface, myToken: Long) {
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         if (display == EGL14.EGL_NO_DISPLAY) {
             warnGl("eglGetDisplay failed")
-            window.release()
             return
         }
         val version = IntArray(2)
         if (!EGL14.eglInitialize(display, version, 0, version, 1)) {
             warnGl("eglInitialize failed")
-            window.release()
             return
         }
         val config = chooseConfig(display)
         if (config == null) {
             warnGl("eglChooseConfig failed")
             EGL14.eglTerminate(display)
-            window.release()
             return
         }
         val context = EGL14.eglCreateContext(
@@ -204,10 +189,13 @@ internal class UyvyRenderer(
             if (surface != null && surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(display, surface)
             if (context != null && context != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
-            window.release()
             return
         }
         EGL14.eglMakeCurrent(display, surface, surface, context)
+        // Until the first frame an empty surface would show what lies under the overlay.
+        GLES20.glClearColor(0f, 0f, 0f, if (shape == CamdShape.CIRCLE) 0f else 1f)
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        EGL14.eglSwapBuffers(display, surface)
         val program = buildProgram()
         val texture = IntArray(1)
         GLES20.glGenTextures(1, texture, 0)
@@ -244,8 +232,9 @@ internal class UyvyRenderer(
         val drawCurrent: (UyvySlot) -> Unit = { published ->
             GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
             GLES20.glUseProgram(program)
-            // Transparent clear so discarded circle corners stay transparent in the buffer.
-            GLES20.glClearColor(0f, 0f, 0f, 0f)
+            // Circle corners stay transparent; the rest is opaque black, since nothing in the
+            // window is drawn under the surface.
+            GLES20.glClearColor(0f, 0f, 0f, if (shape == CamdShape.CIRCLE) 0f else 1f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES20.glUniform1i(uTex, 0)
             GLES20.glUniform1f(uStock, if (stockView != null) 1f else 0f)
@@ -423,11 +412,6 @@ internal class UyvyRenderer(
             EGL14.eglDestroySurface(display, surface)
             EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
-            window.release()
-            releaseOnExit?.takeIf { it === surfaceTexture }?.let { pending ->
-                releaseOnExit = null
-                runCatching { pending.release() }
-            }
         }
     }
 
@@ -495,7 +479,7 @@ internal class UyvyRenderer(
     }
 
     private fun chooseConfig(display: EGLDisplay): EGLConfig? {
-        // Alpha size 8 is required for shape=circle: without it the SurfaceTexture
+        // Alpha size 8 is required for shape=circle: without it the surface
         // buffer has no alpha channel and the outside-circle area renders black.
         val attribs = intArrayOf(
             EGL14.EGL_RED_SIZE, 8,
