@@ -1,4 +1,5 @@
 # Builds DclInstall.apk without Gradle: aapt + javac + d8 + apksigner, signed with the repo keystore.
+# Bundles a freshly built :rootsvc release APK as assets/rootsvc.apk.
 param(
     [string]$Sdk = $(if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { "$env:LOCALAPPDATA\Android\Sdk" }),
     [string]$BuildTools = "",
@@ -16,7 +17,7 @@ $androidJar = "$Sdk\platforms\android-28\android.jar"
 $ks = "$repo\keystore\debug.keystore"
 $b = "$here\build"
 Remove-Item -Recurse -Force $b -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force "$b\wallpaper-classes", "$b\app-classes", "$b\assets", "$b\dex", "$b\plan-test" | Out-Null
+New-Item -ItemType Directory -Force "$b\wallpaper-classes", "$b\unlock-classes", "$b\app-classes", "$b\assets", "$b\dex", "$b\plan-test" | Out-Null
 
 function Fail-Native([string]$Step) {
     if ($LASTEXITCODE -ne 0) { throw "$Step failed with exit $LASTEXITCODE" }
@@ -31,23 +32,31 @@ Fail-Native "InstallPlanTest javac"
 & java -cp "$b\plan-test" vad.dashing.dclinstall.InstallPlanTest
 Fail-Native "InstallPlanTest"
 
-Copy-Item "$repo\tools\usb_mount\UsbMount.apk" "$b\assets\usbmount.apk"
+Write-Host "Building :rootsvc release APK for assets…"
+Push-Location $repo
+& .\gradlew.bat :rootsvc:assembleRelease --quiet
+Fail-Native "rootsvc assembleRelease"
+Pop-Location
+$rootsvcApk = Get-ChildItem "$repo\rootsvc\build\outputs\apk\release\rootsvc-*-release.apk" | Select-Object -First 1
+if (-not $rootsvcApk) { throw "rootsvc release APK missing after assembleRelease" }
+Copy-Item $rootsvcApk.FullName "$b\assets\rootsvc.apk"
 Copy-Item "$here\assets\default_wallpaper.jpg" "$b\assets\default_wallpaper.jpg"
 
-& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\wallpaper-classes" "$here\src\SetWallpaper.java" "$here\src\Unstop.java"
+& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\wallpaper-classes" "$here\src\SetWallpaper.java"
 Fail-Native "SetWallpaper javac"
-& "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\wallpaper-classes\SetWallpaper.class" "$b\wallpaper-classes\Unstop.class"
+& "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\wallpaper-classes\SetWallpaper.class"
 Fail-Native "SetWallpaper d8"
 Move-Item "$b\assets\classes.dex" "$b\assets\setwallpaper.dex"
 
-New-Item -ItemType Directory -Force "$b\unlock-classes" | Out-Null
-& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\unlock-classes" "$repo\tools\usb_mount\src\UnlockUsb.java"
+& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\unlock-classes" "$here\src\UnlockUsb.java"
 Fail-Native "UnlockUsb javac"
 & "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\unlock-classes\UnlockUsb.class"
 Fail-Native "UnlockUsb d8"
 Move-Item "$b\assets\classes.dex" "$b\assets\unlockusb.dex"
 
-& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\app-classes" (Get-ChildItem -Recurse "$here\src\vad" -Filter *.java).FullName
+$appSources = @(Get-ChildItem -Recurse "$here\src\vad" -Filter *.java).FullName +
+    @(Get-ChildItem -Recurse "$repo\shared\rootsvc\java" -Filter *.java).FullName
+& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\app-classes" $appSources
 Fail-Native "app javac"
 & "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\dex" (Get-ChildItem -Recurse "$b\app-classes" -Filter *.class).FullName
 Fail-Native "app d8"

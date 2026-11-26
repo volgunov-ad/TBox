@@ -13,7 +13,7 @@ Dashing (A9 mbCAN / A10 VHAL). Хостинг артефактов: **Яндек
 | [ROAD_MAPS_HOSTING_RU.md](ROAD_MAPS_HOSTING_RU.md) | Публичный share, `yandex-disk:`, `catalog.json` |
 | [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Текущая OTA-вкладка Monitor |
 | [HEAD_UNITS_DEVICE_NOTES_RU.md](HEAD_UNITS_DEVICE_NOTES_RU.md) | Файрвол A10, `/data`, dexopt |
-| [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md) | DCLInstall / UsbMount / окружение A9 |
+| [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md) | DCLInstall / rootsvc / окружение A9 |
 | [MQTT_APK_RU.md](MQTT_APK_RU.md), [CAMD_RU.md](CAMD_RU.md), [VOICE_APK_RU.md](VOICE_APK_RU.md) | Сайдлоад-приложения без своей OTA |
 | [BRANCHING.md](BRANCHING.md) | Ветки `preRelease` / `master` |
 
