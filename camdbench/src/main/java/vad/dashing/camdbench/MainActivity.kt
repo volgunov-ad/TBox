@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -121,10 +122,10 @@ private fun BenchScreen(onStart: (Int) -> Unit, onStop: () -> Unit) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Тест нагрузки камер", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.app_name), fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Включите запись в «Камеры ГУ», закройте окна камер, подождите минуту и начните сбор. " +
-                "Затем установите другую версию camd и повторите с той же длительностью.",
+            "Запустите то, что хотите измерить (запись «Камер ГУ», DCL, TBox Monitor…), подождите минуту " +
+                "и начните сбор. Для сравнения версий установите другую и повторите с той же длительностью.",
             color = Color(0xFF555555),
         )
 
@@ -135,8 +136,8 @@ private fun BenchScreen(onStart: (Int) -> Unit, onStop: () -> Unit) {
                 val fields = BenchLogs.statusFields(info.status)
                 val recording = fields["rec_active"] == "1"
                 Text(
-                    if (recording) "Запись идёт" else "Запись НЕ идёт — замер будет некорректным",
-                    color = if (recording) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    if (recording) "Запись идёт" else "Запись не идёт — для замера регистратора включите её",
+                    color = if (recording) Color(0xFF2E7D32) else Color(0xFF777777),
                     fontWeight = FontWeight.SemiBold,
                 )
                 val windows = fields["windows"]
@@ -230,10 +231,12 @@ private fun StatusBlock(ui: BenchUi) {
                 "Идёт сбор: ${clock(ui.elapsedSec)} из ${clock(ui.plannedSec)}",
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
-                "Сейчас: процессор ${BenchReport.fmt(ui.cpuBusyPct)} % всех ядер · " +
-                    "camd ${BenchReport.fmt(ui.camdPct)} % ядра · camd_grab ${BenchReport.fmt(ui.grabPct)} % ядра",
-            )
+            val camdNow = if (ui.camdPct + ui.grabPct > 0.0) {
+                " · camd ${BenchReport.fmt(ui.camdPct)} % ядра · camd_grab ${BenchReport.fmt(ui.grabPct)} % ядра"
+            } else {
+                ""
+            }
+            Text("Сейчас: процессор ${BenchReport.fmt(ui.cpuBusyPct)} % всех ядер$camdNow")
             Text("Экран можно свернуть — замер идёт в фоне.", color = Color(0xFF777777))
         }
         BenchPhase.DONE -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

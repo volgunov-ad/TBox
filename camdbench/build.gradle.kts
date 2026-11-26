@@ -16,9 +16,9 @@ android {
         applicationId = "vad.dashing.camdbench"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
+        versionCode = 5
 
-        versionName = "1.1.0"
+        versionName = "1.3.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

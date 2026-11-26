@@ -15,6 +15,19 @@ class BenchAccumulator {
 
     class Zone(val name: String, val avgC: Double, val maxC: Double)
 
+    class Core(val cpu: Int, val avgPct: Double, val maxPct: Double)
+
+    /**
+     * Where one of our processes ran: allowed cores (last seen), share of its CPU time per
+     * cpuset (top-app, foreground, background…) and per core. Shares are fractions of 1.
+     */
+    class Placement(
+        val name: String,
+        val allowedCpus: String,
+        val cpusets: List<Pair<String, Double>>,
+        val cores: List<Pair<Int, Double>>,
+    )
+
     class Snapshot(
         val samples: Int,
         val durationSec: Double,
@@ -27,8 +40,14 @@ class BenchAccumulator {
         val zones: List<Zone>,
         val memAvailableMinMb: Long,
         val ended: Boolean,
+        val cpuCores: List<Core> = emptyList(),
+        val placements: List<Placement> = emptyList(),
+        /** Thread key (`process/thread`) → share of its CPU time per core, largest first. */
+        val threadCores: Map<String, List<Pair<Int, Double>>> = emptyMap(),
     ) {
         fun process(name: String): Usage? = processes.firstOrNull { it.name == name }
+
+        fun placement(name: String): Placement? = placements.firstOrNull { it.name == name }
     }
 
     class Live(val elapsedSec: Double, val cpuBusyPct: Double, val camdPct: Double, val grabPct: Double)
@@ -64,6 +83,18 @@ class BenchAccumulator {
     private val threadInterval = HashMap<String, Long>()
     private val threadMax = HashMap<String, Double>()
 
+    private val coreFirst = HashMap<Int, LongArray>()
+    private val coreLast = HashMap<Int, LongArray>()
+    private val corePrev = HashMap<Int, LongArray>()
+    private val coreMax = HashMap<Int, Double>()
+
+    private val placementByPid = HashMap<Int, Pair<String, String>>()
+    private val allowedByName = HashMap<String, String>()
+    private val cpusetTicks = HashMap<String, HashMap<String, Long>>()
+    private val threadKeyByTid = HashMap<Int, String>()
+    private val threadCoreTicks = HashMap<String, HashMap<Int, Long>>()
+    private val procCoreTicks = HashMap<String, HashMap<Int, Long>>()
+
     private val freqSum = HashMap<Int, Long>()
     private val freqCount = HashMap<Int, Int>()
     private val zoneSum = HashMap<Int, Long>()
@@ -83,6 +114,9 @@ class BenchAccumulator {
             }
             "T" -> startSample(parts.getOrNull(1)?.toLongOrNull() ?: return)
             "C" -> cpu(parts)
+            "CC" -> core(parts)
+            "A" -> placement(parts)
+            "Q" -> coreTicks(parts)
             "F" -> {
                 val cpu = parts.getOrNull(1)?.toIntOrNull() ?: return
                 val khz = parts.getOrNull(2)?.toLongOrNull() ?: return
@@ -124,6 +158,32 @@ class BenchAccumulator {
         lastIdle = idle
     }
 
+    private fun core(parts: List<String>) {
+        val cpu = parts.getOrNull(1)?.toIntOrNull() ?: return
+        val total = parts.getOrNull(2)?.toLongOrNull() ?: return
+        val idle = parts.getOrNull(3)?.toLongOrNull() ?: return
+        val value = longArrayOf(total, idle)
+        coreFirst.putIfAbsent(cpu, value)
+        coreLast[cpu] = value
+    }
+
+    private fun placement(parts: List<String>) {
+        val pid = parts.getOrNull(1)?.toIntOrNull() ?: return
+        val cpus = parts.getOrNull(2) ?: return
+        val cpuset = parts.drop(3).joinToString(" ").ifBlank { "/" }
+        placementByPid[pid] = cpus to cpuset
+        procNames[pid]?.let { allowedByName[it] = cpus }
+    }
+
+    private fun coreTicks(parts: List<String>) {
+        val tid = parts.getOrNull(1)?.toIntOrNull() ?: return
+        val cpu = parts.getOrNull(2)?.toIntOrNull() ?: return
+        val ticks = parts.getOrNull(3)?.toLongOrNull()?.takeIf { it > 0 } ?: return
+        val key = threadKeyByTid[tid] ?: return
+        threadCoreTicks.getOrPut(key) { HashMap() }.merge(cpu, ticks, Long::plus)
+        procCoreTicks.getOrPut(OurApps.ownerOf(key)) { HashMap() }.merge(cpu, ticks, Long::plus)
+    }
+
     private fun process(parts: List<String>) {
         val pid = parts.getOrNull(1)?.toIntOrNull() ?: return
         val ticks = parts.getOrNull(2)?.toLongOrNull() ?: return
@@ -135,8 +195,13 @@ class BenchAccumulator {
             ticks < prev || procNames[pid] != name -> ticks
             else -> ticks - prev
         }
+        if (procNames[pid] != null && procNames[pid] != name) placementByPid.remove(pid)
         procTicks[pid] = ticks
         procNames[pid] = name
+        placementByPid[pid]?.let { (cpus, cpuset) ->
+            allowedByName[name] = cpus
+            if (delta > 0) cpusetTicks.getOrPut(name) { HashMap() }.merge(cpuset, delta, Long::plus)
+        }
         if (delta > 0) {
             procTotal[name] = (procTotal[name] ?: 0L) + delta
             procInterval[name] = (procInterval[name] ?: 0L) + delta
@@ -152,6 +217,7 @@ class BenchAccumulator {
         val threadName = parts.drop(4).joinToString(" ").ifBlank { "tid$tid" }
         val owner = procNames[pid] ?: "pid$pid"
         val key = "$owner/$threadName"
+        threadKeyByTid[tid] = key
         val prev = threadTicks[tid]
         val delta = when {
             prev == null && samples <= 1 -> 0L
@@ -185,6 +251,13 @@ class BenchAccumulator {
                 lastIntervalProc[name] = pct
                 if (pct > (procMax[name] ?: 0.0)) procMax[name] = pct
             }
+            coreLast.forEach { (cpu, last) ->
+                val prev = corePrev[cpu] ?: return@forEach
+                val dt = (last[0] - prev[0]).toDouble()
+                if (dt <= 0) return@forEach
+                val busy = (100.0 * (dt - (last[1] - prev[1])) / dt).coerceIn(0.0, 100.0)
+                if (busy > (coreMax[cpu] ?: 0.0)) coreMax[cpu] = busy
+            }
             threadInterval.forEach { (key, ticks) ->
                 val pct = pct(ticks, seconds)
                 if (pct > (threadMax[key] ?: 0.0)) threadMax[key] = pct
@@ -195,6 +268,8 @@ class BenchAccumulator {
         prevUptime = curUptime
         prevTotal = lastTotal
         prevIdle = lastIdle
+        corePrev.clear()
+        corePrev.putAll(coreLast)
         curUptime = -1L
     }
 
@@ -205,6 +280,12 @@ class BenchAccumulator {
     private fun durationSec(): Double {
         val last = if (curUptime >= 0) curUptime else prevUptime
         return if (firstUptime < 0 || last <= firstUptime) 0.0 else (last - firstUptime) / 1000.0
+    }
+
+    private fun <K> shares(ticks: Map<K, Long>): List<Pair<K, Double>> {
+        val total = ticks.values.sum().toDouble()
+        if (total <= 0) return emptyList()
+        return ticks.map { it.key to it.value / total }.sortedByDescending { it.second }
     }
 
     fun live(): Live = Live(
@@ -240,6 +321,21 @@ class BenchAccumulator {
                 (zoneMax[zone] ?: 0L) / 1000.0,
             )
         }
+        val cpuCores = coreLast.keys.sorted().mapNotNull { cpu ->
+            val first = coreFirst[cpu] ?: return@mapNotNull null
+            val last = coreLast.getValue(cpu)
+            val dt = (last[0] - first[0]).toDouble()
+            val busy = if (dt > 0) (100.0 * (dt - (last[1] - first[1])) / dt).coerceIn(0.0, 100.0) else 0.0
+            Core(cpu, busy, coreMax[cpu] ?: 0.0)
+        }
+        val placements = (allowedByName.keys + procCoreTicks.keys).distinct().map { name ->
+            Placement(
+                name = name,
+                allowedCpus = allowedByName[name] ?: "?",
+                cpusets = shares(cpusetTicks[name].orEmpty()),
+                cores = shares(procCoreTicks[name].orEmpty()),
+            )
+        }
         return Snapshot(
             samples = samples,
             durationSec = seconds,
@@ -252,6 +348,9 @@ class BenchAccumulator {
             zones = zones,
             memAvailableMinMb = if (memMinKb == Long.MAX_VALUE) 0 else memMinKb / 1024,
             ended = ended,
+            cpuCores = cpuCores,
+            placements = placements,
+            threadCores = threadCoreTicks.mapValues { shares(it.value) },
         )
     }
 
