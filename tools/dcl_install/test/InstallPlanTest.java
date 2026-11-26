@@ -26,6 +26,7 @@ public final class InstallPlanTest {
         failed += check("d14-grants", d14());
         failed += check("d20-hide-wallpaper", d20());
         failed += check("d21-rootsvc", d21());
+        failed += check("d22-rootsvc-only", d22());
         failed += check("foreign", foreign());
         failed += check("lock", lock());
         failed += check("boot-mark", bootMark());
@@ -343,6 +344,26 @@ public final class InstallPlanTest {
         String listeners = InstallPlan.bootListenersOnlyScript();
         if (!listeners.contains(InstallPlan.DCL_ACCESSIBILITY)) return "listeners script lost DCL a11y";
         if (!listeners.contains(InstallPlan.ROOTSVC_A11Y)) return "listeners script lost rootsvc a11y";
+        return null;
+    }
+
+    private static String d22() {
+        String script = plan(true).toRootsvcScript();
+        if (!script.contains("rootsvc.apk")) return "rootsvc-only script skips install";
+        if (!script.contains("pm install -r -g -t '/sdcard/dcl_install/rootsvc.apk'")) {
+            return "rootsvc-only script lost pm install -r -g -t";
+        }
+        if (!script.contains("pm grant vad.dashing.rootsvc android.permission.WRITE_EXTERNAL_STORAGE")) {
+            return "rootsvc-only script does not grant storage";
+        }
+        if (!script.contains(InstallPlan.ROOTSVC_A11Y)) return "rootsvc-only script skips a11y";
+        if (script.contains("pm path " + InstallPlan.DCL_PACKAGE)) {
+            return "rootsvc-only script requires DCL";
+        }
+        if (script.contains("SetWallpaper") || script.contains("install_dcl") || script.contains("STEP hide")) {
+            return "rootsvc-only script still does DCL setup";
+        }
+        if (script.contains("reboot")) return "rootsvc-only script reboots";
         return null;
     }
 

@@ -379,6 +379,17 @@ final class InstallPlan {
     }
 
     /**
+     * Install or update only {@code vad.dashing.rootsvc} from the staged asset:
+     * {@code pm install -r -g -t}, storage grants, accessibility. No DCL / wallpaper / hide.
+     */
+    String toRootsvcScript() {
+        StringBuilder sh = scriptHeader();
+        appendRootsvc(sh);
+        finishScript(sh, false);
+        return sh.toString();
+    }
+
+    /**
      * After unlock: let vold scan USB sticks when this launcher needs it, put back the two
      * grants boot drops, and, if the system dropped the boot wallpaper, set it again.
      * Own log and result files, and no payload cleanup, so a running install is untouched.

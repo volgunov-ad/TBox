@@ -65,6 +65,7 @@ public class InstallActivity extends Activity {
     private Button dealerOn;
     private Button dealerOff;
     private Button uninstallUsb;
+    private Button installRootsvc;
     private TextView log;
     private String apkPath;
     private String customImagePath;
@@ -136,7 +137,7 @@ public class InstallActivity extends Activity {
         wallpapers.addView(pictureWallpaper);
         wallpapers.addView(blackWallpaper);
         wallpapers.addView(customWallpaper);
-        wallpapers.check(pictureWallpaper.getId());
+        wallpapers.check(blackWallpaper.getId());
         wallpapers.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(RadioGroup group, int checkedId) {
@@ -258,12 +259,22 @@ public class InstallActivity extends Activity {
             }
         });
         column.addView(compileDcl, extraParams);
+        installRootsvc = button("Установить / обновить root-службу");
+        installRootsvc.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onRootsvcClicked();
+            }
+        });
+        column.addView(installRootsvc, extraParams);
         column.addView(note(
                 "«Настроить установленный DCL» повторяет настройку без установки APK и перезагружает ГУ. "
                         + "Разрешения применяются сразу. Обои берутся из текущего выбора. "
                         + "Компиляция занимает несколько минут. "
                         + "Штатный лаунчер и обработчик USB скрываются всегда, остальное — по галочкам. "
-                        + "Ставится root-служба vad.dashing.rootsvc; старая программа флешек удаляется."));
+                        + "Ставится root-служба vad.dashing.rootsvc; старая программа флешек удаляется. "
+                        + "«Установить / обновить root-службу» ставит только её из вшитого APK "
+                        + "(хранилище и спецвозможность), без DCL, обоев и скрытия."));
 
         column.addView(heading("Визит к дилеру"));
         column.addView(note(
@@ -522,6 +533,7 @@ public class InstallActivity extends Activity {
         if (hideSelected != null) hideSelected.setEnabled(false);
         if (changeWallpaper != null) changeWallpaper.setEnabled(false);
         if (compileDcl != null) compileDcl.setEnabled(false);
+        if (installRootsvc != null) installRootsvc.setEnabled(false);
         install.setText("Проверка APK…");
         final String path = apkPath;
         new Thread(new Runnable() {
@@ -761,6 +773,26 @@ public class InstallActivity extends Activity {
                         setBusy(true);
                         uninstallUsb.setText("Удаление…");
                         startRoot(currentPlan(false).toUninstallUsbScript(), false, true);
+                    }
+                });
+    }
+
+    private void onRootsvcClicked() {
+        if (running || !isA9()) return;
+        confirm("Root-служба",
+                "Установить или обновить vad.dashing.rootsvc из вшитого APK? "
+                        + "Будут выданы права на хранилище и спецвозможность. "
+                        + "DCL, обои и скрытие приложений не затрагиваются. Без перезагрузки.",
+                "Установить",
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        expectReboot = false;
+                        setBusy(true);
+                        installRootsvc.setText("Установка root-службы…");
+                        startPrepared(
+                                currentPlan(false).toRootsvcScript(),
+                                false, true, false, false, true);
                     }
                 });
     }
@@ -1119,10 +1151,10 @@ public class InstallActivity extends Activity {
         manual.setChecked(stored.getBoolean("hideManual", false));
         String image = stored.getString("customImage", "");
         customImagePath = image == null || image.length() == 0 ? null : image;
-        String mode = stored.getString("wallpaper", "picture");
-        if ("black".equals(mode)) blackWallpaper.setChecked(true);
+        String mode = stored.getString("wallpaper", "black");
+        if ("picture".equals(mode)) pictureWallpaper.setChecked(true);
         else if ("custom".equals(mode)) customWallpaper.setChecked(true);
-        else pictureWallpaper.setChecked(true);
+        else blackWallpaper.setChecked(true);
         restoring = false;
     }
 
@@ -1159,6 +1191,7 @@ public class InstallActivity extends Activity {
             if (dealerOn != null) dealerOn.setEnabled(false);
             if (dealerOff != null) dealerOff.setEnabled(false);
             if (uninstallUsb != null) uninstallUsb.setEnabled(false);
+            if (installRootsvc != null) installRootsvc.setEnabled(false);
             setChoicesEnabled(false);
             return;
         }
@@ -1208,6 +1241,10 @@ public class InstallActivity extends Activity {
         if (uninstallUsb != null) {
             uninstallUsb.setEnabled(!running);
             uninstallUsb.setText("Удалить программу флешек");
+        }
+        if (installRootsvc != null) {
+            installRootsvc.setEnabled(!running);
+            installRootsvc.setText("Установить / обновить root-службу");
         }
         setChoicesEnabled(!running);
     }
