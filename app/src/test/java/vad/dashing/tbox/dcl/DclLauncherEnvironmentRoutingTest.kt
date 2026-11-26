@@ -416,6 +416,13 @@ class DclLauncherEnvironmentRoutingTest {
 
         assertTrue(dclLaunchShouldUseRawFallback(DclCallResult.Unavailable))
         assertTrue(
+            dclShouldBypassBinderForRawFallback(
+                packageInstalled = true,
+                processLikelyDead = true,
+                capabilityMissing = false,
+            ),
+        )
+        assertTrue(
             dclLaunchShouldUseRawFallback(
                 DclCallResult.Error(
                     DclApiError(DclLauncherApiContract.ERROR_UNSUPPORTED, "no"),

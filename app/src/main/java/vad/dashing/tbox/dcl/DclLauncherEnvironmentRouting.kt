@@ -325,6 +325,9 @@ fun dclModeCapabilityMissing(
 /**
  * Error codes that should fall back to raw `startActivity` like [DclCallResult.Unavailable]
  * (missing/unsupported API surface). Keep `busy` / `not_installed` as toast-only.
+ *
+ * Also see [dclShouldBypassBinderForRawFallback]: when the launcher package is missing or its
+ * process is clearly dead, callers skip Binder entirely and take the same raw path.
  */
 val DCL_LAUNCH_RAW_FALLBACK_ERROR_CODES: Set<String> = setOf(
     DclLauncherApiContract.ERROR_UNSUPPORTED,

@@ -46,8 +46,10 @@ import vad.dashing.tbox.dcl.DclCallResult
 import vad.dashing.tbox.dcl.DclLauncherApiRepository
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
+import vad.dashing.tbox.dcl.DclLauncherLiveness
 import vad.dashing.tbox.dcl.dclLaunchShouldUseRawFallback
 import vad.dashing.tbox.dcl.dclModeCapabilityMissing
+import vad.dashing.tbox.dcl.dclShouldBypassBinderForRawFallback
 import vad.dashing.tbox.HttpRequestWidgetResult
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
@@ -371,14 +373,36 @@ class AutomationActionExecutor(
         packageName: String,
         dclMode: String,
     ): AutomationActionResult {
-        if (dclModeCapabilityMissing(dclMode, DclLauncherApiRepository.capabilities.value)) {
-            return rawFallbackAfterDcl(ruEn("DCL capability missing ($dclMode) — обычный запуск", "DCL capability missing ($dclMode) — normal launch"), packageName)
+        val capabilityMissing =
+            dclModeCapabilityMissing(dclMode, DclLauncherApiRepository.capabilities.value)
+        val packageInstalled = DclLauncherLiveness.isPackageInstalled(appContext)
+        val processDead = DclLauncherLiveness.processLikelyDead(appContext)
+        if (dclShouldBypassBinderForRawFallback(
+                packageInstalled = packageInstalled,
+                processLikelyDead = processDead,
+                capabilityMissing = capabilityMissing,
+            )
+        ) {
+            val reason = when {
+                !packageInstalled -> "launcher package missing"
+                processDead -> "launcher process dead"
+                else -> "DCL capability missing ($dclMode)"
+            }
+            if (!packageInstalled || processDead) {
+                DclLauncherApiRepository.markUnavailable(reason)
+            }
+            return rawFallbackAfterDcl(
+                ruEn("$reason — обычный запуск", "$reason — normal launch"),
+                packageName,
+            )
         }
-        val result = DclLauncherApiRepository.launchApp(
-            packageName = packageName,
-            mode = dclMode,
-            context = appContext,
-        )
+        val result = runCatching {
+            DclLauncherApiRepository.launchApp(
+                packageName = packageName,
+                mode = dclMode,
+                context = appContext,
+            )
+        }.getOrElse { DclCallResult.Unavailable }
         if (result is DclCallResult.Ok && result.value.success) {
             return AutomationActionResult.ok(ruEn("Приложение запущено через DCL ($dclMode)", "App launched via DCL ($dclMode)"))
         }
@@ -393,6 +417,9 @@ class AutomationActionExecutor(
                         ?: result.error.errorCode
                         ?: "DCL launch error"
                 DclCallResult.Unavailable -> "API unavailable"
+            }
+            if (result == DclCallResult.Unavailable) {
+                DclLauncherApiRepository.markUnavailable("launchApp unavailable")
             }
             return rawFallbackAfterDcl(
                 ruEn("DCL недоступен ($detail) — обычный запуск", "DCL unavailable ($detail) — normal launch"),

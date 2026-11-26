@@ -180,12 +180,10 @@ object DclLauncherApiClient {
     ): Bundle? =
         try {
             context.contentResolver.call(uri, method, arg, extras)
-        } catch (_: IllegalArgumentException) {
-            null
-        } catch (_: SecurityException) {
-            null
-        } catch (_: RuntimeException) {
-            // Some OEM ContentResolver paths wrap remote failures as RuntimeException.
+        } catch (_: Exception) {
+            // DeadObjectException / RemoteException (process crash), SecurityException,
+            // IllegalArgumentException (provider missing), and OEM RuntimeException wrappers
+            // all mean "API unavailable" → callers take the raw startActivity fallback.
             null
         }
 }
