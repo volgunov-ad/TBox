@@ -40,22 +40,29 @@ javac -encoding UTF-8 -Xlint:-options -source 8 -target 8 -d "$b/plan-test" \
   "$here/test/InstallPlanTest.java"
 java -cp "$b/plan-test" vad.dashing.dclinstall.InstallPlanTest
 
-cp "$repo/tools/usb_mount/UsbMount.apk" "$b/assets/usbmount.apk"
+echo "Building :rootsvc release APK for assets…"
+( cd "$repo" && ./gradlew :rootsvc:assembleRelease --quiet )
+rootsvc_apk=$(ls -1 "$repo"/rootsvc/build/outputs/apk/release/rootsvc-*-release.apk | head -1)
+if [[ ! -f "$rootsvc_apk" ]]; then
+  echo "rootsvc release APK missing after assembleRelease" >&2
+  exit 1
+fi
+cp "$rootsvc_apk" "$b/assets/rootsvc.apk"
 cp "$here/assets/default_wallpaper.jpg" "$b/assets/default_wallpaper.jpg"
 
 javac -encoding UTF-8 -Xlint:-options -source 8 -target 8 -classpath "$android_jar" \
-  -d "$b/wallpaper-classes" "$here/src/SetWallpaper.java" "$here/src/Unstop.java"
+  -d "$b/wallpaper-classes" "$here/src/SetWallpaper.java"
 "$BUILD_TOOLS/d8" --min-api 22 --lib "$android_jar" --output "$b/assets" \
-  "$b/wallpaper-classes/SetWallpaper.class" "$b/wallpaper-classes/Unstop.class"
+  "$b/wallpaper-classes/SetWallpaper.class"
 mv "$b/assets/classes.dex" "$b/assets/setwallpaper.dex"
 
 javac -encoding UTF-8 -Xlint:-options -source 8 -target 8 -classpath "$android_jar" \
-  -d "$b/unlock-classes" "$repo/tools/usb_mount/src/UnlockUsb.java"
+  -d "$b/unlock-classes" "$here/src/UnlockUsb.java"
 "$BUILD_TOOLS/d8" --min-api 22 --lib "$android_jar" --output "$b/assets" \
   "$b/unlock-classes/UnlockUsb.class"
 mv "$b/assets/classes.dex" "$b/assets/unlockusb.dex"
 
-mapfile -d '' sources < <(find "$here/src/vad" -name '*.java' -print0)
+mapfile -d '' sources < <(find "$here/src/vad" "$repo/shared/rootsvc/java" -name '*.java' -print0)
 javac -encoding UTF-8 -Xlint:-options -source 8 -target 8 -classpath "$android_jar" \
   -d "$b/app-classes" "${sources[@]}"
 mapfile -d '' classes < <(find "$b/app-classes" -name '*.class' -print0)

@@ -34,7 +34,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 /**
  * On-HU installer for Dashing Club Launcher on A9.
- * Root steps go through mb_daemon (/sdcard/autorun.sh), the same path as UsbMount.
+ * Root steps prefer {@code vad.dashing.rootsvc}; long scripts use {@code MbDaemonChannel}.
  */
 public class InstallActivity extends Activity {
     private static final int PICK_APK = 42;
@@ -171,8 +171,8 @@ public class InstallActivity extends Activity {
                         + "Рядом скрывается и системный обработчик USB: при загрузке с уже вставленной флешкой "
                         + "он открывает чёрный экран поверх лаунчера."
                         + (nativeUnlock
-                                ? " Лаунчер " + installedDcl() + " сам подключает флешки, отдельная программа им не нужна."
-                                : "")));
+                                ? " Лаунчер " + installedDcl() + " сам подключает флешки."
+                                : " Флешки при скрытом System UI разблокирует root-служба (или бут-фикс установщика).")));
         column.addView(heading("Скрыть по желанию"));
         column.addView(note("Снятая галочка пакет не трогает."));
         systemUi = check("System UI", true);
@@ -187,8 +187,8 @@ public class InstallActivity extends Activity {
                         + "Вместе с ними пропадают уведомления, всплывающая громкость "
                         + "и системные вопросы, например доступ программы к USB-устройству. "
                         + (nativeUnlock
-                                ? "Флешки после этого подключает сам лаунчер."
-                                : "Флешки после этого подключает отдельная программа, её установщик ставит сам. ")
+                                ? "Флешки после этого подключает сам лаунчер. "
+                                : "Флешки после этого разблокирует root-служба. ")
                         + "Без своих обоев загрузка тогда ждёт около 30 секунд."));
         column.addView(iottube);
         column.addView(note("Телематика. Постоянно падает, потому что не находит сервер, и заполняет системный журнал."));
@@ -263,16 +263,13 @@ public class InstallActivity extends Activity {
                         + "Разрешения применяются сразу. Обои берутся из текущего выбора. "
                         + "Компиляция занимает несколько минут. "
                         + "Штатный лаунчер и обработчик USB скрываются всегда, остальное — по галочкам. "
-                        + (nativeUnlock
-                                ? "Лаунчер сам подключает флешки."
-                                : "Для этого лаунчера ставится программа флешек.")));
+                        + "Ставится root-служба vad.dashing.rootsvc; старая программа флешек удаляется."));
 
         column.addView(heading("Визит к дилеру"));
         column.addView(note(
-                "Включение прячет DCL"
-                        + (nativeUnlock ? "" : " и программу флешек")
-                        + ", возвращает штатный лаунчер, System UI, штатные обои и обработчик USB "
+                "Включение прячет DCL, возвращает штатный лаунчер, System UI, штатные обои и обработчик USB "
                         + "и снова показывает скрытые по желанию приложения. "
+                        + "Root-служба не отключается. "
                         + "Выключение прячет обратно ровно то, что было скрыто до визита. "
                         + "Оба действия перезагружают ГУ. TBox Monitor и установщик остаются."));
         dealerOn = button("Включить режим дилера");
@@ -310,10 +307,8 @@ public class InstallActivity extends Activity {
         });
         column.addView(uninstallUsb, extraParams);
         column.addView(note(
-                "Возврат удаляет DCL"
-                        + (nativeUnlock ? "" : ", программу флешек")
-                        + " и пустые обои, показывает штатные приложения и снимает режим дилера. "
-                        + "Программа флешек для лаунчера 0.8.2+ не нужна: если она осталась, удалите её отдельной кнопкой."));
+                "Возврат удаляет DCL и пустые обои, показывает штатные приложения и снимает режим дилера. "
+                        + "Root-служба остаётся. Если старая программа флешек ещё стоит — удалите её отдельной кнопкой."));
 
         log = text("", 20, 0xFFD5DDE4);
         log.setTypeface(Typeface.MONOSPACE);
@@ -596,7 +591,7 @@ public class InstallActivity extends Activity {
         expectReboot = false;
         setBusy(true);
         grantPermissions.setText("Выдача разрешений…");
-        startRoot(currentPlan(false).toGrantScript(), false);
+        startRoot(currentPlan(false).toGrantScript(), false, true);
     }
 
     private void onSetupClicked() {
@@ -609,10 +604,9 @@ public class InstallActivity extends Activity {
             log.setText("Выберите картинку обоев: по умолчанию, чёрный фон или свой файл.");
             return;
         }
-        final String usb = nativeUnlock ? "" : " Будет установлена программа флешек.";
         confirm("Настроить установленный DCL",
-                "Выдать разрешения, назначить DCL кнопкой HOME, поставить обои и скрыть "
-                        + hideList() + "." + usb + " Головное устройство перезагрузится.",
+                "Выдать разрешения, назначить DCL кнопкой HOME, поставить root-службу и обои, скрыть "
+                        + hideList() + ". Головное устройство перезагрузится.",
                 "Настроить",
                 new Runnable() {
                     @Override
@@ -622,7 +616,7 @@ public class InstallActivity extends Activity {
                         setBusy(true);
                         setupInstalled.setText("Настройка… ГУ перезагрузится");
                         InstallPlan plan = currentPlan(false);
-                        startPrepared(plan.toSetupScript(), true, !plan.launcherHasNativeUnlock, true, false);
+                        startPrepared(plan.toSetupScript(), true, true, true, false, false);
                     }
                 });
     }
@@ -647,7 +641,7 @@ public class InstallActivity extends Activity {
                         setBusy(true);
                         hideSelected.setText("Скрытие… ГУ перезагрузится");
                         InstallPlan plan = currentPlan(false);
-                        startPrepared(plan.toHideScript(), plan.hideSystemUi, false, plan.hideSystemUi, false);
+                        startPrepared(plan.toHideScript(), plan.hideSystemUi, false, plan.hideSystemUi, false, true);
                     }
                 });
     }
@@ -661,18 +655,16 @@ public class InstallActivity extends Activity {
         expectReboot = false;
         setBusy(true);
         compileDcl.setText("Компиляция… несколько минут");
-        startRoot(currentPlan(false).toCompileScript(), false);
+        startRoot(currentPlan(false).toCompileScript(), false, false);
     }
 
     private void onRestoreClicked() {
         if (running || !isA9()) return;
         confirm("Вернуть штатное состояние",
-                "Удалить DCL"
-                        + (nativeUnlock ? "" : ", программу флешек")
-                        + " и пустые обои? "
+                "Удалить DCL и пустые обои? "
                         + "Штатный лаунчер, System UI, обработчик USB, голосовой помощник, "
                         + "IoT Tube и руководство снова появятся. Режим дилера снимется. "
-                        + "Головное устройство перезагрузится. "
+                        + "Root-служба останется. Головное устройство перезагрузится. "
                         + "TBox Monitor и эта программа установки останутся.",
                 "Удалить и вернуть",
                 new Runnable() {
@@ -683,7 +675,7 @@ public class InstallActivity extends Activity {
                         clearModeOnOk = true;
                         setBusy(true);
                         restoreStock.setText("Возврат… ГУ перезагрузится");
-                        startPrepared(currentPlan(false).toRestoreScript(), false, false, true, false);
+                        startPrepared(currentPlan(false).toRestoreScript(), false, false, true, false, false);
                     }
                 });
     }
@@ -712,7 +704,7 @@ public class InstallActivity extends Activity {
                         expectReboot = true;
                         setBusy(true);
                         dealerOn.setText("Включение… ГУ перезагрузится");
-                        startPrepared(currentPlan(false).toDealerOnScript(), false, false, true, false);
+                        startPrepared(currentPlan(false).toDealerOnScript(), false, false, true, false, true);
                     }
                 });
     }
@@ -738,7 +730,7 @@ public class InstallActivity extends Activity {
                         expectReboot = true;
                         setBusy(true);
                         dealerOff.setText("Выключение… ГУ перезагрузится");
-                        startPrepared(currentPlan(false).toDealerOffScript(), true, false, true, false);
+                        startPrepared(currentPlan(false).toDealerOffScript(), true, false, true, false, true);
                     }
                 });
     }
@@ -753,14 +745,14 @@ public class InstallActivity extends Activity {
         expectReboot = false;
         setBusy(true);
         changeWallpaper.setText("Смена обоев…");
-        startPrepared(currentPlan(false).toWallpaperScript(), true, false, true, true);
+        startPrepared(currentPlan(false).toWallpaperScript(), true, false, true, true, true);
     }
 
     private void onUninstallUsbClicked() {
         if (running || !isA9()) return;
         confirm("Удалить программу флешек",
-                "Удалить vad.dashing.usbmount? Лаунчер 0.8.2 и новее подключает флешки сам. "
-                        + "Для более старого лаунчера без этой программы флешки NTFS и exFAT не появятся.",
+                "Удалить оставшийся vad.dashing.usbmount? Он больше не нужен: флешки "
+                        + "подключает лаунчер 0.8.2+ или root-служба.",
                 "Удалить",
                 new Runnable() {
                     @Override
@@ -768,7 +760,7 @@ public class InstallActivity extends Activity {
                         expectReboot = false;
                         setBusy(true);
                         uninstallUsb.setText("Удаление…");
-                        startRoot(currentPlan(false).toUninstallUsbScript(), false);
+                        startRoot(currentPlan(false).toUninstallUsbScript(), false, true);
                     }
                 });
     }
@@ -809,16 +801,16 @@ public class InstallActivity extends Activity {
                 speechClient.isChecked(),
                 manual.isChecked(),
                 fileVersion);
-        startPrepared(plan.toScript(), true, !plan.launcherHasNativeUnlock, true, false);
+        startPrepared(plan.toScript(), true, true, true, false, false);
     }
 
-    private void startRoot(final String script, final boolean reloadWallpaper) {
+    private void startRoot(final String script, final boolean reloadWallpaper, final boolean preferSvc) {
         showProgress("Подготовка…");
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    arm(script);
+                    arm(script, preferSvc);
                     poll();
                     if (reloadWallpaper) reloadWallpaper();
                 } catch (Exception e) {
@@ -831,9 +823,10 @@ public class InstallActivity extends Activity {
     private void startPrepared(
             final String script,
             final boolean wallpaper,
-            final boolean usb,
+            final boolean rootsvc,
             final boolean dex,
-            final boolean reloadWallpaper) {
+            final boolean reloadWallpaper,
+            final boolean preferSvc) {
         final boolean black = blackWallpaper.isChecked();
         final boolean custom = customWallpaper.isChecked();
         final String imagePath = customImagePath;
@@ -843,15 +836,15 @@ public class InstallActivity extends Activity {
             public void run() {
                 try {
                     if (wallpaper) writeWallpaper(black, custom, imagePath);
-                    if (usb || dex) {
+                    if (rootsvc || dex) {
                         File dir = new File(InstallPlan.PAYLOAD_DIR);
                         if (!dir.exists() && !dir.mkdirs()) {
                             throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
                         }
-                        if (usb) copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
+                        if (rootsvc) copyAsset("rootsvc.apk", new File(dir, "rootsvc.apk"));
                         if (dex) copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
                     }
-                    arm(script);
+                    arm(script, preferSvc);
                     poll();
                     if (reloadWallpaper) reloadWallpaper();
                 } catch (Exception e) {
@@ -884,14 +877,18 @@ public class InstallActivity extends Activity {
         return RootRun.inProgress(new File(InstallPlan.LOCK_FILE), SystemClock.elapsedRealtime(), bootId());
     }
 
-    private void arm(String script) throws Exception {
+    private void arm(String script, boolean preferSvc) throws Exception {
         if (!RootRun.tryAcquire(RootRun.OWNER_INSTALL, SystemClock.elapsedRealtime(), bootId())) {
             throw new IllegalStateException("Уже выполняется другая команда");
         }
         try {
             new File(InstallPlan.RESULT_FILE).delete();
             new File(InstallPlan.LOG_FILE).delete();
-            MbDaemon.run(script, MbDaemon.INSTALL_BODY);
+            if (preferSvc) {
+                RootExec.armShort(this, script, MbDaemon.INSTALL_BODY, 120_000L);
+            } else {
+                RootExec.armLong(script, MbDaemon.INSTALL_BODY);
+            }
         } catch (Exception e) {
             RootRun.release();
             throw e;
@@ -1168,8 +1165,7 @@ public class InstallActivity extends Activity {
         status.setTextColor(0xFFB7C0C8);
         String installed = installedDcl();
         if (dealer) {
-            status.setText("ГУ A9. Сейчас: штатный вид для дилера. DCL"
-                    + (nativeUnlock ? "" : " и программа флешек") + " скрыты.");
+            status.setText("ГУ A9. Сейчас: штатный вид для дилера. DCL скрыт.");
         } else if (installed == null) {
             status.setText("ГУ A9. DCL ещё не установлен.");
         } else {

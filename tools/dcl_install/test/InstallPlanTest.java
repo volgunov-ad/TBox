@@ -9,7 +9,7 @@ public final class InstallPlanTest {
         int failed = 0;
         failed += check("d01-setup", d01Setup());
         failed += check("d01-install", d01Install());
-        failed += check("d01-old-keeps-usb", oldKeepsUsb());
+        failed += check("d01-old-no-usb", oldNoUsb());
         failed += check("d02-dealer-native", d02Native());
         failed += check("d02-dealer-old", d02Old());
         failed += check("d03-file-version", d03());
@@ -25,10 +25,12 @@ public final class InstallPlanTest {
         failed += check("d13-boot-usb", d13());
         failed += check("d14-grants", d14());
         failed += check("d20-hide-wallpaper", d20());
+        failed += check("d21-rootsvc", d21());
         failed += check("foreign", foreign());
         failed += check("lock", lock());
         failed += check("boot-mark", bootMark());
         failed += check("clock-jump", clockJump());
+        failed += check("nonce-wrap", nonceWrap());
         if (failed != 0) {
             System.out.println(failed + " failed");
             System.exit(1);
@@ -56,6 +58,7 @@ public final class InstallPlanTest {
         String script = plan(true).toSetupScript();
         if (script.contains("usbmount.apk")) return "setup still installs usbmount";
         if (script.contains("Unstop")) return "setup still runs Unstop";
+        if (!script.contains("rootsvc.apk")) return "setup does not install rootsvc";
         return null;
     }
 
@@ -63,33 +66,33 @@ public final class InstallPlanTest {
         String script = plan(true).toScript();
         if (script.contains("usbmount.apk")) return "install still installs usbmount";
         if (script.contains("Unstop")) return "install still runs Unstop";
+        if (!script.contains("rootsvc.apk")) return "install does not install rootsvc";
         return null;
     }
 
-    private static String oldKeepsUsb() {
+    private static String oldNoUsb() {
         String script = plan(false).toSetupScript();
-        if (!script.contains("usbmount.apk")) return "old launcher lost usbmount install";
-        return unstopGuarded(script);
+        if (script.contains("usbmount.apk")) return "old launcher still installs usbmount";
+        if (script.contains("Unstop")) return "old launcher still runs Unstop";
+        if (!script.contains("rootsvc.apk")) return "old launcher setup skipped rootsvc";
+        if (!script.contains("pm uninstall vad.dashing.usbmount")) {
+            return "old launcher setup does not uninstall leftover usbmount";
+        }
+        return null;
     }
 
     private static String d02Native() {
         String script = plan(true).toDealerOffScript();
         if (script.contains("Unstop")) return "dealer-off with native unlock still runs Unstop";
         if (!script.contains("rm -f '/sdcard/dcl_dealer.flag'")) return "dealer-off does not clear the flag";
+        if (script.contains("pm unhide vad.dashing.usbmount")) return "dealer-off still touches usbmount";
         return null;
     }
 
     private static String d02Old() {
-        return unstopGuarded(plan(false).toDealerOffScript());
-    }
-
-    private static String unstopGuarded(String script) {
-        int unstop = script.indexOf("Unstop");
-        if (unstop < 0) return "missing Unstop";
-        int guard = script.lastIndexOf("if pm path vad.dashing.usbmount >/dev/null; then", unstop);
-        if (guard < 0) return "Unstop is not guarded by pm path";
-        int end = script.indexOf("fi\n", unstop);
-        if (end < 0) return "Unstop guard is not closed";
+        String script = plan(false).toDealerOffScript();
+        if (script.contains("Unstop")) return "dealer-off old still runs Unstop";
+        if (script.contains("pm unhide vad.dashing.usbmount")) return "dealer-off old still touches usbmount";
         return null;
     }
 
@@ -97,10 +100,12 @@ public final class InstallPlanTest {
         InstallPlan fresh = InstallPlan.forApk("/sdcard/Download/dcl.apk", false, true, true, false, false, false, "0.8.2");
         if (fresh.toScript().contains("usbmount.apk")) return "0.8.2 file still installs usbmount";
         if (fresh.toScript().contains("Unstop")) return "0.8.2 file still runs Unstop";
+        if (!fresh.toScript().contains("rootsvc.apk")) return "0.8.2 file skipped rootsvc";
         InstallPlan old = InstallPlan.forApk("/sdcard/Download/dcl.apk", false, true, true, false, false, false, "0.7.7");
-        if (!old.toScript().contains("usbmount.apk")) return "0.7.7 file skipped usbmount";
+        if (old.toScript().contains("usbmount.apk")) return "0.7.7 file still installs usbmount";
+        if (!old.toScript().contains("rootsvc.apk")) return "0.7.7 file skipped rootsvc";
         InstallPlan missing = InstallPlan.forApk("/sdcard/Download/dcl.apk", false, true, true, false, false, false, null);
-        if (!missing.toScript().contains("usbmount.apk")) return "unknown file version skipped usbmount";
+        if (missing.toScript().contains("usbmount.apk")) return "unknown file version still installs usbmount";
         if (!InstallPlan.forApk("/x", false, false, false, false, false, false, "0.8.2-ru").launcherHasNativeUnlock) {
             return "forApk did not read the file version";
         }
@@ -111,6 +116,7 @@ public final class InstallPlanTest {
         String script = plan(true).toRestoreScript();
         if (!script.contains("rm -f '/sdcard/dcl_dealer.flag'")) return "restore leaves the dealer flag";
         if (!script.contains("pm uninstall ras.dashing.tbox.launcher")) return "restore does not uninstall DCL";
+        if (script.contains("pm uninstall vad.dashing.rootsvc")) return "restore uninstalls rootsvc";
         return null;
     }
 
@@ -159,6 +165,9 @@ public final class InstallPlanTest {
         if (error != null) return error;
         if (!script.contains("rm -rf '/sdcard/dcl_install'")) return "success path no longer removes the payload";
         if (script.contains("rm -f \"$0\" '/sdcard/autorun.sh'")) return "cleanup still deletes autorun unconditionally";
+        if (script.contains("setprop vendor.autorun.sdcard.logfile")) {
+            return "script still clears the autorun property";
+        }
         return null;
     }
 
@@ -180,22 +189,9 @@ public final class InstallPlanTest {
     private static String cleanupGuarded(String script) {
         if (!script.contains("rm -f \"$0\"")) return "body is not removed";
         if (!script.contains("rm -f '/sdcard/dcl_install.lock'")) return "lock is not removed";
-        if (!script.contains("grep -qF '/sdcard/dcl_' '/sdcard/autorun.sh'")) {
-            return "autorun cleanup is not limited to our marker";
+        if (script.contains("grep -qF '/sdcard/dcl_' '/sdcard/autorun.sh'")) {
+            return "script still owns autorun cleanup (mb_daemon should)";
         }
-        int from = 0;
-        int props = 0;
-        while (true) {
-            int at = script.indexOf("setprop ", from);
-            if (at < 0) break;
-            props++;
-            int window = Math.max(0, at - 400);
-            if (!script.substring(window, at).contains("grep -qF '/sdcard/dcl_'")) {
-                return "setprop is not inside the ownership check";
-            }
-            from = at + 1;
-        }
-        if (props == 0) return "no setprop";
         return null;
     }
 
@@ -230,6 +226,8 @@ public final class InstallPlanTest {
         int put = on.indexOf("settings put secure accessibility_enabled 0");
         int guard = on.lastIndexOf("if [ -z \"$cur\" ] || [ \"$cur\" = null ]; then", put);
         if (put < 0 || guard < 0) return "accessibility master switch is not conditional";
+        if (on.contains("pm hide vad.dashing.usbmount")) return "dealer-on still hides usbmount";
+        if (on.contains("pm hide vad.dashing.rootsvc")) return "dealer-on hides rootsvc";
         String off = plan(true).toDealerOffScript();
         if (!off.contains("while IFS= read -r pkg")) return "dealer-off does not replay the flag";
         if (!off.contains("done < '/sdcard/dcl_dealer.flag'")) return "dealer-off does not read the flag";
@@ -240,15 +238,6 @@ public final class InstallPlanTest {
         if (noUi.toDealerOffScript().contains("pm hide com.android.systemui\n")) {
             return "dealer-off hides SystemUI when the checkbox is off";
         }
-        InstallPlan nativePlan = new InstallPlan("", false, true, false, false, false, false, true);
-        String nativeOn = nativePlan.toDealerOnScript();
-        if (!nativeOn.contains("if pm path vad.dashing.usbmount >/dev/null; then")) {
-            return "dealer-on does not check for a leftover usbmount";
-        }
-        if (!nativeOn.contains("pm hide vad.dashing.usbmount")) return "dealer-on leaves usbmount visible";
-        String nativeOff = nativePlan.toDealerOffScript();
-        if (nativeOff.contains("Unstop")) return "native dealer-off still unstops usbmount";
-        if (!nativeOff.contains("pm unhide vad.dashing.usbmount")) return "dealer-off leaves usbmount hidden";
         return null;
     }
 
@@ -292,18 +281,20 @@ public final class InstallPlanTest {
     }
 
     private static String d13() {
-        String nativeScript = plan(true).toBootScript("/data/a.dex", "/data/b.dex", false, true);
+        String nativeScript = plan(true).toBootScript("/data/a.dex", "/data/b.dex", false, false);
         if (nativeScript.contains("UnlockUsb")) return "native launcher boot still unlocks";
         if (nativeScript.contains("Unstop")) return "native launcher boot still unstops";
-        if (!nativeScript.contains("WARN usbmount_present")) return "native boot lost the spare-package warning";
+        if (!nativeScript.contains("pm uninstall vad.dashing.usbmount")) {
+            return "boot does not uninstall leftover usbmount";
+        }
         String skip = plan(false).toBootScript("/data/a.dex", "/data/b.dex", false, false);
         if (skip.contains("UnlockUsb")) return "visible SystemUI still unlocks";
         if (!skip.contains("echo skip unlock")) return "skipped unlock is silent";
         String run = plan(false).toBootScript("/data/a.dex", "/data/b.dex", true, true);
         if (!run.contains("UnlockUsb")) return "hidden SystemUI on an old launcher does not unlock";
-        String guard = unstopGuarded(run);
-        if (guard != null) return guard;
+        if (run.contains("Unstop")) return "boot still runs Unstop";
         if (!run.contains("SetWallpaper")) return "wallpaper restore was dropped";
+        if (!run.contains(InstallPlan.ROOTSVC_A11Y)) return "boot lost rootsvc a11y grant";
         return null;
     }
 
@@ -329,6 +320,18 @@ public final class InstallPlanTest {
         return null;
     }
 
+    private static String d21() {
+        String setup = plan(true).toSetupScript();
+        if (!setup.contains("pm grant vad.dashing.rootsvc android.permission.WRITE_EXTERNAL_STORAGE")) {
+            return "setup does not grant rootsvc storage";
+        }
+        if (!setup.contains(InstallPlan.ROOTSVC_A11Y)) return "setup does not enable rootsvc a11y";
+        String listeners = InstallPlan.bootListenersOnlyScript();
+        if (!listeners.contains(InstallPlan.DCL_ACCESSIBILITY)) return "listeners script lost DCL a11y";
+        if (!listeners.contains(InstallPlan.ROOTSVC_A11Y)) return "listeners script lost rootsvc a11y";
+        return null;
+    }
+
     private static String foreign() {
         if (MbDaemon.isForeign(null)) return "missing autorun was treated as foreign";
         if (!MbDaemon.isForeign("echo other")) return "a foreign script was treated as ours";
@@ -338,6 +341,15 @@ public final class InstallPlanTest {
         if (MbDaemon.isForeign("exec /system/bin/sh '/sdcard/dcl_boot.sh'\n")) {
             return "boot body was treated as foreign";
         }
+        return null;
+    }
+
+    private static String nonceWrap() {
+        String wrapped = MbDaemon.wrapWithNonce("#!/system/bin/sh\necho hi\n", "n42");
+        if (!wrapped.contains("# /sdcard/dcl_")) return "nonce wrap lost own marker";
+        if (!wrapped.contains("echo started n42 > '/sdcard/dcl_arm'")) return "nonce wrap lost arm marker";
+        if (!wrapped.contains("echo hi")) return "nonce wrap lost body";
+        if (wrapped.indexOf("echo started") > wrapped.indexOf("echo hi")) return "nonce is not first";
         return null;
     }
 

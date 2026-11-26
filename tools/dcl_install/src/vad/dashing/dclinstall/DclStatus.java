@@ -3,7 +3,6 @@ package vad.dashing.dclinstall;
 import android.app.WallpaperManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -68,7 +67,8 @@ final class DclStatus {
                 secureContains(context, "enabled_notification_listeners", InstallPlan.DCL_NOTIFICATION), bootPending));
         rows.add(afterBoot("Служба специальных возможностей", accessibility(context), bootPending));
         rows.add(wallpaperRow(context));
-        rows.add(usbRow(packages, nativeUnlock));
+        rows.add(rootsvcRow(packages));
+        rows.add(usbLeftoverRow(packages, nativeUnlock));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
         rows.add(row("Обработчик USB скрыт", hidden(packages, InstallPlan.USB_HANDLER), false, ""));
         rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
@@ -95,36 +95,29 @@ final class DclStatus {
         }
     }
 
-    /** With launcher 0.8.2+ the sticks program is a spare for old launchers only, so it is optional. */
-    private static DclStatus usbRow(PackageManager packages, boolean nativeUnlock) {
-        if (nativeUnlock) {
-            boolean present = usbPackage(packages) != null;
-            return row("Программа флешек (запасная)", !present, true,
-                    present ? "установлена; кнопка «Удалить программу флешек» внизу экрана"
-                            : "не нужна: флешки подключает лаунчер");
+    private static DclStatus rootsvcRow(PackageManager packages) {
+        PackageInfo info = packageInfo(packages, InstallPlan.ROOTSVC);
+        if (info == null) {
+            return row("Root-служба", false, false, "не установлена; ставится вместе с DCL");
         }
-        return row("Программа флешек", usbReady(packages), false, usbDetail(packages));
+        String detail = info.versionName == null ? InstallPlan.ROOTSVC : info.versionName;
+        return row("Root-служба", true, false, detail);
     }
 
-    private static boolean usbReady(PackageManager packages) {
-        PackageInfo info = usbPackage(packages);
-        if (info == null || info.applicationInfo == null) return false;
-        return (info.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) == 0;
-    }
-
-    private static String usbDetail(PackageManager packages) {
-        PackageInfo info = usbPackage(packages);
-        if (info == null) return "не установлена";
-        if (info.applicationInfo != null
-                && (info.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) != 0) {
-            return "установлена, но не запускается после загрузки";
+    /** Leftover UsbMount is optional noise; install/setup uninstalls it. */
+    private static DclStatus usbLeftoverRow(PackageManager packages, boolean nativeUnlock) {
+        boolean present = packageInfo(packages, InstallPlan.USB_MOUNT) != null;
+        if (!present) {
+            return row("Старая программа флешек", true, true,
+                    nativeUnlock ? "не нужна" : "удалена");
         }
-        return info.versionName == null ? "" : info.versionName;
+        return row("Старая программа флешек", false, true,
+                "ещё установлена; кнопка «Удалить программу флешек» внизу");
     }
 
-    private static PackageInfo usbPackage(PackageManager packages) {
+    private static PackageInfo packageInfo(PackageManager packages, String name) {
         try {
-            return packages.getPackageInfo("vad.dashing.usbmount", 0);
+            return packages.getPackageInfo(name, 0);
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }
@@ -183,7 +176,7 @@ final class DclStatus {
         String script = InstallPlan.appOpsGrantScript(context.getPackageName());
         try {
             new File("/sdcard/dcl_appops_grant.txt").delete();
-            MbDaemon.run(script, MbDaemon.APPOPS_BODY);
+            RootExec.armShort(context, script, MbDaemon.APPOPS_BODY, 15_000L);
             long deadline = System.currentTimeMillis() + 15000L;
             File result = new File("/sdcard/dcl_appops_grant.txt");
             while (System.currentTimeMillis() < deadline && !result.isFile()) {

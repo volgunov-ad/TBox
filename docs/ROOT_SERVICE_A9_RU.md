@@ -85,10 +85,10 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 | Клиент | Статус |
 |---|---|
 | `:camd` / `:camdbench` | переведены: rootsvc primary + `MbDaemonChannel` fallback (`CamdRootChannel` / `RootChannel`) |
-| `dcl_install` | follow-up: ставить APK + выдать a11y; бут-фикс через службу |
+| `dcl_install` | ставит APK из assets, выдаёт storage + a11y; бут-фикс и короткие скрипты через службу |
 | Dashing Store | follow-up: карточка каталога |
-| Monitor | follow-up: карточка статуса |
-| UsbMount | follow-up: удаление (DCL 0.8.2+ уже разблокирует USB) |
+| Monitor | карточка Root-служба в Настройки → Система |
+| UsbMount | удалён (`tools/usb_mount/`); `dcl_install` делает `pm uninstall vad.dashing.usbmount` |
 
 Явный broadcast: `vad.dashing.rootsvc.ENSURE` (exported). Пакет в `<queries>` у клиентов.
 

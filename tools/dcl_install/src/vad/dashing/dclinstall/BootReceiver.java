@@ -19,14 +19,14 @@ import java.io.InputStream;
 /**
  * After unlock, let vold scan USB sticks when this launcher still needs it, put DCL's
  * notification listener and accessibility service back, and restore the boot wallpaper
- * if the system dropped it. BOOT_COMPLETED is ordered: holding it would delay every later
- * receiver, UsbMount included. So boot only sets an alarm, and the alarm arms the script
- * once UsbMount has used /sdcard/autorun.sh.
+ * if the system dropped it. Prefer rootsvc typed commands; fall back to mb_daemon.
+ * BOOT_COMPLETED is ordered: holding it would delay every later receiver. Boot only
+ * sets an alarm, then arms once.
  */
 public class BootReceiver extends BroadcastReceiver {
     static final String ACTION_ARM = "vad.dashing.dclinstall.ARM";
     private static final String TAG = "DclInstallBoot";
-    private static final long USB_MOUNT_DELAY_MS = 20_000L;
+    private static final long BOOT_DELAY_MS = 20_000L;
     private static final String STAMP = "boot_fix_boot.txt";
 
     @Override
@@ -57,7 +57,7 @@ public class BootReceiver extends BroadcastReceiver {
                 context, 0, arm, PendingIntent.FLAG_UPDATE_CURRENT);
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         alarms.setExact(AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + USB_MOUNT_DELAY_MS, operation);
+                SystemClock.elapsedRealtime() + BOOT_DELAY_MS, operation);
         Log.i(TAG, "boot fix scheduled");
     }
 
@@ -95,11 +95,18 @@ public class BootReceiver extends BroadcastReceiver {
             Log.i(TAG, "restore wallpaper " + restoreWallpaper
                     + " native unlock " + nativeUnlock
                     + " unlock usb " + unlockUsb);
-            String script = new InstallPlan("", false, false, false, false, false, false, nativeUnlock)
-                    .toBootScript(helper.getAbsolutePath(), unlock.getAbsolutePath(), restoreWallpaper, unlockUsb);
-            MbDaemon.run(script, MbDaemon.BOOT_BODY);
+            boolean channelArmed = RootExec.bootFix(
+                    context,
+                    helper.getAbsolutePath(),
+                    unlock.getAbsolutePath(),
+                    restoreWallpaper,
+                    unlockUsb,
+                    nativeUnlock);
             markThisBoot(context);
-            Log.i(TAG, "boot fix armed");
+            if (!channelArmed) {
+                RootRun.release();
+            }
+            Log.i(TAG, channelArmed ? "boot fix armed" : "boot fix via rootsvc");
         } catch (Exception e) {
             RootRun.release();
             throw e;
