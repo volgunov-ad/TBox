@@ -3,18 +3,46 @@ package vad.dashing.rootsvc.daemon;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
-/** Resolves package names for a uid via {@code pm list packages -U}. */
+import vad.dashing.rootsvc.client.PmListParser;
+import vad.dashing.rootsvc.client.RootSvcProtocol;
+
+/** Resolves package names for a uid via {@code pm list packages -U}, with a short TTL cache. */
 public final class PeerPackages {
+    private static final ConcurrentHashMap<Integer, CacheEntry> CACHE =
+            new ConcurrentHashMap<Integer, CacheEntry>();
+
     private PeerPackages() {
     }
 
     public static List<String> forUid(int uid) {
-        List<String> out = new ArrayList<String>();
         if (uid < 0) {
-            return out;
+            return Collections.emptyList();
         }
+        long now = System.currentTimeMillis();
+        CacheEntry cached = CACHE.get(Integer.valueOf(uid));
+        if (cached != null && now - cached.atMs < RootSvcProtocol.PEER_CACHE_TTL_MS) {
+            return cached.packages;
+        }
+        List<String> looked = lookup(uid);
+        List<String> frozen = Collections.unmodifiableList(new ArrayList<String>(looked));
+        CACHE.put(Integer.valueOf(uid), new CacheEntry(frozen, now));
+        return frozen;
+    }
+
+    /** Drop cached packages for {@code uid} (e.g. after an unexpected allowlist miss). */
+    public static void invalidate(int uid) {
+        CACHE.remove(Integer.valueOf(uid));
+    }
+
+    public static void clearCache() {
+        CACHE.clear();
+    }
+
+    private static List<String> lookup(int uid) {
         try {
             Process process = new ProcessBuilder("pm", "list", "packages", "-U")
                     .redirectErrorStream(true)
@@ -27,43 +55,20 @@ public final class PeerPackages {
                 buf.write(tmp, 0, n);
             }
             process.waitFor();
-            String text = buf.toString("UTF-8");
-            String[] lines = text.split("\n");
-            String needle = "uid:" + uid;
-            for (int i = 0; i < lines.length; i++) {
-                String line = lines[i].trim();
-                // package:name uid:10123   or package:name uid:10123 user:0
-                if (!line.startsWith("package:")) {
-                    continue;
-                }
-                if (!line.contains(needle)) {
-                    continue;
-                }
-                // Avoid matching uid:1012 when looking for uid:101.
-                int idx = line.indexOf(needle);
-                int after = idx + needle.length();
-                if (after < line.length()) {
-                    char c = line.charAt(after);
-                    if (c >= '0' && c <= '9') {
-                        continue;
-                    }
-                }
-                String name = line.substring("package:".length()).trim();
-                int space = name.indexOf(' ');
-                if (space > 0) {
-                    name = name.substring(0, space);
-                }
-                int tab = name.indexOf('\t');
-                if (tab > 0) {
-                    name = name.substring(0, tab);
-                }
-                if (name.length() > 0) {
-                    out.add(name);
-                }
-            }
+            return PmListParser.forUid(buf.toString("UTF-8"), uid);
         } catch (Exception error) {
             ServiceLog.warn("pm list " + error.getMessage());
+            return new ArrayList<String>();
         }
-        return out;
+    }
+
+    private static final class CacheEntry {
+        final List<String> packages;
+        final long atMs;
+
+        CacheEntry(List<String> packages, long atMs) {
+            this.packages = packages;
+            this.atMs = atMs;
+        }
     }
 }

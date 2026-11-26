@@ -1,7 +1,6 @@
 package vad.dashing.dclinstall;
 
 import android.content.Context;
-import android.os.SystemClock;
 import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -19,7 +18,7 @@ import vad.dashing.rootsvc.client.RootSvcResult;
 final class RootExec {
     private static final String TAG = "DclRootExec";
     private static final String CLIENT = "vad.dashing.dclinstall";
-    private static final String CLIENT_VERSION = "1.23";
+    private static final String CLIENT_VERSION = "1.24";
 
     private RootExec() {}
 
@@ -159,22 +158,7 @@ final class RootExec {
     }
 
     private static void waitBootWindow() {
-        long uptime = SystemClock.elapsedRealtime();
-        if (uptime >= RootSvcProtocol.BOOT_WINDOW_MS) {
-            return;
-        }
-        long deadline = System.currentTimeMillis() + RootSvcProtocol.BOOT_WAIT_MS;
-        while (System.currentTimeMillis() < deadline) {
-            RootSvcClient.clearCache();
-            if (RootSvcClient.isUp()) {
-                return;
-            }
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException interrupted) {
-                return;
-            }
-        }
+        RootSvcClient.waitBootWindow();
     }
 
     private static void writeSideFiles(RootSvcResult result) throws Exception {

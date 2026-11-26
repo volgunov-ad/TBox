@@ -4,6 +4,14 @@
 При публикации поднять **versionCode** на 1 и править **versionName** (semver); сюда — блок с тем же номером сверху.
 Имя APK: `rootsvc-<versionName>-<debug|release>.apk`.
 
+1.0.3
+1. После ACK сбой клиента — `UNKNOWN_OUTCOME` (не `UNAVAILABLE`), чтобы не было двойного выполнения через mb_daemon; `script.run` обрезает stdout/stderr до 4 КиБ.
+2. `pm list packages -U` кэшируется (60 с); для `ping` пакеты не ищутся.
+3. ACK на потоке accept; ограниченная очередь → `busy`; `script.run` сериализован.
+4. Каталог службы 0711, `state`/`.ver` 0644 — crashloop и версия помощника читаются сторожем, Monitor и camd.
+5. `MY_PACKAGE_REPLACED` / `versionMatches` / `admin.upgrade` обновляют живой dex; boot-скрипт убивает старый супервизор при re-arm.
+6. `RootSvcClient.waitBootWindow` / `callWithBootWait` (5 с в первые 60 с); сторож только на A9 Mengbo.
+
 1.0.2
 1. Команды `status` и `admin.restart` для карточки Monitor; `SERVER_VERSION` 1.0.2.
 2. `admin.restart` выходит с кодом 43 — супервизор сбрасывает счётчик падений и перезапускает без паузы (код 0 больше не считается крашем).

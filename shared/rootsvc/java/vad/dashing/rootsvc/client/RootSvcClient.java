@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
 import android.os.Build;
+import android.os.SystemClock;
 
 import org.json.JSONObject;
 
@@ -33,12 +34,41 @@ public final class RootSvcClient {
             return true;
         }
         if (!cached.up && cached.known && now - cached.atMs < RootSvcProtocol.DOWN_CACHE_MS) {
-            return false;
+            // During the boot window the service may still be starting — do not trust a fresh "down".
+            if (SystemClock.elapsedRealtime() >= RootSvcProtocol.BOOT_WINDOW_MS) {
+                return false;
+            }
         }
         RootSvcResult r = call(RootSvcProtocol.CMD_PING, null, 1_000L, null, null);
         boolean up = r.isOk();
-        CACHE.set(new Cache(up, true, now));
+        CACHE.set(new Cache(up, true, System.currentTimeMillis()));
         return up;
+    }
+
+    /**
+     * In the first {@link RootSvcProtocol#BOOT_WINDOW_MS} after boot, poll the socket for up to
+     * {@link RootSvcProtocol#BOOT_WAIT_MS} before treating the service as missing. No-op after
+     * the window. Safe to call repeatedly.
+     */
+    public static void waitBootWindow() {
+        if (SystemClock.elapsedRealtime() >= RootSvcProtocol.BOOT_WINDOW_MS) {
+            return;
+        }
+        long deadline = System.currentTimeMillis() + RootSvcProtocol.BOOT_WAIT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            clearCache();
+            RootSvcResult r = call(RootSvcProtocol.CMD_PING, null, 1_000L, null, null);
+            if (r.isOk()) {
+                CACHE.set(new Cache(true, true, System.currentTimeMillis()));
+                return;
+            }
+            try {
+                Thread.sleep(200L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     public static void kick(Context context) {
@@ -69,6 +99,21 @@ public final class RootSvcClient {
         return call(cmd, args, resultTimeoutMs, null, null);
     }
 
+    /**
+     * {@link #waitBootWindow()} then {@link #call}. Prefer this from early-boot clients
+     * (camd, dcl_install) so a late socket does not look like {@code UNAVAILABLE}.
+     */
+    public static RootSvcResult callWithBootWait(
+            String cmd, JSONObject args, long resultTimeoutMs) {
+        return callWithBootWait(cmd, args, resultTimeoutMs, null, null);
+    }
+
+    public static RootSvcResult callWithBootWait(
+            String cmd, JSONObject args, long resultTimeoutMs, String client, String clientVersion) {
+        waitBootWindow();
+        return call(cmd, args, resultTimeoutMs, client, clientVersion);
+    }
+
     public static RootSvcResult call(
             String cmd, JSONObject args, long resultTimeoutMs, String client, String clientVersion) {
         long timeout = FallbackContract.resultTimeoutFor(cmd, resultTimeoutMs);
@@ -80,6 +125,7 @@ public final class RootSvcClient {
             CACHE.set(new Cache(false, true, System.currentTimeMillis()));
             return RootSvcResult.unavailable("connect: " + error.getMessage());
         }
+        boolean acked = false;
         try {
             String line = WireCodec.requestLine(id, cmd, args, client, clientVersion);
             OutputStream out = socket.getOutputStream();
@@ -96,6 +142,7 @@ public final class RootSvcClient {
             if (!WireCodec.isAck(ack)) {
                 return WireCodec.parseResult(ack);
             }
+            acked = true;
 
             String resultLine = readLine(in, timeout);
             if (resultLine == null) {
@@ -107,7 +154,9 @@ public final class RootSvcClient {
             }
             return result;
         } catch (Exception error) {
-            return RootSvcResult.unavailable("io: " + error.getMessage());
+            // After ACK the command may already be running — never map to UNAVAILABLE
+            // (that would trigger mb_daemon fallback / double execution).
+            return mapIoError(acked, id, error);
         } finally {
             try {
                 socket.close();
@@ -115,6 +164,15 @@ public final class RootSvcClient {
                 // Peer already gone.
             }
         }
+    }
+
+    /** Maps a mid-call IO failure; after ACK this must not become {@code UNAVAILABLE}. */
+    public static RootSvcResult mapIoError(boolean acked, String id, Exception error) {
+        String detail = error == null ? "io" : "io: " + error.getMessage();
+        if (acked) {
+            return RootSvcResult.unknownOutcome(id, detail);
+        }
+        return RootSvcResult.unavailable(detail);
     }
 
     /** Clear the isUp cache (tests / after kick). */
@@ -166,6 +224,10 @@ public final class RootSvcClient {
         }
         if (buf.size() == 0) {
             return null;
+        }
+        // Cap reached without newline — treat as truncated / unparseable for the caller.
+        if (buf.size() >= RootSvcProtocol.LINE_LIMIT) {
+            throw new IllegalStateException("line_too_long");
         }
         return new String(buf.toByteArray(), UTF8);
     }

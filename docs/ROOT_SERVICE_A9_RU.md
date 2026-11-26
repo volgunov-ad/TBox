@@ -55,7 +55,7 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 }
 ```
 
-С главного потока не вызывать. Константы `BOOT_WAIT_MS` / `BOOT_WINDOW_MS` (5 с в первые 60 с) есть в протоколе, но `RootSvcClient` окно загрузки **сам не ждёт** — клиент (DCL и др.) реализует ожидание сам; см. [DCL_ROOT_SERVICE_FOR_VENDOR_RU.md](DCL_ROOT_SERVICE_FOR_VENDOR_RU.md).
+С главного потока не вызывать. `RootSvcClient.waitBootWindow()` / `callWithBootWait(...)` ждут сокет до 5 с в первые 60 с после boot (`BOOT_WAIT_MS` / `BOOT_WINDOW_MS`). camd, camdbench и dcl_install используют это; DCL может звать те же методы из скопированного клиента.
 
 ### Ошибки и fallback (кратко)
 
@@ -65,20 +65,24 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 | `unsupported` / `proto` → `REJECTED` | старый путь |
 | `forbidden` / `bad_args` / `unknown_cmd` | **не** старый путь |
 | `failed` | **не** повторять старым путём |
-| ACK есть, результата нет → `UNKNOWN_OUTCOME` | старый путь только для идемпотентных |
-| `busy` | в текущей службе **не отдаётся** (пул без отказа); `shouldFallback(busy)` = false |
+| ACK есть, сбой IO / таймаут результата / слишком длинная строка → `UNKNOWN_OUTCOME` | старый путь только для идемпотентных (**не** для `script.run`) |
+| `busy` (очередь рабочих потоков полна) → `REJECTED` | `shouldFallback(busy)` = false — свой retry |
 
 ## Команды v1
 
 `ping`, `hello`, `admin.upgrade`, `pkg.*`, `settings.*` (в т.ч. `a11y.add/remove`), `svc.ctl` (`AVMapp`), `usb.unlock`, `wallpaper.set`, `helper.ensure`, `wm.list/resize/minimize/dismiss`, `power.reboot`, `script.run`.
 
-Авторизация: **только имя пакета** (uid → `pm list packages -U`). uid 0 — всегда. `script.run` — у всех пакетов из allowlist, включая DCL (`ras.dashing.tbox.launcher`).
+Авторизация: **только имя пакета** (uid → `pm list packages -U`, кэш 60 с; для `ping` lookup не делается). uid 0 — всегда. `script.run` — у всех пакетов из allowlist, включая DCL (`ras.dashing.tbox.launcher`); на службе сериализован (один одновременно). `stdout`/`stderr` в ответе обрезаются до 4 КиБ с хвоста.
+
+Каталог `/data/local/vad-rootsvc` — `0711`, `state` и `helpers/*.ver` — `0644` (сторож читает crashloop, camd — версию граббера).
+
+Сторож (`EnsureDaemon`) армит только на A9 Mengbo (`RELEASE=9` + `ro.wt.solution.provider=MB`). При замене APK сравнивает `hello.server` с `SERVER_VERSION` и вызывает `admin.upgrade`.
 
 ## Протокол захвата `mb_daemon`
 
 `MbDaemonChannel`: bind `vad.dashing.mbdaemon.lock` → ждать чужой `autorun.sh` → тело в свой файл → `autorun.sh` = `exec sh <тело>` через rename → флаг + `setprop` → ждать nonce в маркере. **Nonce в маркер пишет само тело скрипта** (`echo … > mark`); канал только ждёт. Скрипт **не** удаляет `$0` / общий флаг / не сбрасывает свойство.
 
-Авторизация пакетов на службе: `pm list packages -U` (не Binder `getPackagesForUid`). Ограничения DCL «appops/a11y/helper только для себя» в v1 **не проверяются**. `script.run` не сериализован; `wm.*` не проверяет коды выхода `am`.
+Авторизация пакетов на службе: `pm list packages -U` (не Binder `getPackagesForUid`). Ограничения DCL «appops/a11y/helper только для себя» в v1 **не проверяются**. `wm.*` не проверяет коды выхода `am`.
 
 ## Потребители
 

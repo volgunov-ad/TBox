@@ -3,23 +3,27 @@ package vad.dashing.rootsvc
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONObject
 import vad.dashing.rootsvc.client.MbDaemonChannel
 import vad.dashing.rootsvc.client.RootSvcClient
 import vad.dashing.rootsvc.client.RootSvcProtocol
+import vad.dashing.rootsvc.client.RootSvcResult
 
 /**
  * Single-flight ensure: PING → arm mb_daemon once per boot (limit 5) → wait for PING.
- * Dealer mode does not block (locked decision).
+ * Dealer mode does not block (locked decision). A9-only: never arms on A10.
  */
 object EnsureDaemon {
     private const val TAG = "RootsvcEnsure"
@@ -43,11 +47,24 @@ object EnsureDaemon {
 
     private fun doEnsure(context: Context, reason: String, force: Boolean) {
         Log.i(TAG, "ensure start reason=$reason force=$force")
-        RootSvcClient.clearCache()
-        if (!force && RootSvcClient.isUp() && versionMatches(context)) {
-            Log.i(TAG, "already up")
-            grantOwnA11yViaSettings(context)
+        if (!isA9Hu()) {
+            Log.w(TAG, "not A9 Mengbo HU — skip arm (RELEASE=${Build.VERSION.RELEASE})")
             return
+        }
+        RootSvcClient.clearCache()
+        if (!force && RootSvcClient.isUp()) {
+            if (versionMatches()) {
+                Log.i(TAG, "already up")
+                grantOwnA11yViaSettings(context)
+                return
+            }
+            Log.i(TAG, "server version mismatch — admin.upgrade")
+            if (tryUpgrade(context)) {
+                Log.i(TAG, "upgraded in place")
+                grantOwnA11yViaSettings(context)
+                return
+            }
+            Log.w(TAG, "admin.upgrade failed — re-arm supervisor")
         }
         if (!hasStoragePermission(context)) {
             Log.e(
@@ -94,9 +111,74 @@ object EnsureDaemon {
         Log.w(TAG, "service did not answer PING after arm")
     }
 
-    private fun versionMatches(context: Context): Boolean {
-        // Soft check: hello would compare; ping alone is enough for ensure.
-        return true
+    /** A9 Mengbo only — same gate as dcl_install. */
+    internal fun isA9Hu(): Boolean {
+        if (Build.VERSION.RELEASE != "9") return false
+        return getprop("ro.wt.solution.provider") == "MB"
+    }
+
+    private fun getprop(key: String): String {
+        return try {
+            val process = ProcessBuilder("getprop", key).start()
+            val out = ByteArrayOutputStream()
+            process.inputStream.use { input ->
+                val buf = ByteArray(256)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n <= 0) break
+                    out.write(buf, 0, n)
+                }
+            }
+            process.waitFor()
+            out.toString(StandardCharsets.UTF_8.name()).trim()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun versionMatches(): Boolean {
+        val hello = RootSvcClient.call(
+            RootSvcProtocol.CMD_HELLO,
+            null,
+            2_000L,
+            RootSvcProtocol.PACKAGE,
+            BuildConfig.VERSION_NAME,
+        )
+        if (!hello.isOk()) return false
+        val raw = hello.raw ?: return false
+        return try {
+            JSONObject(raw).optString("server") == RootSvcProtocol.SERVER_VERSION
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun tryUpgrade(context: Context): Boolean {
+        val dex = copyDex(context)
+        val sha = sha256(dex)
+        val args = JSONObject()
+            .put("path", dex.absolutePath)
+            .put("sha256", sha)
+        val result = RootSvcClient.call(
+            RootSvcProtocol.CMD_ADMIN_UPGRADE,
+            args,
+            RootSvcProtocol.HELPER_TIMEOUT_MS,
+            RootSvcProtocol.PACKAGE,
+            BuildConfig.VERSION_NAME,
+        )
+        if (!result.isOk() && result.kind != RootSvcResult.Kind.UNKNOWN_OUTCOME) {
+            Log.w(TAG, "admin.upgrade rejected: ${result.err ?: result.reason}")
+            return false
+        }
+        val deadline = System.currentTimeMillis() + 8_000L
+        while (System.currentTimeMillis() < deadline) {
+            RootSvcClient.clearCache()
+            if (RootSvcClient.isUp() && versionMatches()) {
+                return true
+            }
+            Thread.sleep(200)
+        }
+        return false
     }
 
     private fun noteArm(context: Context, force: Boolean): Boolean {
@@ -160,6 +242,7 @@ object EnsureDaemon {
         val supervisorSrc = "$files/supervisor.sh"
         val a11y = RootSvcProtocol.WATCHDOG_A11Y
         val dir = RootSvcProtocol.DIR
+        val helpers = RootSvcProtocol.HELPERS_DIR
         val mark = RootSvcProtocol.ARM_MARKER
         val dexDest = RootSvcProtocol.DEX_PATH
         val state = RootSvcProtocol.STATE_PATH
@@ -172,12 +255,13 @@ object EnsureDaemon {
             append("#!/system/bin/sh\n")
             append("# ").append(RootSvcProtocol.OWN_MARKER).append('\n')
             append("DIR=").append(dir).append('\n')
+            append("HELPERS=").append(helpers).append('\n')
             append("MARK=").append(mark).append('\n')
             append("DEX_SRC=").append(qDex).append('\n')
             append("SUP_SRC=").append(qSup).append('\n')
             append("EXPECT_SHA=").append(sha).append('\n')
-            append("mkdir -p \"${'$'}DIR\"\n")
-            append("chmod 700 \"${'$'}DIR\"\n")
+            append("mkdir -p \"${'$'}DIR\" \"${'$'}HELPERS\"\n")
+            append("chmod 711 \"${'$'}DIR\" \"${'$'}HELPERS\"\n")
             append("cur=${'$'}(settings get secure enabled_accessibility_services 2>/dev/null)\n")
             append("case \"${'$'}cur\" in\n")
             append("  *\"").append(a11y).append("\"*) : ;;\n")
@@ -197,15 +281,18 @@ object EnsureDaemon {
             append("  exit 1\n")
             append("fi\n")
             append("mv \"${'$'}DIR/rootsvc.dex.new\" ").append(dexDest).append('\n')
-            append("cp \"${'$'}SUP_SRC\" \"${'$'}DIR/supervisor.sh\"\n")
+            // Atomic replace of supervisor (N8): temp then mv, not cp onto running inode.
+            append("cp \"${'$'}SUP_SRC\" \"${'$'}DIR/supervisor.sh.new\"\n")
+            append("mv \"${'$'}DIR/supervisor.sh.new\" \"${'$'}DIR/supervisor.sh\"\n")
             append("chmod 700 \"${'$'}DIR/supervisor.sh\" ").append(dexDest).append('\n')
             append("rm -f ").append(state).append('\n')
+            // We only arm when a restart is needed — kill a live supervisor so the new dex runs.
             append("if [ -f ").append(pidFile).append(" ]; then\n")
             append("  old=${'$'}(cat ").append(pidFile).append(")\n")
             append("  if kill -0 \"${'$'}old\" 2>/dev/null; then\n")
-            append("    echo \"already ").append(nonce).append("\" > \"${'$'}MARK\"\n")
-            append("    chmod 666 \"${'$'}MARK\"\n")
-            append("    exit 0\n")
+            append("    kill \"${'$'}old\" 2>/dev/null\n")
+            append("    sleep 0.3\n")
+            append("    kill -9 \"${'$'}old\" 2>/dev/null\n")
             append("  fi\n")
             append("fi\n")
             append("setsid /system/bin/sh \"${'$'}DIR/supervisor.sh\" >> ").append(log)
@@ -223,7 +310,7 @@ object EnsureDaemon {
     private fun grantOwnA11yViaSettings(context: Context) {
         // Soft path when we already have root service: ask it.
         try {
-            val args = org.json.JSONObject()
+            val args = JSONObject()
                 .put("component", RootSvcProtocol.WATCHDOG_A11Y)
             RootSvcClient.call(RootSvcProtocol.CMD_SETTINGS_A11Y_ADD, args, 5_000L)
         } catch (_: Exception) {
@@ -233,7 +320,7 @@ object EnsureDaemon {
 
     private fun grantOwnA11yViaService() {
         try {
-            val args = org.json.JSONObject()
+            val args = JSONObject()
                 .put("component", RootSvcProtocol.WATCHDOG_A11Y)
             RootSvcClient.call(
                 RootSvcProtocol.CMD_SETTINGS_A11Y_ADD,

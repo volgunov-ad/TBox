@@ -12,7 +12,7 @@ class SupervisorExitCodesTest {
     fun upgradeAndRestartCodesAreDistinctFromCrash() {
         assertEquals(42, RootSvcProtocol.EXIT_UPGRADE)
         assertEquals(43, RootSvcProtocol.EXIT_RESTART)
-        assertEquals("1.0.2", RootSvcProtocol.SERVER_VERSION)
+        assertEquals("1.0.3", RootSvcProtocol.SERVER_VERSION)
     }
 
     @Test
@@ -26,5 +26,14 @@ class SupervisorExitCodesTest {
         val idx43 = script.indexOf("code\" -eq 43")
         val idxFail = script.indexOf("FAILS=\$((FAILS + 1))")
         assertTrue(idx43 >= 0 && idxFail > idx43)
+    }
+
+    @Test
+    fun supervisorExposesReadableStateDir() {
+        val script = File("src/main/assets/supervisor.sh").readText()
+            .replace("\r\n", "\n")
+        assertTrue(script.contains("chmod 711"))
+        assertTrue(script.contains("chmod 644 \"\$STATE\""))
+        assertTrue(script.contains("write_state"))
     }
 }

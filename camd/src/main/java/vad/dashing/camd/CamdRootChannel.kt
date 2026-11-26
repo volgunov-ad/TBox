@@ -119,7 +119,7 @@ object CamdRootChannel {
         while (attempt < CamdRootBridge.BUSY_RETRIES) {
             attempt++
             val result = runCatching {
-                RootSvcClient.call(cmd, args, timeoutMs)
+                RootSvcClient.callWithBootWait(cmd, args, timeoutMs)
             }.getOrElse { error ->
                 RootSvcResult.unavailable("call: ${error.message}")
             }

@@ -64,7 +64,7 @@ shared/rootsvc/java/vad/dashing/rootsvc/client/*.java
 | `RootSvcClient` | `call(cmd, args, timeoutMs)`, `isUp()`, `kick(Context)` |
 | `RootSvcResult` | `Kind`: `OK` / `FAILED` / `REJECTED` / `UNKNOWN_OUTCOME` / `UNAVAILABLE` |
 | `FallbackContract` | `shouldFallback(result, cmd)`, таймауты результата |
-| `RootSvcProtocol` | константы сокета, ошибок, команд, таймаутов (`BOOT_WAIT_MS` / `BOOT_WINDOW_MS` — только константы) |
+| `RootSvcProtocol` | константы сокета, ошибок, команд, таймаутов (`BOOT_WAIT_MS` / `BOOT_WINDOW_MS`) |
 | `Allowlist` | справочно: `PKG_DCL`, набор caps (на стороне службы) |
 | `MbDaemonChannel` | протокол захвата `mb_daemon` для legacy-пути |
 
@@ -76,7 +76,7 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 }
 ```
 
-`RootSvcClient` **не** ждёт сокет в окне загрузки: константы `BOOT_WAIT_MS` (5 с) / `BOOT_WINDOW_MS` (60 с) есть, но общий клиент их не применяет. DCL должен сам подождать до 5 с в первые 60 с после boot, прежде чем уходить в legacy (см. §6.1).
+`RootSvcClient.waitBootWindow()` / `callWithBootWait(...)` ждут сокет до 5 с в первые 60 с после boot. Предпочитайте их на старте / `BOOT_COMPLETED`, прежде чем уходить в legacy (см. §6.1).
 
 ---
 
@@ -108,11 +108,11 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 | `unknown_cmd` | неизвестная команда | **нет** |
 | `unsupported` | команды нет на этом ГУ / в этой сборке | **да** |
 | `proto` | несовместимая версия протокола | **да** |
-| `busy` | задумано «очередь полна» | **сейчас служба `busy` не отдаёт** (пул 4 потока с неограниченной очередью). `FallbackContract.shouldFallback` для `busy` = `false` — общий пример из §2.1 на legacy сам не уйдёт; при появлении `busy` в будущем нужен свой retry |
+| `busy` | очередь рабочих потоков полна (ёмкость 8) | `FallbackContract.shouldFallback(busy)` = `false` — нужен свой retry (×3), не legacy |
 | `timeout` | команда не уложилась на стороне службы | по контракту клиента |
 | `failed` | выполнилось с ошибкой (`exit` / `stderr` / `msg`) | **нет** — действие уже было |
 
-Клиентское `UNAVAILABLE` (нет сокета / нет `ACK` за 1 с) в провод не попадает: его выставляет `RootSvcClient`. Под нагрузкой (пул занят долгими командами) `ACK` тоже может не прийти за 1 с → клиент увидит `UNAVAILABLE` и пойдёт в legacy.
+Клиентское `UNAVAILABLE` (нет сокета / нет `ACK` за 1 с) в провод не попадает: его выставляет `RootSvcClient`. `ACK` шлёт поток accept до постановки в очередь; при полной очереди после `ACK` приходит `busy`. Сбой **после** `ACK` (в т.ч. ответ длиннее 16 КиБ) — `UNKNOWN_OUTCOME`, не `UNAVAILABLE` (иначе legacy даст двойное выполнение).
 
 ### 3.3. Таймауты
 
@@ -290,9 +290,10 @@ DCL с `script.run` и так имеет полный root; это не повы
 
 Фактически в v1:
 
-- **параллельность:** сериализации нет — несколько `script.run` могут идти сразу (пул из 4 рабочих потоков);
+- **параллельность:** один `script.run` одновременно (семафор); остальные команды — пул из 4 потоков с очередью 8 (`busy` при переполнении);
 - **журнал службы:** пишутся uid, команда, `ok`/`err` — **тело скрипта в лог не пишется**;
-- ответная JSON-строка должна укладываться в 16 КиБ на стороне клиента (`LINE_LIMIT`); очень длинный `stdout`/`stderr` может оборвать разбор — перенаправляйте болтливый вывод в файл на устройстве.
+- служба обрезает `stdout`/`stderr` до 4 КиБ с хвоста; клиентский `LINE_LIMIT` = 16 КиБ. Болтливый вывод всё же лучше перенаправлять в файл на устройстве.
+
 
 ---
 
@@ -300,11 +301,11 @@ DCL с `script.run` и так имеет полный root; это не повы
 
 1. Скопировать `shared/rootsvc/.../client/*.java` в исходники DCL (тот же пакет `vad.dashing.rootsvc.client`).
 2. В манифест: `<queries>` на `vad.dashing.rootsvc`.
-3. На старте / `BOOT_COMPLETED`: своё ожидание сокета в окне boot → `hello` → при успехе `usb.unlock` + `wm.*`; иначе legacy с `MbDaemonChannel` (nonce в теле скрипта).
+3. На старте / `BOOT_COMPLETED`: `RootSvcClient.waitBootWindow()` или `callWithBootWait` → `hello` → при успехе `usb.unlock` + `wm.*`; иначе legacy с `MbDaemonChannel` (nonce в теле скрипта).
 4. Кнопку «домой» вести через `wm.list`/`wm.minimize` + свой `startActivity` (как в [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md)). Не полагаться на коды выхода `am` в ответе `wm.*`.
 5. Убрать безусловный `rm -f "$0"` / сброс свойства в хвосте legacy-скрипта; брать блокировку канала.
 6. При `forbidden`/`bad_args` писать в журнал DCL и не маскировать legacy-путём.
-7. Не рассчитывать на `busy` от службы и на серверную проверку «только свой пакет/путь».
+7. На `busy` — свой retry (×3); не рассчитывать на серверную проверку «только свой пакет/путь».
 
 ---
 

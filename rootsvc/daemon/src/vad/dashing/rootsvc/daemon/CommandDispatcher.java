@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import vad.dashing.rootsvc.client.RootSvcProtocol;
+import vad.dashing.rootsvc.client.WireCodec;
 
 /** Dispatches allowlisted commands. */
 public final class CommandDispatcher {
@@ -280,8 +281,9 @@ public final class CommandDispatcher {
         try {
             Shell.Result r = Shell.run(timeout, "/system/bin/sh", tmp.getAbsolutePath());
             JSONObject o = finishShell(id, r, start);
-            o.put("stdout", r.stdout);
-            o.put("stderr", r.stderr);
+            // Cap so the JSON result line stays under client LINE_LIMIT (16 KiB).
+            o.put("stdout", WireCodec.truncateTail(r.stdout, RootSvcProtocol.SCRIPT_OUTPUT_LIMIT));
+            o.put("stderr", WireCodec.truncateTail(r.stderr, RootSvcProtocol.SCRIPT_OUTPUT_LIMIT));
             return o;
         } finally {
             tmp.delete();

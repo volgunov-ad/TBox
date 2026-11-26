@@ -5,7 +5,7 @@ package vad.dashing.rootsvc.client;
  */
 public final class RootSvcProtocol {
     public static final int PROTO = 1;
-    public static final String SERVER_VERSION = "1.0.2";
+    public static final String SERVER_VERSION = "1.0.3";
     /** Supervisor: refresh dex and restart immediately (not a crash). */
     public static final int EXIT_UPGRADE = 42;
     /** Supervisor: deliberate {@code admin.restart} — reset fail counter, no backoff. */
@@ -21,6 +21,7 @@ public final class RootSvcProtocol {
             "vad.dashing.rootsvc/vad.dashing.rootsvc.RootsvcAccessibilityService";
 
     public static final String DIR = "/data/local/vad-rootsvc";
+    public static final String HELPERS_DIR = DIR + "/helpers";
     public static final String DEX_PATH = DIR + "/rootsvc.dex";
     public static final String STATE_PATH = DIR + "/state";
     public static final String LOG_PATH = DIR + "/rootsvc.log";
@@ -34,6 +35,12 @@ public final class RootSvcProtocol {
     public static final String AUTORUN_PROP = "vendor.autorun.sdcard.logfile";
 
     public static final int LINE_LIMIT = 16 * 1024;
+    /** Cap each of stdout/stderr in {@code script.run} so the JSON line fits under {@link #LINE_LIMIT}. */
+    public static final int SCRIPT_OUTPUT_LIMIT = 4 * 1024;
+    /** Worker pool queue; overflow → wire {@code busy}. */
+    public static final int WORKER_QUEUE_CAPACITY = 8;
+    /** uid → packages cache TTL for {@code pm list packages -U}. */
+    public static final long PEER_CACHE_TTL_MS = 60_000L;
     public static final long CONNECT_TIMEOUT_MS = 300L;
     public static final long ACK_TIMEOUT_MS = 1_000L;
     public static final long DEFAULT_RESULT_TIMEOUT_MS = 5_000L;
