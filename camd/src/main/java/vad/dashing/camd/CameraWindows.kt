@@ -510,6 +510,15 @@ class CameraWindows(private val context: Context) {
 
     /** If the process died after stopping AVMapp, the next start puts it back. */
     fun recover() {
+        // Root goes to other apps first at boot (DCL mounts USB sticks through mb_daemon);
+        // the keep flag is re-read after the pause, a window or the recorder may stop AVM sooner.
+        if (synchronized(lock) { keepAvmStopped() }) {
+            try {
+                Thread.sleep(KEEP_AVM_START_DELAY_MS)
+            } catch (_: InterruptedException) {
+                return
+            }
+        }
         val needStop = synchronized(lock) {
             if (keepAvmStopped()) {
                 markAvmStopped()
@@ -919,6 +928,7 @@ class CameraWindows(private val context: Context) {
 
     companion object {
         const val KEEP_AVM_STOPPED_KEY = "keep_avm_stopped"
+        private const val KEEP_AVM_START_DELAY_MS = 5_000L
         const val SHOW_CLOSE_BUTTON_KEY = "show_close_button"
         const val TAP_TO_CLOSE_KEY = "tap_to_close"
         const val RECORDER_INPUTS_KEY = "recorder_inputs"

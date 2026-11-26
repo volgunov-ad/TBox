@@ -1849,7 +1849,7 @@ private fun SettingsTab(
         checked = state.keepAvmStopped,
         enabled = !state.busy,
         title = "Держать штатный AVM отключенным",
-        description = "Штатный AVM выключается сразу и остаётся выключенным после перезагрузки. " +
+        description = "Штатный AVM выключается сразу, а после перезагрузки — через 5 с после старта. " +
             "Выключение опции закрывает сырые окна и сразу включает его.",
         onCheckedChange = onKeepAvm,
     )
