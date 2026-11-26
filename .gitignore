@@ -57,6 +57,7 @@ camd/src/main/assets/camd_grab
 camdbench/src/main/assets/camdbench_sampler
 
 hu_perf_results/
+hu_mbd_bench_results/
 
 # R8 mapping.txt of published APKs (tools/build_ota_release.py), ~100 MB each
 release-mapping/

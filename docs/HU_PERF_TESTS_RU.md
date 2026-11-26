@@ -10,6 +10,7 @@
 | `hu_perf_sample.sh` | ГУ (`/data/local/tmp`) | каждые 5 с до заданного аптайма: строка `cpu` из `/proc/stat`, `utime+stime` процесса пакета, loadavg; `top` в начале и в конце |
 | `hu_perf_switch.sh` | ГУ | N циклов «`am start -W` активности → 3 с → BACK → 3 с», CPU до/после, `dumpsys gfxinfo` пакета (сброс перед циклами) |
 | `hu_perf_analyze.py` | ПК (Python 3, stdlib) | сводная таблица по папкам прогонов, колонки рядом |
+| `hu_mb_daemon_bench.ps1` + `hu_mb_daemon_bench.sh` | ПК → ГУ A9 | семантика `mb_daemon` (W0): задержка взвода, удаление `autorun.sh`, poll при взведённом свойстве, `rename` на `/sdcard`, гонка двух писателей; `-Boot` — первый ответ после загрузки и метки Accessibility |
 
 ## 1. Порядок
 
@@ -108,3 +109,18 @@ TBox Monitor стартует на загрузке как сервис (без 
 - Статус `speed` переживает перезагрузку (`[status=speed] [reason=unknown]`), но любая установка/обновление APK возвращает `speed-profile` с почти пустым профилем — компиляцию повторять после каждого обновления.
 - Сама загрузка ГУ одинакова во всех прогонах: `boot_progress_enable_screen` ~10,9 с, конец загрузочной анимации ~40,9 с, процессы TBox Monitor и лаунчера стартуют на ~42 с, adb по Wi-Fi — ~56–60 с.
 - Лаунчер 0.6.9-en и 0.7.0-ru подписаны разными ключами: обновление поверх даёт `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, переход — только через удаление, данные лаунчера теряются.
+
+## 4. Семантика `mb_daemon` на A9 (W0)
+
+Замер канала root на A9 до общей root-службы: когда демон удаляет `/sdcard/autorun.sh`, подхватывает ли он файл при уже взведённом `vendor.autorun.sdcard.logfile`, атомарность `rename` на `/sdcard`, гонки двух писателей, задержка «setprop → маркер», при `-Boot` — первый успешный взвод после загрузки и строки bind спецвозможности в logcat.
+
+Пошаговая инструкция для стенда (LAN ADB): [`tools/hu_perf/ИНСТРУКЦИЯ_MB_DAEMON.md`](../tools/hu_perf/ИНСТРУКЦИЯ_MB_DAEMON.md). Фон канала: [HEAD_UNITS_DEVICE_NOTES_RU.md](HEAD_UNITS_DEVICE_NOTES_RU.md) §10.1.
+
+```
+cd tools/hu_perf
+adb connect 192.168.1.128:5555
+.\hu_mb_daemon_bench.ps1 -Device 192.168.1.128:5555
+.\hu_mb_daemon_bench.ps1 -Boot -Device 192.168.1.128:5555
+```
+
+Параметры: `-Suite all|arm|delete|poll|rearm|rename|race`, `-Tag`, `-OutDir` (по умолчанию `.\hu_mbd_bench_results`), `-A11yPkg` (фильтр logcat при `-Boot`). APK не ставит; после прогона канал очищается.
