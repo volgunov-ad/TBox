@@ -119,11 +119,14 @@ public final class SessionTest {
     }
 
     private static boolean arm() {
-        String script = ArmScript.text("/data/local/tmp/dclwm.dex");
+        String script = ArmScript.text("/data/local/tmp/dclwm.dex", "n1");
         return script.indexOf('\r') < 0
                 && script.startsWith("#!/system/bin/sh\n")
                 && script.contains("DEX='/data/local/tmp/dclwm.dex'\n")
-                && script.contains("setsid /system/bin/app_process /system/bin vad.dashing.dclwm.Helper");
+                && script.contains("setsid /system/bin/app_process /system/bin vad.dashing.dclwm.Helper")
+                && script.contains("started n1")
+                && !script.contains("rm -f \"$0\"")
+                && !script.contains("setprop " + Protocol.AUTORUN_PROP + " ''");
     }
 
     private static String sample(

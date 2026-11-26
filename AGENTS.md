@@ -29,6 +29,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.1.9). Th
 | **Boot / autostart** | `BootCompleteReceiver`, `MainScreenBootOpen.kt`, `BackgroundService` | [docs/BOOT_AUTOSTART_DEVICE_RU.md](docs/BOOT_AUTOSTART_DEVICE_RU.md) |
 | **Wi-Fi SoftAP → ESP32 router** | (firmware research, `app_process` helper) | [docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md](docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md) (A9), [docs/WIFI_SOFTAP_A10_RU.md](docs/WIFI_SOFTAP_A10_RU.md) (A10) |
 | **A9 camera preview (AIS)** | `:camview` (processed `*_sharecamera`); `:camd` (clean qcarcam window) | [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md) — `ais_server` sockets, qcarcam XML windows, root-only connect, inputs 0/1/3/4/5/8/9 |
+| **A9 shared root service** | `:rootsvc` (watchdog APK + `app_process` daemon); client `:rootclient` / `shared/rootsvc/` | [docs/ROOT_SERVICE_A9_RU.md](docs/ROOT_SERVICE_A9_RU.md) — abstract socket `vad.dashing.rootsvc`, JSON v1, mb_daemon channel lock, A9 only in v1 |
 
 Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are computed **only during an active trip** (`CanFramesProcess` gate); refuel records are created inside `BackgroundService.applyActiveTripFuelStep`.
 
@@ -179,6 +180,17 @@ Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing
 ```
 ./gradlew :camview:assembleDebug
 ./gradlew :camview:assembleRelease
+```
+
+### Shared root service (`:rootsvc`) and `:rootclient`
+
+Separate app **TBox Root** (`vad.dashing.rootsvc`) for A9 HUs: Accessibility + `BOOT_COMPLETED` watchdog arms `mb_daemon` once per boot to start a root `app_process` daemon on abstract socket `vad.dashing.rootsvc` (JSON line protocol v1, package-name allowlist, `script.run`, `helper.ensure`, `wm.*`). Client library: pure Java under `shared/rootsvc/` (DCL copies as-is) and Gradle module `:rootclient`. Docs and DCL guide: [docs/ROOT_SERVICE_A9_RU.md](docs/ROOT_SERVICE_A9_RU.md). A10, consumer migration, UsbMount removal, Store/`dcl_install` install hooks — follow-up PRs.
+
+```
+./gradlew :rootclient:assembleDebug
+./gradlew :rootsvc:testDebugUnitTest
+./gradlew :rootsvc:assembleDebug
+./gradlew :rootsvc:assembleRelease
 ```
 
 ### Camera window app (`:camd`)

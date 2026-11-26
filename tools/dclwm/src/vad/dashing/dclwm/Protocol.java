@@ -3,6 +3,8 @@ package vad.dashing.dclwm;
 /** Shared names for the window helper and the launcher that talks to it. */
 public final class Protocol {
     public static final String SOCKET = "dclwm";
+    /** Shared mb_daemon channel lock (same name as rootsvc MbDaemonChannel). */
+    public static final String LOCK_SOCKET = "vad.dashing.mbdaemon.lock";
     public static final String LAUNCHER_PACKAGE = "ras.dashing.tbox.launcher";
     /** Off-screen stack rect. A 1x1 resize stays visible: this firmware clamps it to 88 px. */
     public static final int OFF_LEFT = 2000;
