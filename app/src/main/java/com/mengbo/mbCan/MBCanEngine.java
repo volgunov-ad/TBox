@@ -124,18 +124,18 @@ public class MBCanEngine extends MBCanClient {
     private ICanBaseCallback mCanCallback = new ICanBaseCallback() { // from class: com.mengbo.mbCan.MBCanEngine.1
         @Override // com.mengbo.mbCan.interfaces.ICanBaseCallback
         public void onCanDataCallback(final int i, final Object obj) {
-            MBCanEngine.this.canHandler.postDelayed(new Runnable() { // from class: com.mengbo.mbCan.MBCanEngine.1.1
-                @Override // java.lang.Runnable
-                public void run() {
-                    if (obj != null) {
-                        String str = MBCanEngine.TAG;
-                        Log.d(str, MBCanEngine.this.mIMBLogListener + "run: " + i + ",data =" + obj.toString());
-                        if (MBCanEngine.this.mIMBLogListener != null) {
-                            MBCanEngine.this.mIMBLogListener.onLog(obj.toString());
+            // No logcat here: a toString per CAN frame is ~500 lines/s and overwrites the boot log.
+            if (obj != null && MBCanEngine.this.mIMBLogListener != null) {
+                MBCanEngine.this.canHandler.postDelayed(new Runnable() { // from class: com.mengbo.mbCan.MBCanEngine.1.1
+                    @Override // java.lang.Runnable
+                    public void run() {
+                        IMBLogListener listener = MBCanEngine.this.mIMBLogListener;
+                        if (listener != null) {
+                            listener.onLog(obj.toString());
                         }
                     }
-                }
-            }, 1L);
+                }, 1L);
+            }
             if (MBCanDataType.eMBCAN_VEHICLE_SPEED.getValue() == i) {
                 MBCanEngine.this.canHandler.postDelayed(new Runnable() { // from class: com.mengbo.mbCan.MBCanEngine.1.2
                     @Override // java.lang.Runnable
