@@ -22,11 +22,17 @@ object BenchScripts {
 
     const val CAMD_PREFS_SOURCE = "/data/data/vad.dashing.camd/shared_prefs/camd.xml"
     const val CAMD_GRAB_LOG = "/data/local/tmp/camd-grab.log"
+    /** rootsvc helper.ensure redirects camd_grab stdout/stderr here. */
+    const val CAMD_GRAB_LOG_HELPER = "/data/local/vad-rootsvc/helpers/camd_grab.log"
     const val CAMD_GRAB_VERSION = "/data/local/tmp/camd_grab.ver"
+    const val CAMD_GRAB_VERSION_HELPER = "/data/local/vad-rootsvc/helpers/camd_grab.ver"
 
     const val AUTORUN = "/sdcard/autorun.sh"
     const val AUTORUN_FLAG = "/sdcard/autorun.flag"
     const val AUTORUN_PROP = "vendor.autorun.sdcard.logfile"
+    /** MbDaemonChannel body + substring that appears in the one-line autorun exec. */
+    const val ARM_BODY = "/sdcard/camdbench_arm.sh"
+    const val OWN_MARKER = "camdbench_arm"
 
     private const val LOGCAT_FILTER = "-v time -s CamdRecorder:I CamdQcar:I"
 
@@ -85,6 +91,12 @@ object BenchScripts {
     /**
      * mb_daemon deletes autorun.sh after running it, so an existing file is another app's
      * script (camd, DCL, dcl_install, UsbMount) still waiting or running.
+     * Own leftovers: ARM path in the old inline body, or MbDaemonChannel exec marker.
      */
-    fun isForeignAutorun(text: String?): Boolean = text != null && !text.contains(ARM)
+    fun isForeignAutorun(text: String?): Boolean {
+        if (text == null) return false
+        if (text.contains(ARM)) return false
+        if (text.contains(OWN_MARKER)) return false
+        return true
+    }
 }

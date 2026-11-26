@@ -14,6 +14,11 @@ class DaemonScriptsTest {
     fun ownLeftoverIsOverwritten() {
         assertFalse(DaemonScripts.isForeignAutorun(GrabberScripts.stopAvm("n1")))
         assertFalse(DaemonScripts.isForeignAutorun(GrabberScripts.startAvm("n2")))
+        assertFalse(
+            DaemonScripts.isForeignAutorun(
+                "#!/system/bin/sh\nexec /system/bin/sh '${GrabberScripts.ARM_BODY}'\n",
+            ),
+        )
     }
 
     @Test

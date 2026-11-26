@@ -1,47 +1,75 @@
 package vad.dashing.camdbench
 
-import java.io.File
+import android.content.Context
+import android.util.Log
+import org.json.JSONObject
+import vad.dashing.rootsvc.client.MbDaemonChannel
+import vad.dashing.rootsvc.client.RootSvcClient
+import vad.dashing.rootsvc.client.RootSvcProtocol
+import vad.dashing.rootsvc.client.RootSvcResult
 import java.util.concurrent.TimeUnit
 
-/** Root through mb_daemon's `/sdcard/autorun.sh`, the same primitive camd uses. */
+/**
+ * Root path for `:camdbench`: `script.run` via rootsvc first; on fallback —
+ * [MbDaemonChannel] (same §3.4 lock protocol as `:camd`).
+ */
 object RootChannel {
+    private const val TAG = "CamdBenchRoot"
+    private val armLock = Any()
 
-    private const val FOREIGN_WAIT_MS = 10_000L
-    private const val ANSWER_WAIT_MS = 8_000L
-
-    fun arm(script: String, nonce: String) {
-        val autorun = File(BenchScripts.AUTORUN)
-        waitForeign(autorun)
-        autorun.writeText(script)
-        exec("chmod", "777", BenchScripts.AUTORUN)
-        File(BenchScripts.AUTORUN_FLAG).createNewFile()
-        exec("setprop", BenchScripts.AUTORUN_PROP, "")
-        Thread.sleep(300)
-        exec("setprop", BenchScripts.AUTORUN_PROP, BenchScripts.AUTORUN_FLAG)
-        val marker = File(BenchScripts.ARM)
-        val deadline = System.currentTimeMillis() + ANSWER_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
-            val text = runCatching { if (marker.canRead()) marker.readText() else "" }.getOrDefault("")
-            if (text.contains(nonce)) return
-            Thread.sleep(200)
+    fun arm(context: Context, script: String, nonce: String) = synchronized(armLock) {
+        var attempt = 0
+        while (attempt < CamdBenchRootBridge.BUSY_RETRIES) {
+            attempt++
+            val args = JSONObject()
+                .put("body", script)
+                .put("timeoutMs", 15_000L)
+            val result = runCatching {
+                RootSvcClient.call(RootSvcProtocol.CMD_SCRIPT_RUN, args, 15_000L)
+            }.getOrElse { error ->
+                RootSvcResult.unavailable("call: ${error.message}")
+            }
+            when (CamdBenchRootBridge.outcome(result, RootSvcProtocol.CMD_SCRIPT_RUN)) {
+                CamdBenchRootBridge.Outcome.OK -> return
+                CamdBenchRootBridge.Outcome.RETRY_BUSY -> {
+                    Thread.sleep(CamdBenchRootBridge.BUSY_SLEEP_MS)
+                    continue
+                }
+                CamdBenchRootBridge.Outcome.FALLBACK -> {
+                    Log.i(TAG, "fallback script.run: ${result.err ?: result.reason}")
+                    RootSvcClient.kick(context)
+                    legacyArm(script, nonce)
+                    return
+                }
+                CamdBenchRootBridge.Outcome.FAIL -> {
+                    throw IllegalStateException(
+                        CamdBenchRootBridge.failMessage(result, RootSvcProtocol.CMD_SCRIPT_RUN),
+                    )
+                }
+            }
         }
-        throw IllegalStateException("mb_daemon не ответил — root недоступен (это ГУ A9?)")
+        Log.i(TAG, "fallback script.run after busy retries")
+        RootSvcClient.kick(context)
+        legacyArm(script, nonce)
     }
 
-    private fun waitForeign(autorun: File) {
-        val deadline = System.currentTimeMillis() + FOREIGN_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
-            val text = if (autorun.exists()) runCatching { autorun.readText() }.getOrDefault("") else null
-            if (!BenchScripts.isForeignAutorun(text)) return
-            Thread.sleep(200)
-        }
+    private fun legacyArm(script: String, nonce: String) {
+        val channel = MbDaemonChannel(
+            ProcessExec,
+            BenchScripts.OWN_MARKER,
+            BenchScripts.ARM,
+        )
+        channel.arm(BenchScripts.ARM_BODY, script, nonce)
     }
 
-    private fun exec(vararg command: String) {
-        runCatching {
+    private object ProcessExec : MbDaemonChannel.Exec {
+        override fun run(vararg command: String) {
             val process = ProcessBuilder(*command).redirectErrorStream(true).start()
             process.inputStream.use { it.readBytes() }
-            if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroy()
+            if (!process.waitFor(8, TimeUnit.SECONDS)) {
+                process.destroy()
+                throw IllegalStateException("timeout ${command.firstOrNull()}")
+            }
         }
     }
 }

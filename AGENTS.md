@@ -184,7 +184,7 @@ Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing
 
 ### Shared root service (`:rootsvc`) and `:rootclient`
 
-Separate app **TBox Root** (`vad.dashing.rootsvc`) for A9 HUs: Accessibility + `BOOT_COMPLETED` watchdog arms `mb_daemon` once per boot to start a root `app_process` daemon on abstract socket `vad.dashing.rootsvc` (JSON line protocol v1, package-name allowlist, `script.run`, `helper.ensure`, `wm.*`). Client library: pure Java under `shared/rootsvc/` (DCL copies as-is) and Gradle module `:rootclient`. Docs and DCL guide: [docs/ROOT_SERVICE_A9_RU.md](docs/ROOT_SERVICE_A9_RU.md). A10, consumer migration, UsbMount removal, Store/`dcl_install` install hooks — follow-up PRs.
+Separate app **TBox Root** (`vad.dashing.rootsvc`) for A9 HUs: Accessibility + `BOOT_COMPLETED` watchdog arms `mb_daemon` once per boot to start a root `app_process` daemon on abstract socket `vad.dashing.rootsvc` (JSON line protocol v1, package-name allowlist, `script.run`, `helper.ensure`, `wm.*`). Client library: pure Java under `shared/rootsvc/` (DCL copies as-is) and Gradle module `:rootclient`. `:camd` / `:camdbench` call rootsvc first and fall back to `MbDaemonChannel`. Docs and DCL guide: [docs/ROOT_SERVICE_A9_RU.md](docs/ROOT_SERVICE_A9_RU.md). A10, UsbMount removal, Store/`dcl_install`/Monitor install hooks — follow-up PRs.
 
 ```
 ./gradlew :rootclient:assembleDebug
@@ -195,7 +195,7 @@ Separate app **TBox Root** (`vad.dashing.rootsvc`) for A9 HUs: Accessibility + `
 
 ### Camera window app (`:camd`)
 
-Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). The window service draws one overlay per camera from the app process. A root executable `camd_grab` reads `libais_client.so` and writes ARGB under `/data/local/tmp`. Local API `127.0.0.1:8770` (`8766` is TBox MQTT): `OPEN`, `CLOSE <id>`, `CLOSE`. Inputs 4/5/8/9 stop `AVMapp` until the last of those windows closes. `qcarcam_test` remains the 20 s probe only. Car result on 10 Nov 2026: clean frames from inputs 4 and 5 arrive only after `AVMapp` is stopped, and `qcarcam_test` does not put them on screen. The new window is not checked on the car yet. Recording, reverse-gear auto-open, and the TBox/DCL buttons are still later.
+Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). The window service draws one overlay per camera from the app process. A root executable `camd_grab` (via rootsvc `helper.ensure`, fallback `mb_daemon`) reads `libais_client.so` and writes UYVY under `/mnt/camd-ram`. Local API `127.0.0.1:8770` (`8766` is TBox MQTT): `OPEN`, `CLOSE <id>`, `CLOSE`. Inputs 4/5/8/9 stop `AVMapp` until the last of those windows closes. `qcarcam_test` remains the 20 s probe only. Car result on 10 Nov 2026: clean frames from inputs 4 and 5 arrive only after `AVMapp` is stopped, and `qcarcam_test` does not put them on screen. The new window is not checked on the car yet. Recording, reverse-gear auto-open, and the TBox/DCL buttons are still later.
 
 ```
 ./gradlew :camd:testDebugUnitTest
@@ -205,7 +205,7 @@ Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done:
 
 ### HU CPU benchmark (`:camdbench`)
 
-Separate test app **Нагрузка ГУ** (`vad.dashing.camdbench`, `arm64-v8a`; named «Тест нагрузки камер» before 1.3.0) for A/B CPU measurements of the HU: per-core load, all processes, threads of our apps (`vad.dashing.*`), the DCL launcher and `dclwm` with their cpuset / allowed cores / per-core time, and — when `:camd` takes part — dashcam fps and grabber copy time. A root sampler `camdbench_sampler` (started through `mb_daemon`) reads `/proc`, core frequencies, temperatures; the app writes `report.txt` / `summary.tsv` / raw data to `Download/camdbench/` and compares two runs on screen. Actual recording fps is measured from segments finished during the run. Procedure and report format: [docs/CAMDBENCH_RU.md](docs/CAMDBENCH_RU.md).
+Separate test app **Нагрузка ГУ** (`vad.dashing.camdbench`, `arm64-v8a`; named «Тест нагрузки камер» before 1.3.0) for A/B CPU measurements of the HU: per-core load, all processes, threads of our apps (`vad.dashing.*`), the DCL launcher and `dclwm` with their cpuset / allowed cores / per-core time, and — when `:camd` takes part — dashcam fps and grabber copy time. A root sampler `camdbench_sampler` (started through rootsvc `script.run`, fallback `mb_daemon`) reads `/proc`, core frequencies, temperatures; the app writes `report.txt` / `summary.tsv` / raw data to `Download/camdbench/` and compares two runs on screen. Actual recording fps is measured from segments finished during the run. Procedure and report format: [docs/CAMDBENCH_RU.md](docs/CAMDBENCH_RU.md).
 
 ```
 ./gradlew :camdbench:testDebugUnitTest

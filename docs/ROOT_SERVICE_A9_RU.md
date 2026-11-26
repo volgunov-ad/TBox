@@ -77,14 +77,15 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 
 `MbDaemonChannel`: bind `vad.dashing.mbdaemon.lock` → ждать чужой `autorun.sh` → тело в свой файл → `autorun.sh` = `exec sh <тело>` через rename → флаг + `setprop` → ждать nonce. Скрипт **не** удаляет `$0` / общий флаг / не сбрасывает свойство.
 
-## Установка (хуки для follow-up)
+## Потребители
 
-| Канал | Статус в этом PR |
+| Клиент | Статус |
 |---|---|
-| `dcl_install` | не менялся — follow-up: ставить APK + выдать a11y |
-| Dashing Store | не менялся — follow-up: карточка каталога |
-| Monitor | не менялся — follow-up: карточка статуса |
-| UsbMount | не удалялся — follow-up (DCL 0.8.2+ уже разблокирует USB) |
+| `:camd` / `:camdbench` | переведены: rootsvc primary + `MbDaemonChannel` fallback (`CamdRootChannel` / `RootChannel`) |
+| `dcl_install` | follow-up: ставить APK + выдать a11y; бут-фикс через службу |
+| Dashing Store | follow-up: карточка каталога |
+| Monitor | follow-up: карточка статуса |
+| UsbMount | follow-up: удаление (DCL 0.8.2+ уже разблокирует USB) |
 
 Явный broadcast: `vad.dashing.rootsvc.ENSURE` (exported). Пакет в `<queries>` у клиентов.
 

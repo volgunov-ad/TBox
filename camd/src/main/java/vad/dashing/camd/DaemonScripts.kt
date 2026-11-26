@@ -1,8 +1,9 @@
 package vad.dashing.camd
 
 /**
- * Shared constants for the root-side files on the head unit. mb_daemon runs the
- * arm scripts written by [CameraWindows]; the command daemon was retired.
+ * Shared constants for the root-side files on the head unit. Primary root path is
+ * the shared rootsvc; legacy mb_daemon scripts still use these paths via
+ * [vad.dashing.rootsvc.client.MbDaemonChannel].
  */
 object DaemonScripts {
     const val PACKAGE_FILES = "/data/data/vad.dashing.camd/files"
@@ -22,7 +23,15 @@ object DaemonScripts {
      */
     const val FOREIGN_AUTORUN_WAIT_MS = 10_000L
 
-    /** Our own leftover (mb_daemon did not answer last time) is safe to overwrite at once. */
-    fun isForeignAutorun(text: String?): Boolean =
-        text != null && !text.contains(GrabberScripts.ARM)
+    /**
+     * Our own leftover (mb_daemon did not answer last time) is safe to overwrite at once.
+     * Matches both the old inline scripts (ARM path in the body) and MbDaemonChannel's
+     * one-line `exec …/camd_grab_arm.sh`.
+     */
+    fun isForeignAutorun(text: String?): Boolean {
+        if (text == null) return false
+        if (text.contains(GrabberScripts.ARM)) return false
+        if (text.contains(GrabberScripts.OWN_MARKER)) return false
+        return true
+    }
 }
