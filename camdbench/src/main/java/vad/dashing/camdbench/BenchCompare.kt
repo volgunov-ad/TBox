@@ -16,6 +16,9 @@ object BenchCompare {
         val copyAvgMs: Map<String, Double>,
         val proc: Map<String, Double>,
         val threads: Map<String, Double>,
+        val cores: Map<String, Double> = emptyMap(),
+        /** `<process>@cpuN` → percent of the process CPU time on that core. */
+        val placement: Map<String, Double> = emptyMap(),
     )
 
     fun parse(text: String): Summary {
@@ -26,6 +29,8 @@ object BenchCompare {
         val copy = LinkedHashMap<String, Double>()
         val proc = LinkedHashMap<String, Double>()
         val threads = LinkedHashMap<String, Double>()
+        val cores = LinkedHashMap<String, Double>()
+        val placement = LinkedHashMap<String, Double>()
         text.lineSequence().forEach { line ->
             val cells = line.split('\t')
             if (cells.size < 3) return@forEach
@@ -39,9 +44,11 @@ object BenchCompare {
                 "copy" -> value.toDoubleOrNull()?.let { copy[key] = it }
                 "proc" -> value.toDoubleOrNull()?.let { proc[key] = it }
                 "thread" -> value.toDoubleOrNull()?.let { threads[key] = it }
+                "core" -> value.toDoubleOrNull()?.let { cores[key] = it }
+                "placement" -> value.toDoubleOrNull()?.let { placement[key] = it }
             }
         }
-        return Summary(info, warnings, metrics, fps, copy, proc, threads)
+        return Summary(info, warnings, metrics, fps, copy, proc, threads, cores, placement)
     }
 
     private val metricLabels = listOf(
@@ -78,6 +85,13 @@ object BenchCompare {
         header("Процессы, % ядра")
         rankedKeys(a.proc, b.proc, 15).forEach { row(it, a.proc[it], b.proc[it]) }
 
+        if (a.cores.isNotEmpty() || b.cores.isNotEmpty()) {
+            appendLine()
+            header("Ядра: занято в среднем, %")
+            (a.cores.keys + b.cores.keys).distinct().sortedBy { it.removePrefix("cpu").toIntOrNull() ?: 0 }
+                .forEach { row(it, a.cores[it], b.cores[it]) }
+        }
+
         val ours = rankedKeys(a.proc.filterKeys(OurApps::isOurs), b.proc.filterKeys(OurApps::isOurs), Int.MAX_VALUE)
         appendLine()
         header("Наши приложения и DCL, % ядра")
@@ -88,6 +102,13 @@ object BenchCompare {
             val threadsB = b.threads.filterKeys { OurApps.ownerOf(it) == owner }
             val keys = rankedKeys(threadsA, threadsB, THREADS_PER_APP)
                 .filter { maxOf(threadsA[it] ?: 0.0, threadsB[it] ?: 0.0) >= MIN_SHOWN_PCT }
+            val placementKeys = (a.placement.keys + b.placement.keys).filter { it.substringBeforeLast('@') == owner }
+                .distinct().sortedBy { it.substringAfterLast("@cpu").toIntOrNull() ?: 0 }
+            if (placementKeys.isNotEmpty()) {
+                appendLine()
+                header("${OurApps.label(owner)}: доля времени по ядрам, %")
+                placementKeys.forEach { row(it.substringAfterLast('@'), a.placement[it], b.placement[it]) }
+            }
             if (keys.isEmpty()) return@forEach
             appendLine()
             header("Потоки ${OurApps.label(owner)}, % ядра")

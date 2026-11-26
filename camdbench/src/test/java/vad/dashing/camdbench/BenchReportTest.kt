@@ -130,4 +130,43 @@ class BenchReportTest {
         assertTrue(OurApps.isOurs("vad.dashing.voice"))
         assertTrue(!OurApps.isOurs("com.wt.launcher3"))
     }
+
+    @Test
+    fun coresPlacementAndThreadCores() {
+        val acc = BenchAccumulator()
+        listOf(
+            "K 100", "N 8", "T 0 0", "C 0 0", "CC 0 0 0", "CC 6 0 0",
+            "P 40 0 ras.dashing.tbox.launcher", "A 40 0-7 /top-app", "H 40 41 0 RenderThread",
+            "T 100000 0", "C 80000 60000", "CC 0 10000 7500", "CC 6 10000 2000",
+            "P 40 1000 ras.dashing.tbox.launcher", "H 40 41 1000 RenderThread",
+            "Q 41 6 600", "Q 41 7 300", "Q 41 0 100",
+            "T 200000 0", "C 160000 120000", "CC 0 20000 15000", "CC 6 20000 4000",
+            "P 40 2000 ras.dashing.tbox.launcher", "A 40 0-5 /background", "H 40 41 2000 RenderThread",
+            "Q 41 6 1000",
+            "E",
+        ).forEach(acc::feed)
+        val s = acc.snapshot()
+        assertEquals(25.0, s.cpuCores.first { it.cpu == 0 }.avgPct, 1e-9)
+        assertEquals(80.0, s.cpuCores.first { it.cpu == 6 }.maxPct, 1e-9)
+        val dcl = s.placement(OurApps.DCL_LAUNCHER)!!
+        assertEquals("0-5", dcl.allowedCpus)
+        assertEquals("/top-app", dcl.cpusets.first().first)
+        assertEquals(1.0, dcl.cpusets.first().second, 1e-9)
+        assertEquals(6, dcl.cores.first().first)
+        assertEquals(0.8, dcl.cores.first().second, 1e-9)
+
+        val text = BenchReport.text(run(), s)
+        assertTrue(text, text.contains("cpu6: занято сред. 80.0 %"))
+        assertTrue(text, text.contains("разрешённые ядра: 0-5"))
+        assertTrue(text, text.contains("группа (cpuset): /top-app 100 %"))
+        assertTrue(text, text.contains("ras.dashing.tbox.launcher/RenderThread  [6:80% 7:15% 0:5%]"))
+
+        val a = BenchCompare.parse(BenchReport.summary(run(), s))
+        assertEquals(80.0, a.cores.getValue("cpu6"), 1e-9)
+        assertEquals(80.0, a.placement.getValue("ras.dashing.tbox.launcher@cpu6"), 1e-9)
+        val compare = BenchCompare.text(a, a, "a", "b")
+        assertTrue(compare, compare.contains("== Ядра: занято в среднем, % =="))
+        assertTrue(compare, compare.contains("доля времени по ядрам"))
+        assertTrue(compare, compare.lines().any { it.startsWith("cpu7") && it.contains("15.00") })
+    }
 }

@@ -1,6 +1,7 @@
 package vad.dashing.camdbench
 
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Everything one run knows besides the CPU samples. */
 class BenchRun(
@@ -98,8 +99,30 @@ object BenchReport {
             appendLine("== Потоки ${OurApps.label(process.name)}: ${fmt(process.avgPct)} % ядра ==")
             appendLine(String.format(Locale.US, "%8s %8s  %s", "сред.%", "пик%", "поток"))
             threads.forEach {
-                appendLine(String.format(Locale.US, "%8.1f %8.1f  %s", it.avgPct, it.maxPct, it.name))
+                val cores = s.threadCores[it.name]?.let { shares -> "  [${coreShares(shares)}]" } ?: ""
+                appendLine(String.format(Locale.US, "%8.1f %8.1f  %s%s", it.avgPct, it.maxPct, it.name, cores))
             }
+        }
+        appendLine("[ядро:доля] — на каких ядрах поток провёл своё время процессора (выборки 5 раз в секунду)")
+
+        appendLine()
+        appendLine("== Ядра процессора ==")
+        if (s.cpuCores.isEmpty()) appendLine("нет данных (сэмплер camdbench до 1.2.0)")
+        s.cpuCores.forEach {
+            val mhz = s.freqMhz.getOrNull(it.cpu)?.let { f -> ", ${fmt(f, 0)} МГц" } ?: ""
+            appendLine("cpu${it.cpu}: занято сред. ${fmt(it.avgPct)} %, пик ${fmt(it.maxPct)} %$mhz")
+        }
+
+        appendLine()
+        appendLine("== Где работают наши процессы и DCL ==")
+        ours.filter { it.avgPct >= MIN_SHOWN_PCT }.forEach { process ->
+            val placement = s.placement(process.name) ?: return@forEach
+            appendLine("${OurApps.label(process.name)}: ${fmt(process.avgPct)} % ядра")
+            appendLine("  разрешённые ядра: ${placement.allowedCpus}")
+            if (placement.cpusets.isNotEmpty()) {
+                appendLine("  группа (cpuset): " + placement.cpusets.joinToString(", ") { (name, share) -> "$name ${percent(share)}" })
+            }
+            if (placement.cores.isNotEmpty()) appendLine("  по ядрам: ${coreShares(placement.cores, limit = 8)}")
         }
 
         appendLine()
@@ -163,6 +186,10 @@ object BenchReport {
         row("metric", "camd_grab_pct", fmt(grab, 2))
         row("metric", "camd_total_pct", fmt(camd + grab, 2))
         row("metric", "mem_available_min_mb", s.memAvailableMinMb)
+        s.cpuCores.forEach { row("core", "cpu${it.cpu}", fmt(it.avgPct, 2), fmt(it.maxPct, 2)) }
+        s.placements.filter { OurApps.isOurs(it.name) }.forEach { placement ->
+            placement.cores.forEach { (cpu, share) -> row("placement", "${placement.name}@cpu$cpu", fmt(share * 100, 2)) }
+        }
         BenchLogs.summarizeFps(run.segmentFps).forEach {
             row("fps", "cam${it.inputId}", fmt(it.fps, 2))
         }
@@ -182,6 +209,14 @@ object BenchReport {
             }
         }
     }
+
+    private fun percent(share: Double): String = "${(share * 100).roundToInt()} %"
+
+    /** `6:55% 7:40% 0:5%`, shares under 1 % dropped. */
+    private fun coreShares(shares: List<Pair<Int, Double>>, limit: Int = 4): String =
+        shares.filter { it.second >= 0.01 }.take(limit).joinToString(" ") { (cpu, share) ->
+            "$cpu:${(share * 100).roundToInt()}%"
+        }
 
     fun fmt(value: Double, digits: Int = 1): String = String.format(Locale.US, "%.${digits}f", value)
 }
