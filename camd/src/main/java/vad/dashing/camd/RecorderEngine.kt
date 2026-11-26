@@ -54,6 +54,9 @@ internal class RecorderEngine(
     /** Frames go to GL straight from the grabber mapping; off after the first failed upload. */
     private var directUpload = true
 
+    /** Frames are copied into the shared [AhbFrameTexture]; off after the first failure. */
+    private var ahbAllowed = true
+
     /**
      * Set by the emergency save ([RecorderController.requestEmergencySave]): the current
      * in-flight segment closes immediately through the normal finally path —
@@ -302,6 +305,30 @@ internal class RecorderEngine(
      * rewriting that slot); the next poll takes the newer frame. Returns false for a drop.
      */
     private fun upload(gl: Gl, slot: UyvySlot, pixels: ByteBuffer, mapped: ByteBuffer): Boolean {
+        if (ahbAllowed) {
+            var target = gl.ahb
+            if (target == null || target.width != slot.width || target.height != slot.height) {
+                target?.release()
+                target = AhbFrameTexture.create(slot.width, slot.height, gl.ahbTexture)
+                gl.ahb = target
+                if (target == null) {
+                    ahbAllowed = false
+                    Log.i(LOG_TAG, "cam$inputId: общий буфер кадра недоступен, передаю через glTexSubImage2D")
+                }
+            }
+            if (target != null) {
+                val offset = UYVY_HEADER + slot.slot * slot.slotBytes
+                if (target.write(mapped, offset, slot.slotBytes)) {
+                    gl.activeTexture = gl.ahbTexture
+                    return mapped.getInt(16) == slot.seq
+                }
+                Log.i(LOG_TAG, "cam$inputId: запись в общий буфер не удалась, передаю через glTexSubImage2D")
+                target.release()
+                gl.ahb = null
+                ahbAllowed = false
+            }
+        }
+        gl.activeTexture = gl.texture
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gl.texture)
         val direct = directUpload
         val uploaded = runCatching {
@@ -333,6 +360,7 @@ internal class RecorderEngine(
     }
 
     private fun draw(gl: Gl, slot: UyvySlot, correction: CamdLensCorrection) {
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gl.activeTexture)
         GLES20.glViewport(0, 0, slot.width, slot.height)
         GLES20.glUseProgram(gl.program)
         GLES20.glUniform1i(gl.uTex, 0)
@@ -355,6 +383,7 @@ internal class RecorderEngine(
         GLES20.glVertexAttribPointer(gl.aPos, 2, GLES20.GL_FLOAT, false, 0, gl.quad)
         GLES20.glEnableVertexAttribArray(gl.aPos)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+        if (gl.activeTexture == gl.ahbTexture) gl.ahb?.fenceAfterDraw()
         EGL14.eglSwapBuffers(gl.display, gl.currentSurface)
     }
 
@@ -367,6 +396,8 @@ internal class RecorderEngine(
         val config: EGLConfig,
         val program: Int,
         val texture: Int,
+        /** Bound to [ahb] while the shared frame buffer is in use. */
+        val ahbTexture: Int,
         val aPos: Int,
         val quad: java.nio.FloatBuffer,
         val uTex: Int,
@@ -389,6 +420,8 @@ internal class RecorderEngine(
         var uploadedWidth = 0
         var uploadedHeight = 0
         var currentSurface: EGLSurface? = null
+        var ahb: AhbFrameTexture? = null
+        var activeTexture = texture
     }
 
     private fun createGl(): Gl? {
@@ -439,8 +472,8 @@ internal class RecorderEngine(
             EGL14.eglTerminate(display)
             return null
         }
-        val texture = IntArray(1)
-        GLES20.glGenTextures(1, texture, 0)
+        val texture = IntArray(2)
+        GLES20.glGenTextures(2, texture, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
@@ -451,7 +484,7 @@ internal class RecorderEngine(
         quad.put(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f))
         quad.position(0)
         val gl = Gl(
-            display, context, pbuffer, config, program, texture[0],
+            display, context, pbuffer, config, program, texture[0], texture[1],
             GLES20.glGetAttribLocation(program, "aPos"),
             quad,
             GLES20.glGetUniformLocation(program, "uTex"),
@@ -509,7 +542,9 @@ internal class RecorderEngine(
 
     private fun release(gl: Gl) {
         runCatching {
-            GLES20.glDeleteTextures(1, intArrayOf(gl.texture), 0)
+            gl.ahb?.release()
+            gl.ahb = null
+            GLES20.glDeleteTextures(2, intArrayOf(gl.texture, gl.ahbTexture), 0)
             if (gl.program != 0) GLES20.glDeleteProgram(gl.program)
             EGL14.eglMakeCurrent(gl.display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             EGL14.eglDestroySurface(gl.display, gl.pbuffer)
@@ -587,7 +622,7 @@ internal class RecorderEngine(
             return FrameRead(src, buf, ino, len, pixels, null, false, slot.seq)
         }
         val bytes = slot.slotBytes
-        if (directUpload) {
+        if (directUpload || ahbAllowed) {
             val view = mappedBuf.duplicate().order(ByteOrder.LITTLE_ENDIAN)
             view.position(UYVY_HEADER + slot.slot * bytes)
             view.limit(UYVY_HEADER + slot.slot * bytes + bytes)

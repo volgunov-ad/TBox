@@ -197,8 +197,9 @@ internal class UyvyRenderer(
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         EGL14.eglSwapBuffers(display, surface)
         val program = buildProgram()
-        val texture = IntArray(1)
-        GLES20.glGenTextures(1, texture, 0)
+        // [0] glTexSubImage2D upload, [1] bound to the shared AhbFrameTexture buffer.
+        val texture = IntArray(2)
+        GLES20.glGenTextures(2, texture, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
@@ -282,6 +283,14 @@ internal class UyvyRenderer(
         var source: RandomAccessFile? = null
         var pixels: ByteBuffer? = null
         var directUpload = true
+        var ahb: AhbFrameTexture? = null
+        var ahbAllowed = true
+        var activeTexture = texture[0]
+        val drawFrame: (UyvySlot) -> Unit = { published ->
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, activeTexture)
+            drawCurrent(published)
+            if (activeTexture == texture[1]) ahb?.fenceAfterDraw()
+        }
         var lastSeq = 0
         var uploadedWidth = 0
         var uploadedHeight = 0
@@ -319,7 +328,7 @@ internal class UyvyRenderer(
                     }
                     if (lastSettingsVersion != settingsVersion) {
                         lastSettingsVersion = settingsVersion
-                        if (!redrawCurrentFrame(display, surface, published, drawCurrent)) {
+                        if (!redrawCurrentFrame(display, surface, published, drawFrame)) {
                             break
                         }
                     }
@@ -329,62 +338,84 @@ internal class UyvyRenderer(
                 }
                 idle = 0
                 val bytes = published.slotBytes
-                val slotView = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-                slotView.position(UYVY_HEADER + published.slot * bytes)
-                slotView.limit(UYVY_HEADER + published.slot * bytes + bytes)
-                val upload = if (directUpload) {
-                    slotView.slice()
-                } else {
-                    val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
-                        pixels = it
+                val slotOffset = UYVY_HEADER + published.slot * bytes
+                if (ahbAllowed) {
+                    var target = ahb
+                    if (target == null || target.width != published.width || target.height != published.height) {
+                        target?.release()
+                        target = AhbFrameTexture.create(published.width, published.height, texture[1])
+                        ahb = target
+                        if (target == null) {
+                            ahbAllowed = false
+                            warnGl("shared frame buffer unavailable, using glTexSubImage2D")
+                        }
                     }
-                    copy.clear()
-                    copy.put(slotView)
-                    copy.position(0)
-                    copy
+                    if (target != null && !target.write(buffer, slotOffset, bytes)) {
+                        warnGl("shared frame buffer write failed, using glTexSubImage2D")
+                        target.release()
+                        ahb = null
+                        ahbAllowed = false
+                    }
                 }
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
-                val uploaded = runCatching {
-                    if (uploadedWidth != published.width || uploadedHeight != published.height) {
-                        GLES20.glTexImage2D(
-                            GLES20.GL_TEXTURE_2D,
-                            0,
-                            GLES20.GL_RGBA,
-                            published.width / 2,
-                            published.height,
-                            0,
-                            GLES20.GL_RGBA,
-                            GLES20.GL_UNSIGNED_BYTE,
-                            upload,
-                        )
-                        uploadedWidth = published.width
-                        uploadedHeight = published.height
+                activeTexture = if (ahbAllowed && ahb != null) texture[1] else texture[0]
+                if (activeTexture == texture[0]) {
+                    val slotView = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                    slotView.position(slotOffset)
+                    slotView.limit(slotOffset + bytes)
+                    val upload = if (directUpload) {
+                        slotView.slice()
                     } else {
-                        GLES20.glTexSubImage2D(
-                            GLES20.GL_TEXTURE_2D,
-                            0,
-                            0,
-                            0,
-                            published.width / 2,
-                            published.height,
-                            GLES20.GL_RGBA,
-                            GLES20.GL_UNSIGNED_BYTE,
-                            upload,
-                        )
+                        val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
+                            pixels = it
+                        }
+                        copy.clear()
+                        copy.put(slotView)
+                        copy.position(0)
+                        copy
                     }
-                }
-                if (uploaded.isFailure) {
-                    if (!directUpload) throw uploaded.exceptionOrNull()!!
-                    // A read-only mapping the GL binding cannot take: fall back to a private copy.
-                    warnGl("direct texture upload failed, copying frames", uploaded.exceptionOrNull())
-                    directUpload = false
-                    uploadedWidth = 0
-                    continue
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
+                    val uploaded = runCatching {
+                        if (uploadedWidth != published.width || uploadedHeight != published.height) {
+                            GLES20.glTexImage2D(
+                                GLES20.GL_TEXTURE_2D,
+                                0,
+                                GLES20.GL_RGBA,
+                                published.width / 2,
+                                published.height,
+                                0,
+                                GLES20.GL_RGBA,
+                                GLES20.GL_UNSIGNED_BYTE,
+                                upload,
+                            )
+                            uploadedWidth = published.width
+                            uploadedHeight = published.height
+                        } else {
+                            GLES20.glTexSubImage2D(
+                                GLES20.GL_TEXTURE_2D,
+                                0,
+                                0,
+                                0,
+                                published.width / 2,
+                                published.height,
+                                GLES20.GL_RGBA,
+                                GLES20.GL_UNSIGNED_BYTE,
+                                upload,
+                            )
+                        }
+                    }
+                    if (uploaded.isFailure) {
+                        if (!directUpload) throw uploaded.exceptionOrNull()!!
+                        // A read-only mapping the GL binding cannot take: fall back to a private copy.
+                        warnGl("direct texture upload failed, copying frames", uploaded.exceptionOrNull())
+                        directUpload = false
+                        uploadedWidth = 0
+                        continue
+                    }
                 }
                 // GL has taken the pixels once the call returns. If the grabber moved on meanwhile it
                 // may have been writing into this slot, so the frame is dropped and the newer one drawn.
                 if (buffer.getInt(16) != published.seq) continue
-                drawCurrent(published)
+                drawFrame(published)
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
                 val pauseMs = System.currentTimeMillis() - lastFrameMs
@@ -406,7 +437,8 @@ internal class UyvyRenderer(
             warnGl("GL/render failure", error)
         } finally {
             runCatching { source?.close() }
-            GLES20.glDeleteTextures(1, texture, 0)
+            ahb?.release()
+            GLES20.glDeleteTextures(2, texture, 0)
             if (program != 0) GLES20.glDeleteProgram(program)
             EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             EGL14.eglDestroySurface(display, surface)
