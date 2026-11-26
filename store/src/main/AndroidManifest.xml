@@ -12,6 +12,8 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Optional DCL permission; user-builds may not enforce it (Binder UID check instead). -->
+    <uses-permission android:name="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
 
     <queries>
         <package android:name="vad.dashing.tbox" />
@@ -22,6 +24,7 @@
         <package android:name="ras.dashing.tbox.launcher" />
         <package android:name="com.wt.launcher3" />
         <package android:name="com.adayo.launcher" />
+        <provider android:authorities="ras.dashing.tbox.launcher.api" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

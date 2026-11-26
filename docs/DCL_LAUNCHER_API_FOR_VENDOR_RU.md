@@ -92,7 +92,7 @@ DCL — доверенный локальный клиент Monitor (как TBo
     android:permission="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
 ```
 
-Permission signature-level или custom permission, выдаваемый только приложению с известной подписью Monitor — по выбору DCL; **обязательна** проверка `callingPackage == "vad.dashing.tbox"` внутри `call()`.
+Permission signature-level или custom permission, выдаваемый только приложению с известной подписью Monitor / Store — по выбору DCL; **обязательна** проверка `callingPackage` ∈ `{ "vad.dashing.tbox", "vad.dashing.store" }` внутри `call()` (оба пакета подписаны ключом TBox).
 
 Monitor со своей стороны добавит в `<queries>` authority DCL (это **TBox side later**).
 
@@ -118,16 +118,16 @@ Monitor со своей стороны добавит в `<queries>` authority D
 
 ### 3.2. Monitor → DCL (новый API): только Binder, токена от DCL нет
 
-Для вызовов TBox Monitor в ContentProvider DCL:
+Для вызовов TBox Monitor / Dashing Store в ContentProvider DCL:
 
-1. Принимать запросы **только** если `callingPackage == "vad.dashing.tbox"` и пакет принадлежит `Binder.getCallingUid()`.
-2. Опционально: сверить SHA-256 подписи вызывающего APK с эталоном Monitor (тот же формат digest). Это **не** consent UI и **не** выдача секрета.
+1. Принимать запросы **только** если `callingPackage` ∈ `{ "vad.dashing.tbox", "vad.dashing.store" }` и пакет принадлежит `Binder.getCallingUid()`.
+2. Опционально: сверить SHA-256 подписи вызывающего APK с эталоном TBox (тот же формат digest). Это **не** consent UI и **не** выдача секрета.
 3. **Запрещено / out of scope on purpose:**
-   - DCL **не** выдаёт токен (one-shot, rotating, shared secret — любой) приложению Monitor;
-   - DCL **не** показывает второй диалог «Разрешить» / pairing / consent для Monitor;
+   - DCL **не** выдаёт токен (one-shot, rotating, shared secret — любой) приложению Monitor / Store;
+   - DCL **не** показывает второй диалог «Разрешить» / pairing / consent для Monitor / Store;
    - не копировать модель §3.1 «в обратную сторону».
-4. Пользователь уже один раз согласился в Monitor на связь с DCL (§3.1). Этого достаточно для доверия процессу `vad.dashing.tbox` на том же ГУ.
-5. HTTP-сервер в DCL **не требуется**. Если когда-либо понадобится — всё равно без второго user consent и без токена от DCL к Monitor; по умолчанию остаётся только ContentProvider + Binder.
+4. Пользователь уже один раз согласился в Monitor на связь с DCL (§3.1). Этого достаточно для доверия процессу `vad.dashing.tbox` на том же ГУ. Store (`vad.dashing.store`) — тот же ключ подписи / экосистема; Open из витрины вызывает тот же `launchApp(mode=app_area)`.
+5. HTTP-сервер в DCL **не требуется**. Если когда-либо понадобится — всё равно без второго user consent и без токена от DCL к Monitor/Store; по умолчанию остаётся только ContentProvider + Binder.
 
 Доступ только local-on-device. Никакого listen на внешний интерфейс.
 
@@ -435,7 +435,7 @@ TBox может отложить hide/show плавающих панелей н�
 
 ```
 Authority: content://ras.dashing.tbox.launcher.api
-Caller:    only vad.dashing.tbox (Binder)
+Caller:    vad.dashing.tbox | vad.dashing.store (Binder)
 
 REQUIRED v1
   call "launchApp"   mode=fullscreen|full_width|app_area + packageName…
@@ -451,7 +451,7 @@ RECOMMENDED later (§6): geometry/bounds, split focus+ratio,
   isLauncherResumed — additive, not required to ship v1
 
 Auth (DCL→Monitor, existing): one Allow in Monitor → Monitor issues token once → DCL stores it.
-Auth (Monitor→DCL, this API): Binder callingPackage==vad.dashing.tbox (+ optional cert).
+Auth (Monitor/Store→DCL, this API): Binder callingPackage∈{vad.dashing.tbox, vad.dashing.store} (+ optional cert).
   NO token issued by DCL. NO second Allow/consent UI in DCL.
 ```
 
