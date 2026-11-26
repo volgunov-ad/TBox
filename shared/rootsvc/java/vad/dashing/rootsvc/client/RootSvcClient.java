@@ -42,11 +42,22 @@ public final class RootSvcClient {
     }
 
     public static void kick(Context context) {
+        kick(context, false);
+    }
+
+    /**
+     * Ask the watchdog to {@code ensure()}. With {@code force}, the watchdog arms even after
+     * supervisor {@code crashloop} (Monitor restart button).
+     */
+    public static void kick(Context context, boolean force) {
         if (context == null) {
             return;
         }
         Intent intent = new Intent(RootSvcProtocol.ENSURE_ACTION);
         intent.setPackage(RootSvcProtocol.PACKAGE);
+        if (force) {
+            intent.putExtra(RootSvcProtocol.ENSURE_EXTRA_FORCE, true);
+        }
         try {
             context.sendBroadcast(intent);
         } catch (Exception ignored) {

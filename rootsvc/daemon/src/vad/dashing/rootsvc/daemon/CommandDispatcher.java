@@ -58,6 +58,12 @@ public final class CommandDispatcher {
             o.put("caps", arr);
             return o;
         }
+        if (RootSvcProtocol.CMD_STATUS.equals(cmd)) {
+            return status(id);
+        }
+        if (RootSvcProtocol.CMD_ADMIN_RESTART.equals(cmd)) {
+            return adminRestart(id);
+        }
         if (RootSvcProtocol.CMD_ADMIN_UPGRADE.equals(cmd)) {
             return adminUpgrade(id, args);
         }
@@ -279,6 +285,64 @@ public final class CommandDispatcher {
             return o;
         } finally {
             tmp.delete();
+        }
+    }
+
+    private JSONObject status(String id) throws Exception {
+        JSONObject o = ServiceMain.okJson(id, 0, 0L);
+        o.put("server", RootSvcProtocol.SERVER_VERSION);
+        o.put("proto", RootSvcProtocol.PROTO);
+        o.put("hu", "A9");
+        o.put("uptimeMs", Math.max(0L, System.currentTimeMillis() - ServiceMain.STARTED_AT_MS));
+        String state = readStateFile();
+        o.put("state", state);
+        o.put("crashloop", "crashloop".equals(state));
+        return o;
+    }
+
+    private JSONObject adminRestart(String id) throws Exception {
+        File state = new File(RootSvcProtocol.STATE_PATH);
+        if (state.isFile()) {
+            // Clear crashloop / upgraded markers so the supervisor can keep running.
+            //noinspection ResultOfMethodCallIgnored
+            state.delete();
+        }
+        ServiceLog.info("admin.restart — exit 0 for supervisor restart");
+        JSONObject o = ServiceMain.okJson(id, 0, 0L);
+        o.put("state", "restarting");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException ignored) {
+                    // ignore
+                }
+                System.exit(0);
+            }
+        }, "rootsvc-restart").start();
+        return o;
+    }
+
+    private static String readStateFile() {
+        File state = new File(RootSvcProtocol.STATE_PATH);
+        if (!state.isFile()) {
+            return "";
+        }
+        try {
+            FileInputStream in = new FileInputStream(state);
+            try {
+                byte[] buf = new byte[64];
+                int n = in.read(buf);
+                if (n <= 0) {
+                    return "";
+                }
+                return new String(buf, 0, n, java.nio.charset.Charset.forName("UTF-8")).trim();
+            } finally {
+                in.close();
+            }
+        } catch (Exception error) {
+            return "";
         }
     }
 

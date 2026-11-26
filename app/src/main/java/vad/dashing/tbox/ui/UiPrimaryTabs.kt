@@ -1670,6 +1670,10 @@ fun SettingsTabContent(
             autoCompile = appDexoptAuto,
             onAutoCompileChange = settingsViewModel::saveAppDexoptAuto,
         )
+        if (headUnitCanMode == HeadUnitCanMode.Android9MbCan) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            RootSvcSettingsCard(headUnitCanMode = headUnitCanMode)
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         CamdKeepAvmSystemSwitch()
         SettingsTitle(stringResource(R.string.settings_expert_section_title))

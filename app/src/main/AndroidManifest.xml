@@ -129,6 +129,7 @@
         <package android:name="vad.dashing.mqtt" />
         <package android:name="vad.dashing.camd" />
         <package android:name="vad.dashing.store" />
+        <package android:name="vad.dashing.rootsvc" />
         <package android:name="ras.dashing.tbox.launcher" />
 
         <provider android:authorities="ras.dashing.tbox.launcher.api" />

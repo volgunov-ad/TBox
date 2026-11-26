@@ -30,6 +30,8 @@ import vad.dashing.rootsvc.client.WireCodec;
 public final class ServiceMain {
     private static final Charset UTF8 = Charset.forName("UTF-8");
     public static final int EXIT_UPGRADE = 42;
+    /** Wall-clock start of this daemon process (for {@code status} uptimeMs). */
+    static final long STARTED_AT_MS = System.currentTimeMillis();
 
     private static final AtomicInteger WORKER = new AtomicInteger();
     private static final ExecutorService POOL = Executors.newFixedThreadPool(4, new ThreadFactory() {

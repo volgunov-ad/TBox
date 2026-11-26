@@ -9,6 +9,8 @@ public final class RootSvcProtocol {
     public static final String SOCKET = "vad.dashing.rootsvc";
     public static final String PACKAGE = "vad.dashing.rootsvc";
     public static final String ENSURE_ACTION = "vad.dashing.rootsvc.ENSURE";
+    /** Extra on {@link #ENSURE_ACTION}: bypass crashloop skip (Monitor «Перезапустить»). */
+    public static final String ENSURE_EXTRA_FORCE = "force";
     public static final String LOCK_SOCKET = "vad.dashing.mbdaemon.lock";
 
     public static final String WATCHDOG_A11Y =
@@ -49,7 +51,9 @@ public final class RootSvcProtocol {
 
     public static final String CMD_PING = "ping";
     public static final String CMD_HELLO = "hello";
+    public static final String CMD_STATUS = "status";
     public static final String CMD_ADMIN_UPGRADE = "admin.upgrade";
+    public static final String CMD_ADMIN_RESTART = "admin.restart";
     public static final String CMD_PKG_HIDE = "pkg.hide";
     public static final String CMD_PKG_UNHIDE = "pkg.unhide";
     public static final String CMD_PKG_ENABLE = "pkg.enable";
