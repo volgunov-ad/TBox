@@ -12,6 +12,8 @@
 
 Скрипт **не** ставит APK и **не** пишет в `/system`. На время прогона лучше не трогать ГУ руками (лаунчер/camd/UsbMount тоже пишут в `autorun.sh`).
 
+`hu_mb_daemon_bench.ps1` — ASCII + UTF-8 BOM (Windows PowerShell 5.1). Маркеры в `/data/local/tmp` после записи от root делают `chmod 666`, иначе shell не читает файл (ложный `timeout`).
+
 ## Быстрый прогон (без перезагрузки)
 
 На ПК:

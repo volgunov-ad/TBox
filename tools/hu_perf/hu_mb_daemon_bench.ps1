@@ -1,10 +1,12 @@
-# A9 mb_daemon semantics bench (W0 / shared-root-service plan §13).
+﻿# A9 mb_daemon semantics bench (W0 / shared-root-service plan section 13).
 # Run from a PC on the same LAN as the HU. Requires adb in PATH.
-# See tools/hu_perf/ИНСТРУКЦИЯ_MB_DAEMON.md and docs/HU_PERF_TESTS_RU.md §4.
+# See tools/hu_perf/ (RU runbook INSTRUKTSIYA_MB_DAEMON.md) and docs/HU_PERF_TESTS_RU.md section 4.
 #
 # Measures (on-device script): arm latency, when autorun.sh is deleted, poll-while-
 # armed, re-arm without setprop, rename atomicity on /sdcard, two-writer race.
 # Optional -Boot: reboot and capture Accessibility bind + first successful arm.
+#
+# Encoding: ASCII-only body + UTF-8 BOM so Windows PowerShell 5.1 can parse it.
 param(
     [string]$Device = "192.168.1.128:5555",
     [string]$Tag = ("mbd_" + (Get-Date -Format "yyyyMMdd_HHmmss")),
@@ -167,6 +169,6 @@ Write-Host "==== results ($out/results.txt) ===="
 if (Test-Path (Join-Path $out "results.txt")) {
     Get-Content (Join-Path $out "results.txt") | Write-Host
 } else {
-    Write-Host "MISSING results.txt — see suite_run.txt"
+    Write-Host "MISSING results.txt - see suite_run.txt"
 }
-Write-Host "DONE $Tag → $out"
+Write-Host "DONE $Tag -> $out"

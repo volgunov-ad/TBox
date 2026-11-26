@@ -81,6 +81,8 @@ else
 fi
 id -u >> "\$WORKDIR/script_trace.txt" 2>&1 || true
 echo "\$NONCE start" > "\$MARK.start"
+# mb_daemon creates files as root 0600; shell must grep the marker.
+chmod 666 "\$MARK.start" 2>/dev/null || true
 EOF
   if [ "$mid_sleep" != "0" ]; then
     cat >> "$AUTORUN" <<EOF
@@ -97,6 +99,7 @@ EOF
   fi
   cat >> "$AUTORUN" <<EOF
 echo "\$NONCE" > "\$MARK"
+chmod 666 "\$MARK" 2>/dev/null || true
 echo "script_done \$(awk '{printf \"%d\", \$1 * 1000}' /proc/uptime)" >> "\$WORKDIR/script_trace.txt"
 EOF
   chmod 777 "$AUTORUN" 2>/dev/null || true
@@ -289,6 +292,7 @@ run_rename_atomic() {
   cat > "$body" <<EOF
 #!/system/bin/sh
 echo $nonce > $OWN_MARK
+chmod 666 $OWN_MARK 2>/dev/null || true
 EOF
   chmod 777 "$body"
   # One-line exec wrapper (as dcl_install does).
@@ -369,6 +373,7 @@ EOF
   cat > "$body_b" <<EOF
 #!/system/bin/sh
 echo $nonce_b > $OWN_MARK
+chmod 666 $OWN_MARK 2>/dev/null || true
 EOF
   chmod 777 "$body_b"
   printf '%s\n' "#!/system/bin/sh" "exec /system/bin/sh '$body_b'" > "$WORKDIR/autorun_b.tmp"
@@ -407,7 +412,9 @@ run_race() {
     cat > "$AUTORUN" <<EOF
 #!/system/bin/sh
 echo $nonce_x > $MARKER_DIR/arm_x
+chmod 666 $MARKER_DIR/arm_x 2>/dev/null || true
 echo $nonce_x > $OWN_MARK
+chmod 666 $OWN_MARK 2>/dev/null || true
 EOF
     chmod 777 "$AUTORUN" 2>/dev/null || true
     touch "$FLAG"
@@ -422,7 +429,9 @@ EOF
     cat > "$AUTORUN" <<EOF
 #!/system/bin/sh
 echo $nonce_y > $MARKER_DIR/arm_y
+chmod 666 $MARKER_DIR/arm_y 2>/dev/null || true
 echo $nonce_y > $OWN_MARK
+chmod 666 $OWN_MARK 2>/dev/null || true
 EOF
     chmod 777 "$AUTORUN" 2>/dev/null || true
     touch "$FLAG"
