@@ -24,6 +24,7 @@ import vad.dashing.store.catalog.StoreCatalogEntry
 import vad.dashing.store.catalog.StorePublicShareUrl
 import vad.dashing.store.catalog.StoreSection
 import vad.dashing.store.catalog.YandexDiskPath
+import vad.dashing.store.dcl.StoreDclAppLauncher
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppChangelogState
 import vad.dashing.store.disk.AppReleaseInfo
@@ -558,11 +559,13 @@ class StoreRepository(
         )
     }
 
-    fun openInstalledApp(packageName: String): Boolean {
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        return runCatching { context.startActivity(intent) }.isSuccess
-    }
+    /**
+     * Opens an installed catalog app. Prefers DCL Binder `launchApp(mode=app_area)` when
+     * `ras.dashing.tbox.launcher` is installed and looks alive; otherwise ordinary
+     * [android.content.Context.startActivity] (same fallback when DCL is dead / forbidden).
+     */
+    fun openInstalledApp(packageName: String): Boolean =
+        StoreDclAppLauncher.open(context, packageName)
 
     /** Opens the system uninstall dialog. False if refused (e.g. Store itself). */
     fun uninstallApp(packageName: String): Boolean =

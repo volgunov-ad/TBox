@@ -16,7 +16,7 @@
 | **Authority** | `ras.dashing.tbox.launcher.api` |
 | **URI** | `content://ras.dashing.tbox.launcher.api` |
 | **Разрешение** | `ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API` *(не обязательно на user-builds, проверка по UID)* |
-| **Авторизация** | Автоматическая (по UID вызывающего пакета `vad.dashing.tbox`). Токены и подтверждения в UI не требуются. |
+| **Авторизация** | Автоматическая (по UID вызывающего пакета `vad.dashing.tbox` или `vad.dashing.store`). Токены и подтверждения в UI не требуются. |
 | **Формат обмена** | Синхронный `ContentResolver.call()` (вызывать в фоновом потоке IO). |
 
 ---

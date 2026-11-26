@@ -6,6 +6,9 @@
 Имя APK: `store-<versionName>-<debug|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`).
 Каталог: id `tbox-store`, самообновление с карточки магазина.
 
+0.2.1
+1. Open установленного приложения: через DCL Binder `launchApp(mode=app_area)` (`StoreDclAppLauncher`), если лаунчер установлен и жив; иначе обычный `startActivity` (в т.ч. crash / Unavailable / `forbidden` до allowlist Store в DCL).
+
 0.2.0
 1. Разделы витрины: чипы «Все · N» и «<раздел> · N»; по умолчанию все приложения; язык EN берёт `titleEn`, если есть.
 2. Список по 10 приложений на страницу; «Предыдущая» / «Страница X из Y» / «Следующая» (скрыто, если ≤ 10).
