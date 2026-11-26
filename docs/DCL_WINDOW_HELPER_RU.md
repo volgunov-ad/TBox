@@ -1,6 +1,6 @@
 # Помощник окон DCL
 
-> Общая root-служба A9 (`vad.dashing.rootsvc`) и переход DCL на неё: [ROOT_SERVICE_A9_RU.md](ROOT_SERVICE_A9_RU.md). Пока `wm.*` не используются лаунчером повсеместно, этот помощник (`dclwm`) остаётся. Хвост скрипта `ArmScript` больше не удаляет общий `autorun.sh` / флаг и не сбрасывает свойство — см. протокол захвата канала в том же документе.
+> Общая root-служба A9 (`vad.dashing.rootsvc`) и переход DCL на неё: инструкция вендору [DCL_ROOT_SERVICE_FOR_VENDOR_RU.md](DCL_ROOT_SERVICE_FOR_VENDOR_RU.md), обзор службы [ROOT_SERVICE_A9_RU.md](ROOT_SERVICE_A9_RU.md). Пока `wm.*` не используются лаунчером повсеместно, этот помощник (`dclwm`) остаётся как fallback. Хвост скрипта `ArmScript` больше не удаляет общий `autorun.sh` / флаг и не сбрасывает свойство — см. протокол захвата канала в документах rootsvc.
 
 
 Инструкция для разработчика Dashing Club Launcher (`ras.dashing.tbox.launcher`).

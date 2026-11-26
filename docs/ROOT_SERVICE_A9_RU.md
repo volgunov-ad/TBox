@@ -71,7 +71,7 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 
 `ping`, `hello`, `admin.upgrade`, `pkg.*`, `settings.*` (в т.ч. `a11y.add/remove`), `svc.ctl` (`AVMapp`), `usb.unlock`, `wallpaper.set`, `helper.ensure`, `wm.list/resize/minimize/dismiss`, `power.reboot`, `script.run`.
 
-Авторизация: **только имя пакета** (uid → `pm list packages -U`). uid 0 — всегда. `script.run` — у наших пакетов (`vad.dashing.*` из allowlist), не у DCL.
+Авторизация: **только имя пакета** (uid → `pm list packages -U`). uid 0 — всегда. `script.run` — у всех пакетов из allowlist, включая DCL (`ras.dashing.tbox.launcher`).
 
 ## Протокол захвата `mb_daemon`
 
@@ -94,38 +94,6 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 
 ## Раздел для разработчика DCL
 
-Вводить можно независимо: если службы нет, DCL работает как сейчас.
+Полная инструкция вендору: **[DCL_ROOT_SERVICE_FOR_VENDOR_RU.md](DCL_ROOT_SERVICE_FOR_VENDOR_RU.md)** (протокол, `wm.*`, fallback, allowlist). Окна legacy: [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md).
 
-### Что известно
-
-- Пакет сторожа: `vad.dashing.rootsvc`. Сокет: абстрактный `vad.dashing.rootsvc`, `LocalSocket` + `LocalSocketAddress(name, Namespace.ABSTRACT)`.
-- Вызывать не с главного потока. Пакет `ras.dashing.tbox.launcher` проверяется по имени (подпись не сверяется). Представиться лаунчером другое приложение не может: uid из ядра.
-- Клиент: скопировать `shared/rootsvc/java/vad/dashing/rootsvc/client/*.java` как есть.
-
-### Обмен
-
-```
-→ {"v":1,"id":"d01","cmd":"hello","client":"ras.dashing.tbox.launcher","clientVersion":"0.8.5"}
-← {"id":"d01","ack":true}
-← {"id":"d01","ok":true,"server":"1.0.0","proto":1,"hu":"A9","caps":["usb.unlock","helper.ensure","settings.a11y.add","wm.list",…]}
-
-→ {"v":1,"id":"d02","cmd":"usb.unlock"}
-← {"id":"d02","ack":true}
-← {"id":"d02","ok":true,"exit":0,"ms":180}
-
-→ {"v":1,"id":"d03","cmd":"helper.ensure","args":{"name":"dclwm","path":"/data/data/ras.dashing.tbox.launcher/files/dclwm.dex","sha256":"…","version":"3","kind":"dex","mainClass":"vad.dashing.dclwm.Helper"}}
-← {"id":"d03","ack":true}
-← {"id":"d03","ok":true,"state":"started","pid":4321}
-```
-
-### Порядок в DCL
-
-1. При старте процесса и на `BOOT_COMPLETED` (не с главного потока): `hello`. В первые 60 с после загрузки ждать сокет до 5 с.
-2. Служба ответила и в `caps` есть нужное → `usb.unlock`, `helper.ensure dclwm`. **`/sdcard/autorun.sh` в этой загрузке не трогать.** Окна: `wm.*` на сокете службы **или** пока ещё сокет `dclwm`, пока миграция не завершена.
-3. Нет сокета / нет ACK / `unsupported`/`proto` → прежний `RootOrchestrator` и `Starter.ensure`, но с `MbDaemonChannel` (без безусловного `rm -f "$0"` / `setprop ''`). Можно послать `vad.dashing.rootsvc.ENSURE`.
-4. `forbidden`/`bad_args` — не падать на старый путь, записать в журнал.
-5. `failed` — действие уже выполнялось; старым путём не повторять.
-
-### Что DCL нужно исправить в любом случае
-
-Хвост скрипта `dclwm` (`ArmScript`) не должен удалять `autorun.sh`, общий флаг и сбрасывать свойство; `Starter.ensure` должен ждать чужой скрипт и брать блокировку канала (`MbDaemonChannel` / `vad.dashing.mbdaemon.lock`). Правка в `tools/dclwm/` — follow-up; DCL заберёт новые файлы.
+Кратко: если службы нет — DCL работает как сейчас. Пакет `ras.dashing.tbox.launcher` — по имени (без подписи). Клиент: скопировать `shared/rootsvc/java/vad/dashing/rootsvc/client/*.java`. При живой службе — `usb.unlock` + `wm.*`, `/sdcard/autorun.sh` и отдельный `dclwm` в этой загрузке не трогать. Legacy — с `MbDaemonChannel` (без безусловного `rm -f "$0"` / `setprop ''`).
