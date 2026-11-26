@@ -43,9 +43,6 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
-    /** mb_daemon runs one shared autorun.sh: a second writer would replace the first script. */
-    private val armLock = Any()
-
     /** Loaded once on the first stock OPEN; null when the HU has no calibration dir. */
     private val stockCalibration: CamdCalibration? by lazy {
         runCatching { CamdCalibration.load(File(CamdCalibration.DIR)) }.getOrNull()
@@ -60,12 +57,11 @@ class CameraWindows(private val context: Context) {
     }
 
     /**
-     * Self-grant of the accessibility service through the mb_daemon root channel,
-     * same as the overlay grant. Blocking; call from a worker thread.
+     * Self-grant of the accessibility service through rootsvc (`settings.a11y.add`)
+     * with mb_daemon fallback. Blocking; call from a worker thread.
      */
     fun grantAccessibility() {
-        val nonce = "a${System.currentTimeMillis()}"
-        arm(GrabberScripts.grantAccessibility(nonce), nonce)
+        CamdRootChannel.grantAccessibility(context)
     }
 
     fun setRecorderInputsPref(inputs: Set<Int>) {
@@ -103,12 +99,12 @@ class CameraWindows(private val context: Context) {
 
     /** Stops the stock AVM and holds it off, ignoring the user's keep flag while the recorder runs. */
     fun forceAvmOffForRecorder() {
-        val nonce = synchronized(lock) {
+        val needStop = synchronized(lock) {
             markAvmStopped()
-            if (getprop("init.svc.AVMapp") != "running") return
-            "r${System.currentTimeMillis()}"
+            getprop("init.svc.AVMapp") == "running"
         }
-        arm(GrabberScripts.stopAvm(nonce), nonce)
+        if (!needStop) return
+        CamdRootChannel.stopAvm(context)
         waitProp("init.svc.AVMapp", "running", present = false)
     }
 
@@ -145,14 +141,15 @@ class CameraWindows(private val context: Context) {
             return "state=error error=recorder_active"
         }
         if (keep) {
-            val nonce = synchronized(lock) {
+            val needStop = synchronized(lock) {
                 prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, true).apply()
                 markAvmStopped()
-                if (getprop("init.svc.AVMapp") != "running") return "state=avm_held"
-                "k${System.currentTimeMillis()}"
+                getprop("init.svc.AVMapp") == "running"
             }
-            arm(GrabberScripts.stopAvm(nonce), nonce)
-            waitProp("init.svc.AVMapp", "running", present = false)
+            if (needStop) {
+                CamdRootChannel.stopAvm(context)
+                waitProp("init.svc.AVMapp", "running", present = false)
+            }
             return "state=avm_held"
         }
         val ids = synchronized(lock) {
@@ -444,30 +441,34 @@ class CameraWindows(private val context: Context) {
     private fun prepare(stopAvm: Boolean) {
         val needGrant = !Settings.canDrawOverlays(context)
         val beat = File(GrabberScripts.BEAT)
-        val versionOk = runCatching {
-            File(GrabberScripts.VERSION_FILE).readText().trim() == GrabberScripts.GRAB_VERSION
-        }.getOrDefault(false)
+        val versionOk = GrabberScripts.grabVersionOk()
         val fresh = beat.canRead() &&
             System.currentTimeMillis() - beat.lastModified() < 4_000 &&
             versionOk
         if (fresh && !stopAvm && !needGrant) return
         if (stopAvm) markAvmStopped()
         if (fresh && stopAvm && !needGrant) {
-            val nonce = "s${System.currentTimeMillis()}"
-            arm(GrabberScripts.stopAvm(nonce), nonce)
+            CamdRootChannel.stopAvm(context)
             waitProp("init.svc.AVMapp", "running", present = false)
             return
         }
         if (fresh && !stopAvm) {
-            val nonce = "o${System.currentTimeMillis()}"
-            arm(GrabberScripts.grantOverlay(nonce), nonce)
+            CamdRootChannel.grantOverlay(context)
             return
         }
+        // Full start: stop AVM first so the grabber can open held inputs, then
+        // helper.ensure (or legacy launcher). Overlay is always in the legacy
+        // launcher; on rootsvc grant it only when still missing.
+        if (stopAvm) {
+            CamdRootChannel.stopAvm(context)
+            waitProp("init.svc.AVMapp", "running", present = false)
+        }
         installGrabber()
-        val nonce = "g${System.currentTimeMillis()}"
-        val script = GrabberScripts.launcher(nonce, stopAvm)
-        arm(script, nonce)
-        if (stopAvm) waitProp("init.svc.AVMapp", "running", present = false)
+        val binary = File(context.filesDir, "camd_grab.new")
+        val usedRootsvc = CamdRootChannel.ensureGrabber(context, binary, stopAvm = false)
+        if (usedRootsvc && needGrant) {
+            CamdRootChannel.grantOverlay(context)
+        }
         if (!fresh) waitBeat()
     }
 
@@ -490,30 +491,26 @@ class CameraWindows(private val context: Context) {
             if (!busy) break
             Thread.sleep(100)
         }
-        val nonce = "a${System.currentTimeMillis()}"
-        arm(GrabberScripts.startAvm(nonce), nonce)
+        CamdRootChannel.startAvm(context)
         synchronized(lock) { clearAvmStopped() }
         waitProp("init.svc.AVMapp", "running", present = true)
     }
 
     /** If the process died after stopping AVMapp, the next start puts it back. */
     fun recover() {
-        val stopNonce = synchronized(lock) {
+        val needStop = synchronized(lock) {
             if (keepAvmStopped()) {
                 markAvmStopped()
-                if (getprop("init.svc.AVMapp") == "running") {
-                    "k${System.currentTimeMillis()}"
-                } else {
-                    return
-                }
+                getprop("init.svc.AVMapp") == "running"
             } else {
                 null
             }
         }
-        if (stopNonce != null) {
-            runCatching { arm(GrabberScripts.stopAvm(stopNonce), stopNonce) }
+        if (needStop == true) {
+            runCatching { CamdRootChannel.stopAvm(context) }
             return
         }
+        if (needStop == false) return
         val shouldRestore = synchronized(lock) {
             val marker = File(context.filesDir, "avm.stopped")
             if (!marker.exists()) return
@@ -709,37 +706,6 @@ class CameraWindows(private val context: Context) {
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
 
-    private fun arm(script: String, nonce: String) = synchronized(armLock) {
-        val autorun = File(DaemonScripts.AUTORUN)
-        waitForeignAutorun(autorun)
-        autorun.writeText(script)
-        // With the trigger still armed by another app, mb_daemon runs and deletes the
-        // script the moment it lands, so chmod finds no file. The nonce marker below
-        // is the real answer.
-        runCatching { exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN)) }
-        File(DaemonScripts.AUTORUN_FLAG).createNewFile()
-        exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, ""))
-        Thread.sleep(300)
-        exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, DaemonScripts.AUTORUN_FLAG))
-        val deadline = System.currentTimeMillis() + 8_000
-        val marker = File(GrabberScripts.ARM)
-        while (System.currentTimeMillis() < deadline) {
-            val text = runCatching { if (marker.canRead()) marker.readText() else "" }.getOrDefault("")
-            if (text.contains(nonce)) return@synchronized
-            Thread.sleep(200)
-        }
-        throw IllegalStateException("mb_daemon не ответил")
-    }
-
-    private fun waitForeignAutorun(autorun: File) {
-        val deadline = System.currentTimeMillis() + DaemonScripts.FOREIGN_AUTORUN_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
-            val text = if (autorun.exists()) runCatching { autorun.readText() }.getOrDefault("") else null
-            if (!DaemonScripts.isForeignAutorun(text)) return
-            Thread.sleep(200)
-        }
-    }
-
     private fun waitBeat() {
         val deadline = System.currentTimeMillis() + 8_000
         val beat = File(GrabberScripts.BEAT)
@@ -768,10 +734,6 @@ class CameraWindows(private val context: Context) {
 
     private fun readProp(name: String): String {
         return runCatching { CamdShell.exec(arrayOf("getprop", name), timeoutMs = 3_000) }.getOrDefault("")
-    }
-
-    private fun exec(cmd: Array<String>) {
-        CamdShell.exec(cmd)
     }
 
     private class ShowResult {

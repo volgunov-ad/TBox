@@ -30,8 +30,15 @@ object CamdProbe {
         "none"
     }
 
-    fun grabVersion(): String =
-        runCatching { File(BenchScripts.CAMD_GRAB_VERSION).readText().trim() }.getOrNull()?.ifBlank { null } ?: "?"
+    fun grabVersion(): String {
+        val helper = runCatching {
+            File(BenchScripts.CAMD_GRAB_VERSION_HELPER).readText().trim()
+        }.getOrNull()?.ifBlank { null }
+        if (helper != null) return helper
+        return runCatching {
+            File(BenchScripts.CAMD_GRAB_VERSION).readText().trim()
+        }.getOrNull()?.ifBlank { null } ?: "?"
+    }
 
     fun status(): String = try {
         Socket().use { socket ->
@@ -45,11 +52,18 @@ object CamdProbe {
         "camd не отвечает на 127.0.0.1:$API_PORT (${error.javaClass.simpleName})"
     }
 
-    fun grabLogLength(): Long = runCatching { File(BenchScripts.CAMD_GRAB_LOG).length() }.getOrDefault(0L)
+    fun grabLogLength(): Long = grabLogFile().length()
+
+    /** Prefer the rootsvc helper log when present; else the legacy tmp path. */
+    private fun grabLogFile(): File {
+        val helper = File(BenchScripts.CAMD_GRAB_LOG_HELPER)
+        if (helper.isFile && helper.length() > 0L) return helper
+        return File(BenchScripts.CAMD_GRAB_LOG)
+    }
 
     /** Grabber log written since [offset]; a restarted grabber truncates the log, then read it all. */
     fun grabLogSince(offset: Long): String = runCatching {
-        RandomAccessFile(BenchScripts.CAMD_GRAB_LOG, "r").use { file ->
+        RandomAccessFile(grabLogFile(), "r").use { file ->
             val start = if (file.length() < offset) 0L else offset
             val bytes = ByteArray((file.length() - start).coerceIn(0L, 4_000_000L).toInt())
             file.seek(start)

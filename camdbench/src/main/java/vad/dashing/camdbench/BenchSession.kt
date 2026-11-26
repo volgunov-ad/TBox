@@ -17,7 +17,11 @@ class BenchSession(private val context: Context, private val plannedSec: Int) {
     fun run() {
         BenchState.stopRequested = false
         BenchState.update {
-            BenchUi(phase = BenchPhase.STARTING, plannedSec = plannedSec, message = "Запускаю сэмплер через mb_daemon…")
+            BenchUi(
+                phase = BenchPhase.STARTING,
+                plannedSec = plannedSec,
+                message = "Запускаю сэмплер (rootsvc / mb_daemon)…",
+            )
         }
         try {
             measure()
@@ -39,7 +43,11 @@ class BenchSession(private val context: Context, private val plannedSec: Int) {
         val grabLogOffset = CamdProbe.grabLogLength()
 
         stage(nonce)
-        RootChannel.arm(BenchScripts.start(nonce, plannedSec + BenchScripts.SAMPLER_GRACE_SEC), nonce)
+        RootChannel.arm(
+            context,
+            BenchScripts.start(nonce, plannedSec + BenchScripts.SAMPLER_GRACE_SEC),
+            nonce,
+        )
 
         val raw = File(BenchScripts.RAW)
         waitFor("сэмплер не запустился, журнал ${BenchScripts.RUN_LOG}", 10_000) { raw.canRead() }

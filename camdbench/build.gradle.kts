@@ -16,9 +16,9 @@ android {
         applicationId = "vad.dashing.camdbench"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
+        versionCode = 6
 
-        versionName = "1.3.0"
+        versionName = "1.3.1"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -62,6 +62,7 @@ tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {
 }
 
 dependencies {
+    implementation(project(":rootclient"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -71,4 +72,5 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
 }

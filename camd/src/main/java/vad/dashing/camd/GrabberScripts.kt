@@ -11,11 +11,29 @@ object GrabberScripts {
     const val BINARY = "${DaemonScripts.PACKAGE_FILES}/camd_grab.new"
     const val RUN = "/data/local/tmp/camd_grab"
     const val VERSION_FILE = "/data/local/tmp/camd_grab.ver"
+    /** rootsvc helper.ensure install path (plan W5). */
+    const val HELPER_NAME = "camd_grab"
+    const val HELPER_VERSION_FILE = "/data/local/vad-rootsvc/helpers/camd_grab.ver"
     const val GRAB_VERSION = "9"
     const val BEAT = "/data/local/tmp/camd-grab.beat"
     const val LOG = "/data/local/tmp/camd-grab.log"
     const val ARM = "/data/local/tmp/camd-grab.arm"
+    /** MbDaemonChannel body + substring that appears in the one-line autorun exec. */
+    const val ARM_BODY = "/sdcard/camd_grab_arm.sh"
+    const val OWN_MARKER = "camd_grab_arm"
     const val FRAME_RAM = "/mnt/camd-ram"
+
+    /** True when either the rootsvc helper or the legacy tmp version stamp matches. */
+    @JvmStatic
+    fun grabVersionOk(): Boolean {
+        val helpers = runCatching {
+            java.io.File(HELPER_VERSION_FILE).readText().trim() == GRAB_VERSION
+        }.getOrDefault(false)
+        if (helpers) return true
+        return runCatching {
+            java.io.File(VERSION_FILE).readText().trim() == GRAB_VERSION
+        }.getOrDefault(false)
+    }
 
     @JvmStatic
     fun frame(id: Int): String = "$FRAME_RAM/camd-uyvy-$id"

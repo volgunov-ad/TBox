@@ -38,6 +38,11 @@ class BenchScriptsTest {
     fun ownLeftoverAutorunIsNotForeign() {
         assertFalse(BenchScripts.isForeignAutorun(null))
         assertFalse(BenchScripts.isForeignAutorun(BenchScripts.start("x", 1)))
+        assertFalse(
+            BenchScripts.isForeignAutorun(
+                "#!/system/bin/sh\nexec /system/bin/sh '${BenchScripts.ARM_BODY}'\n",
+            ),
+        )
         assertTrue(BenchScripts.isForeignAutorun("#!/system/bin/sh\necho /data/local/tmp/camd-grab.arm\n"))
     }
 
