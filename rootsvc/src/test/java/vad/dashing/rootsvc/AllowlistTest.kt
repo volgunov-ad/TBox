@@ -16,6 +16,14 @@ class AllowlistTest {
     }
 
     @Test
+    fun monitorGetsStatusAndAdminRestart() {
+        assertTrue(Allowlist.allows(listOf(Allowlist.PKG_TBOX), RootSvcProtocol.CMD_STATUS))
+        assertTrue(Allowlist.allows(listOf(Allowlist.PKG_TBOX), RootSvcProtocol.CMD_ADMIN_RESTART))
+        assertFalse(Allowlist.allows(listOf(Allowlist.PKG_DCL), RootSvcProtocol.CMD_STATUS))
+        assertFalse(Allowlist.allows(listOf(Allowlist.PKG_DCL), RootSvcProtocol.CMD_ADMIN_RESTART))
+    }
+
+    @Test
     fun dclGetsScriptRunAndWindowCaps() {
         assertTrue(Allowlist.allows(listOf(Allowlist.PKG_DCL), RootSvcProtocol.CMD_SCRIPT_RUN))
         assertTrue(Allowlist.allows(listOf(Allowlist.PKG_DCL), RootSvcProtocol.CMD_USB_UNLOCK))

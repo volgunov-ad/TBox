@@ -29,22 +29,22 @@ object EnsureDaemon {
     private const val MAX_ARMS = 5
     private val busy = AtomicBoolean(false)
 
-    fun ensure(context: Context, reason: String) {
+    fun ensure(context: Context, reason: String, force: Boolean = false) {
         if (!busy.compareAndSet(false, true)) {
             Log.i(TAG, "ensure already running ($reason)")
             return
         }
         try {
-            doEnsure(context.applicationContext, reason)
+            doEnsure(context.applicationContext, reason, force)
         } finally {
             busy.set(false)
         }
     }
 
-    private fun doEnsure(context: Context, reason: String) {
-        Log.i(TAG, "ensure start reason=$reason")
+    private fun doEnsure(context: Context, reason: String, force: Boolean) {
+        Log.i(TAG, "ensure start reason=$reason force=$force")
         RootSvcClient.clearCache()
-        if (RootSvcClient.isUp() && versionMatches(context)) {
+        if (!force && RootSvcClient.isUp() && versionMatches(context)) {
             Log.i(TAG, "already up")
             grantOwnA11yViaSettings(context)
             return
@@ -59,11 +59,11 @@ object EnsureDaemon {
             return
         }
         val state = File(RootSvcProtocol.STATE_PATH)
-        if (state.canRead() && state.readText().trim() == "crashloop") {
-            Log.w(TAG, "supervisor crashloop — skip arm until reboot")
+        if (!force && state.canRead() && state.readText().trim() == "crashloop") {
+            Log.w(TAG, "supervisor crashloop — skip arm until reboot or force")
             return
         }
-        if (!noteArm(context)) {
+        if (!noteArm(context, force)) {
             Log.w(TAG, "arm limit reached for this boot")
             return
         }
@@ -99,13 +99,14 @@ object EnsureDaemon {
         return true
     }
 
-    private fun noteArm(context: Context): Boolean {
+    private fun noteArm(context: Context, force: Boolean): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val boot = currentBootId(context)
         val saved = prefs.getLong(KEY_BOOT, -1L)
         val arms = if (saved == boot) prefs.getInt(KEY_ARMS, 0) else 0
-        if (arms >= MAX_ARMS) return false
-        prefs.edit().putLong(KEY_BOOT, boot).putInt(KEY_ARMS, arms + 1).apply()
+        if (!force && arms >= MAX_ARMS) return false
+        val next = if (force && arms >= MAX_ARMS) MAX_ARMS else arms + 1
+        prefs.edit().putLong(KEY_BOOT, boot).putInt(KEY_ARMS, next.coerceAtMost(MAX_ARMS + 1)).apply()
         return true
     }
 

@@ -22,7 +22,9 @@ public final class Allowlist {
     private static final Set<String> ALL_CAPS = unmodifiable(
             RootSvcProtocol.CMD_PING,
             RootSvcProtocol.CMD_HELLO,
+            RootSvcProtocol.CMD_STATUS,
             RootSvcProtocol.CMD_ADMIN_UPGRADE,
+            RootSvcProtocol.CMD_ADMIN_RESTART,
             RootSvcProtocol.CMD_PKG_HIDE,
             RootSvcProtocol.CMD_PKG_UNHIDE,
             RootSvcProtocol.CMD_PKG_ENABLE,
