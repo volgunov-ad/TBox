@@ -307,7 +307,7 @@ public final class CommandDispatcher {
             //noinspection ResultOfMethodCallIgnored
             state.delete();
         }
-        ServiceLog.info("admin.restart — exit 0 for supervisor restart");
+        ServiceLog.info("admin.restart — exit " + ServiceMain.EXIT_RESTART);
         JSONObject o = ServiceMain.okJson(id, 0, 0L);
         o.put("state", "restarting");
         new Thread(new Runnable() {
@@ -318,7 +318,7 @@ public final class CommandDispatcher {
                 } catch (InterruptedException ignored) {
                     // ignore
                 }
-                System.exit(0);
+                System.exit(ServiceMain.EXIT_RESTART);
             }
         }, "rootsvc-restart").start();
         return o;

@@ -5,7 +5,11 @@ package vad.dashing.rootsvc.client;
  */
 public final class RootSvcProtocol {
     public static final int PROTO = 1;
-    public static final String SERVER_VERSION = "1.0.0";
+    public static final String SERVER_VERSION = "1.0.2";
+    /** Supervisor: refresh dex and restart immediately (not a crash). */
+    public static final int EXIT_UPGRADE = 42;
+    /** Supervisor: deliberate {@code admin.restart} — reset fail counter, no backoff. */
+    public static final int EXIT_RESTART = 43;
     public static final String SOCKET = "vad.dashing.rootsvc";
     public static final String PACKAGE = "vad.dashing.rootsvc";
     public static final String ENSURE_ACTION = "vad.dashing.rootsvc.ENSURE";

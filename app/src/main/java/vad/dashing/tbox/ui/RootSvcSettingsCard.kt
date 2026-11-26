@@ -52,7 +52,7 @@ fun RootSvcSettingsCard(headUnitCanMode: HeadUnitCanMode) {
                     RootSvcMonitor.fetchStatus(context.applicationContext)
                 }
             }
-            delay(2_000)
+            delay(10_000)
         }
     }
 

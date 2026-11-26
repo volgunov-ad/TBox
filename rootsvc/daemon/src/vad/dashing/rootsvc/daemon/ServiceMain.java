@@ -25,11 +25,13 @@ import vad.dashing.rootsvc.client.WireCodec;
 
 /**
  * Root app_process entry. Binds abstract {@link RootSvcProtocol#SOCKET}; a second instance
- * gets EADDRINUSE and exits. Exit code 42 asks the supervisor to refresh the dex immediately.
+ * gets EADDRINUSE and exits. Exit code {@link RootSvcProtocol#EXIT_UPGRADE} asks the supervisor
+ * to refresh the dex immediately; {@link RootSvcProtocol#EXIT_RESTART} is a deliberate restart.
  */
 public final class ServiceMain {
     private static final Charset UTF8 = Charset.forName("UTF-8");
-    public static final int EXIT_UPGRADE = 42;
+    public static final int EXIT_UPGRADE = RootSvcProtocol.EXIT_UPGRADE;
+    public static final int EXIT_RESTART = RootSvcProtocol.EXIT_RESTART;
     /** Wall-clock start of this daemon process (for {@code status} uptimeMs). */
     static final long STARTED_AT_MS = System.currentTimeMillis();
 

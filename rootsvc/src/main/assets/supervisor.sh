@@ -40,6 +40,12 @@ while true; do
     echo "upgraded" > "$STATE"
     continue
   fi
+  if [ "$code" -eq 43 ]; then
+    # admin.restart — deliberate, not a crash.
+    reset_fails
+    echo "restarted" > "$STATE"
+    continue
+  fi
   FAILS=$((FAILS + 1))
   if [ "$FAILS" -gt 6 ]; then
     echo "crashloop" > "$STATE"

@@ -145,8 +145,7 @@ object RootSvcMonitor {
                 null,
             )
             if (restart.isOk() || restart.kind == RootSvcResult.Kind.UNKNOWN_OUTCOME) {
-                // Daemon is exiting; also nudge watchdog in case supervisor died.
-                RootSvcClient.kick(context, true)
+                // Supervisor restarts on exit 43; do not force-ENSURE (would re-arm mb_daemon).
                 return restart
             }
             // Unknown cmd on older daemon — fall through to ensure.
