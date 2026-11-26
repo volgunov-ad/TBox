@@ -286,14 +286,11 @@ object EnsureDaemon {
             append("mv \"${'$'}DIR/supervisor.sh.new\" \"${'$'}DIR/supervisor.sh\"\n")
             append("chmod 700 \"${'$'}DIR/supervisor.sh\" ").append(dexDest).append('\n')
             append("rm -f ").append(state).append('\n')
-            // We only arm when a restart is needed — kill a live supervisor so the new dex runs.
+            // We only arm when a restart is needed. Supervisor was started with setsid, so its
+            // pid is the process-group leader — kill the group so app_process dies too (M1).
             append("if [ -f ").append(pidFile).append(" ]; then\n")
             append("  old=${'$'}(cat ").append(pidFile).append(")\n")
-            append("  if kill -0 \"${'$'}old\" 2>/dev/null; then\n")
-            append("    kill \"${'$'}old\" 2>/dev/null\n")
-            append("    sleep 0.3\n")
-            append("    kill -9 \"${'$'}old\" 2>/dev/null\n")
-            append("  fi\n")
+            append(killLiveSupervisorGroupShell())
             append("fi\n")
             append("setsid /system/bin/sh \"${'$'}DIR/supervisor.sh\" >> ").append(log)
                 .append(" 2>&1 < /dev/null &\n")
@@ -306,6 +303,17 @@ object EnsureDaemon {
     private fun shellQuote(path: String): String =
         "'" + path.replace("'", "'\\''") + "'"
 
+    /**
+     * Kill the setsid process group (supervisor.sh + app_process ServiceMain + helpers).
+     * A single-pid kill left the daemon holding the abstract socket (EADDRINUSE / crashloop).
+     */
+    internal fun killLiveSupervisorGroupShell(): String = buildString {
+        append("  if kill -0 \"${'$'}old\" 2>/dev/null; then\n")
+        append("    kill -TERM -\"${'$'}old\" 2>/dev/null\n")
+        append("    sleep 0.3\n")
+        append("    kill -9 -\"${'$'}old\" 2>/dev/null\n")
+        append("  fi\n")
+    }
 
     private fun grantOwnA11yViaSettings(context: Context) {
         // Soft path when we already have root service: ask it.

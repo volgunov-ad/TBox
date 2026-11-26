@@ -5,7 +5,7 @@ package vad.dashing.rootsvc.client;
  */
 public final class RootSvcProtocol {
     public static final int PROTO = 1;
-    public static final String SERVER_VERSION = "1.0.3";
+    public static final String SERVER_VERSION = "1.0.4";
     /** Supervisor: refresh dex and restart immediately (not a crash). */
     public static final int EXIT_UPGRADE = 42;
     /** Supervisor: deliberate {@code admin.restart} — reset fail counter, no backoff. */

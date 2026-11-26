@@ -4,6 +4,9 @@
 При публикации поднять **versionCode** на 1 и править **versionName**; сюда — блок с тем же номером сверху.
 Сборка: `tools/dcl_install/build.ps1` (Windows) или `tools/dcl_install/build.sh` (Linux), не Gradle. Готовый файл — `tools/dcl_install/DclInstall.apk` (версия только в манифесте). После сборки этот APK нужно закоммитить: CI сверяет его versionCode с манифестом.
 
+1.25
+1. Вшитая rootsvc 1.0.4: re-arm убивает группу процессов супервизора (`kill -9 -$pid`), чтобы не оставлять старый `app_process` на сокете.
+
 1.24
 1. Вшитая rootsvc 1.0.3 (ядро: post-ACK `UNKNOWN_OUTCOME`, кэш uid→пакеты, `busy`/очередь, права state/.ver, `admin.upgrade` при замене APK, boot-wait в клиенте, A9-gate сторожа).
 2. Короткий путь и бут-фикс вызывают общий `RootSvcClient.waitBootWindow` (5 с в первые 60 с).

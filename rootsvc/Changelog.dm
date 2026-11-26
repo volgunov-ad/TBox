@@ -4,6 +4,9 @@
 При публикации поднять **versionCode** на 1 и править **versionName** (semver); сюда — блок с тем же номером сверху.
 Имя APK: `rootsvc-<versionName>-<debug|release>.apk`.
 
+1.0.4
+1. Re-arm убивает группу процессов супервизора (`kill -9 -"$pid"`), а не только оболочку — иначе `app_process` держал сокет, новый супервизор получал EADDRINUSE и уходил в crashloop.
+
 1.0.3
 1. После ACK сбой клиента — `UNKNOWN_OUTCOME` (не `UNAVAILABLE`), чтобы не было двойного выполнения через mb_daemon; `script.run` обрезает stdout/stderr до 4 КиБ.
 2. `pm list packages -U` кэшируется (60 с); для `ping` пакеты не ищутся.

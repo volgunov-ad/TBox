@@ -12,7 +12,17 @@ class SupervisorExitCodesTest {
     fun upgradeAndRestartCodesAreDistinctFromCrash() {
         assertEquals(42, RootSvcProtocol.EXIT_UPGRADE)
         assertEquals(43, RootSvcProtocol.EXIT_RESTART)
-        assertEquals("1.0.3", RootSvcProtocol.SERVER_VERSION)
+        assertEquals("1.0.4", RootSvcProtocol.SERVER_VERSION)
+    }
+
+    @Test
+    fun reArmKillsSupervisorProcessGroup() {
+        val shell = EnsureDaemon.killLiveSupervisorGroupShell()
+        // Negative pid = process group (setsid leader): must kill app_process too (M1).
+        assertTrue(shell.contains("""kill -9 -"${'$'}old""""))
+        assertTrue(shell.contains("""kill -TERM -"${'$'}old""""))
+        // Must not be a single-pid-only kill without the leading dash before $old.
+        assertTrue(!shell.contains("""kill -9 "${'$'}old""""))
     }
 
     @Test

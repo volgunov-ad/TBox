@@ -18,7 +18,7 @@ import vad.dashing.rootsvc.client.RootSvcResult;
 final class RootExec {
     private static final String TAG = "DclRootExec";
     private static final String CLIENT = "vad.dashing.dclinstall";
-    private static final String CLIENT_VERSION = "1.24";
+    private static final String CLIENT_VERSION = "1.25";
 
     private RootExec() {}
 
