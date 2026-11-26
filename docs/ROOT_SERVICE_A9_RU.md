@@ -88,6 +88,8 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 
 Явный broadcast: `vad.dashing.rootsvc.ENSURE` (exported). Пакет в `<queries>` у клиентов.
 
+Сторожу нужно `WRITE_EXTERNAL_STORAGE` (A9 / API 28), иначе не записать `/sdcard/vad_rootsvc_boot.sh`. Установщик (`dcl_install` / Store follow-up) или `pm grant vad.dashing.rootsvc android.permission.WRITE_EXTERNAL_STORAGE`; экран приложения тоже запрашивает право.
+
 ---
 
 ## Раздел для разработчика DCL

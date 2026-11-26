@@ -1,12 +1,16 @@
 package vad.dashing.rootsvc
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import vad.dashing.rootsvc.client.MbDaemonChannel
@@ -43,6 +47,15 @@ object EnsureDaemon {
         if (RootSvcClient.isUp() && versionMatches(context)) {
             Log.i(TAG, "already up")
             grantOwnA11yViaSettings(context)
+            return
+        }
+        if (!hasStoragePermission(context)) {
+            Log.e(
+                TAG,
+                "WRITE_EXTERNAL_STORAGE not granted — cannot write "
+                    + RootSvcProtocol.BOOT_BODY
+                    + "; grant via installer/pm or open the app once",
+            )
             return
         }
         val state = File(RootSvcProtocol.STATE_PATH)
@@ -102,6 +115,13 @@ object EnsureDaemon {
         return System.currentTimeMillis() - SystemClock.elapsedRealtime()
     }
 
+    private fun hasStoragePermission(context: Context): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     private fun copyDex(context: Context): File {
         val dest = File(context.filesDir, "rootsvc.dex")
         context.assets.open("rootsvc.dex").use { input ->
@@ -110,10 +130,13 @@ object EnsureDaemon {
             }
         }
         // supervisor.sh next to the dex for the boot script to copy.
+        // Always rewrite as LF-only: Windows/cloud packaging can leave CRLF in assets.
+        val supervisor = File(context.filesDir, "supervisor.sh")
         context.assets.open("supervisor.sh").use { input ->
-            FileOutputStream(File(context.filesDir, "supervisor.sh")).use { output ->
-                input.copyTo(output)
-            }
+            val text = input.reader(StandardCharsets.UTF_8).readText()
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+            supervisor.writeText(text, StandardCharsets.UTF_8)
         }
         return dest
     }

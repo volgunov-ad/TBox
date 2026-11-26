@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
+import android.os.Build;
 
 import org.json.JSONObject;
 
@@ -63,9 +64,7 @@ public final class RootSvcClient {
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         LocalSocket socket = new LocalSocket();
         try {
-            socket.connect(
-                    new LocalSocketAddress(RootSvcProtocol.SOCKET, LocalSocketAddress.Namespace.ABSTRACT),
-                    (int) RootSvcProtocol.CONNECT_TIMEOUT_MS);
+            connect(socket);
         } catch (Exception error) {
             CACHE.set(new Cache(false, true, System.currentTimeMillis()));
             return RootSvcResult.unavailable("connect: " + error.getMessage());
@@ -110,6 +109,24 @@ public final class RootSvcClient {
     /** Clear the isUp cache (tests / after kick). */
     public static void clearCache() {
         CACHE.set(Cache.unknown());
+    }
+
+    /**
+     * Abstract sockets answer immediately. Timed {@code connect(addr, timeout)} throws
+     * {@link UnsupportedOperationException} on API 28 (A9); use the one-arg form there.
+     */
+    static void connect(LocalSocket socket) throws Exception {
+        LocalSocketAddress addr =
+                new LocalSocketAddress(RootSvcProtocol.SOCKET, LocalSocketAddress.Namespace.ABSTRACT);
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                socket.connect(addr, (int) RootSvcProtocol.CONNECT_TIMEOUT_MS);
+                return;
+            } catch (UnsupportedOperationException unsupported) {
+                // Some firmwares advertise API 29+ but still reject timed connect.
+            }
+        }
+        socket.connect(addr);
     }
 
     private static String readLine(InputStream in, long timeoutMs) throws Exception {

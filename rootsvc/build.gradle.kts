@@ -27,8 +27,8 @@ android {
         applicationId = "vad.dashing.rootsvc"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     buildTypes {
@@ -99,12 +99,21 @@ val androidJar: File =
     File(android.sdkDirectory, "platforms/android-36/android.jar").also {
         require(it.isFile) { "Missing $it — install platforms;android-36" }
     }
-val d8: File =
-    File(android.sdkDirectory, "build-tools").listFiles()
-        ?.filter { it.isDirectory }
-        ?.maxByOrNull { it.name }
-        ?.resolve("d8")
-        ?: error("d8 not found under build-tools")
+val d8: File = run {
+    val tools = File(android.sdkDirectory, "build-tools").listFiles()
+        ?.filter { it.isDirectory && !it.name.contains("rc", ignoreCase = true) }
+        ?.sortedBy { it.name }
+        ?: emptyList()
+    val dir = tools.lastOrNull()
+        ?: error("No stable build-tools under ${android.sdkDirectory}/build-tools")
+    val bat = dir.resolve("d8.bat")
+    val bin = dir.resolve("d8")
+    when {
+        bat.isFile -> bat
+        bin.isFile -> bin
+        else -> error("d8 not found in $dir")
+    }
+}
 
 val daemonClasses = layout.buildDirectory.dir("daemon/classes")
 val daemonDexOut = layout.buildDirectory.dir("daemon/dex")
@@ -144,11 +153,31 @@ val copyDaemonDex by tasks.registering(Copy::class) {
     rename { "rootsvc.dex" }
 }
 
-tasks.matching { it.name == "preBuild" }.configureEach {
+/** Force LF in shell assets so Windows checkouts / editors cannot ship CRLF into the APK. */
+val normalizeShellAssets by tasks.registering {
+    group = "build"
+    description = "Rewrite rootsvc shell assets as LF-only"
     dependsOn(copyDaemonDex)
+    val assetsDir = layout.projectDirectory.dir("src/main/assets")
+    inputs.files(fileTree(assetsDir) { include("*.sh") })
+    outputs.files(fileTree(assetsDir) { include("*.sh") })
+    doLast {
+        assetsDir.asFile.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".sh") }
+            ?.forEach { file ->
+                val text = file.readText(Charsets.UTF_8)
+                    .replace("\r\n", "\n")
+                    .replace("\r", "\n")
+                file.writeText(text, Charsets.UTF_8)
+            }
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(normalizeShellAssets)
 }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-    dependsOn(copyDaemonDex)
+    dependsOn(normalizeShellAssets)
 }
 
 dependencies {
