@@ -89,6 +89,7 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 | Клиент | Статус |
 |---|---|
 | `:camd` / `:camdbench` | переведены: rootsvc primary + `MbDaemonChannel` fallback (`CamdRootChannel` / `RootChannel`) |
+| `:camd` (0.9.15+) | запасной `usb.unlock` при загрузке, если SystemUI скрыт и флешка не смонтирована через 10 с; только служба, без `mb_daemon` |
 | `dcl_install` | ставит APK из assets, выдаёт storage + a11y; бут-фикс и короткие скрипты через службу |
 | Dashing Store | follow-up: карточка каталога |
 | Monitor | карточка Root-служба в Настройки → Система |

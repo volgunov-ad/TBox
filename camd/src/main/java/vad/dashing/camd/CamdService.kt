@@ -167,6 +167,7 @@ object CamdRuntime {
                 Thread({ createdWindows.recover() }, "camd-recover").apply { isDaemon = true }.start()
                 // The dashcam master switch persists: recording starts by itself after boot.
                 Thread({ createdRecorder.autoStartIfEnabled() }, "camd-rec-boot").apply { isDaemon = true }.start()
+                Thread({ BootUsbUnlock.runAfterDelay(app) }, "camd-usb-unlock").apply { isDaemon = true }.start()
             } else if (apiServer?.isRunning() != true) {
                 // Process survived but listen supervisor exited — restart API only (P1-5).
                 val eng = engine
