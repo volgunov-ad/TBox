@@ -51,9 +51,20 @@ class CameraWindows(private val context: Context) {
     @Volatile
     private var recorderActive = false
 
+    /** All recording cameras wait for the media: their inputs leave `grab.desired`, AVM stays held off. */
+    @Volatile
+    private var recorderPaused = false
+
     /** While recording, stock AVM is force-held off and AVM commands are denied. */
     fun setRecorderActive(active: Boolean) {
         recorderActive = active
+        recorderPaused = false
+    }
+
+    fun setRecorderPaused(paused: Boolean) = synchronized(lock) {
+        if (!recorderActive || recorderPaused == paused) return@synchronized
+        recorderPaused = paused
+        writeDesired()
     }
 
     /**
@@ -84,6 +95,7 @@ class CameraWindows(private val context: Context) {
             prefs.edit()
                 .putStringSet(RECORDER_INPUTS_KEY, inputs.map { it.toString() }.toSet())
                 .apply()
+            recorderPaused = false
             writeDesired(recorderInputs = inputs)
             shouldStopAvmNow()
         }
@@ -698,7 +710,7 @@ class CameraWindows(private val context: Context) {
         file.parentFile?.mkdirs()
         val recorderIds = when {
             recorderInputs != null -> recorderInputs
-            recorderActive -> recorderInputsPref()
+            recorderActive && !recorderPaused -> recorderInputsPref()
             else -> emptySet()
         }
         val divisor = RecorderFps.normalize(prefs.getInt(RecorderFps.PREF_DIVISOR, 1))

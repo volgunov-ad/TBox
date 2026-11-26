@@ -41,6 +41,7 @@ class RecorderController(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
     private val engines = HashMap<Int, RecorderEngine>()
+    private val waitingInputs = HashSet<Int>()
     private var watcher: Thread? = null
     @Volatile
     private var enabledNow = false
@@ -248,7 +249,7 @@ class RecorderController(
                         start()
                     }
                 } else {
-                    _state.update { it.copy(enabled = false) }
+                    _state.update { it.copy(enabled = false, runState = RunState.STOPPED, message = "") }
                 }
             }
         }
@@ -426,6 +427,7 @@ class RecorderController(
      * answering) is retried with growing pauses while the master switch stays on.
      */
     private fun startWithRetry() {
+        if (!waitForMedia()) return
         val pauses = RecorderStartRetry.PAUSES_MS
         for (attempt in 0..pauses.size) {
             if (attempt > 0) {
@@ -438,6 +440,41 @@ class RecorderController(
             if (!prefs.getBoolean(PREF_ENABLED, false) || enabledNow) return
             if (startRecording(retryInMs = pauses.getOrNull(attempt))) return
         }
+    }
+
+    /**
+     * Holds the start until the recording folder is writable. Before that nothing goes to
+     * root (rootsvc / mb_daemon): at boot the USB stick is mounted through mb_daemon by
+     * another app, and an early grabber start would occupy that channel for nothing.
+     * Returns false when the switch was turned off or recording already runs.
+     */
+    private fun waitForMedia(): Boolean {
+        var announced = false
+        while (true) {
+            if (!prefs.getBoolean(PREF_ENABLED, false) || enabledNow) return false
+            if (mediaReady()) {
+                if (announced) Log.i(LOG_TAG, "папка записи появилась: ${_state.value.folder}")
+                return true
+            }
+            if (!announced) {
+                announced = true
+                Log.i(LOG_TAG, "жду папку записи ${_state.value.folder} — граббер не запускаю")
+                _state.update {
+                    it.copy(runState = RunState.WAITING_MEDIA, message = "Жду папку записи: ${it.folder}")
+                }
+            }
+            try {
+                Thread.sleep(MEDIA_POLL_MS)
+            } catch (_: InterruptedException) {
+                return false
+            }
+        }
+    }
+
+    private fun mediaReady(): Boolean {
+        val folder = currentFolder() ?: return false
+        if (!folder.isDirectory && folder.parentFile?.isDirectory == true) folder.mkdirs()
+        return RecorderFiles.isWritable(folder)
     }
 
     /** Returns true once recording runs (started now or already running). */
@@ -500,6 +537,7 @@ class RecorderController(
                     nextSegment = ::nextSegment,
                     onSegmentClosed = { recountBytes() },
                     onWaiting = { waiting, reason ->
+                        mediaWaitChanged(inputId, waiting)
                         updateRunState(if (waiting) RunState.WAITING_MEDIA else RunState.RECORDING, reason)
                     },
                     onSegmentError = { message ->
@@ -547,7 +585,21 @@ class RecorderController(
         }
     }
 
+    /**
+     * While every recording camera waits for the media, the grabber stops copying their
+     * frames ([CameraWindows.setRecorderPaused]); the first engine that finds the folder
+     * again brings the copies back. Only the desired file changes — no root call.
+     */
+    private fun mediaWaitChanged(inputId: Int, waiting: Boolean) {
+        val paused = synchronized(waitingInputs) {
+            if (waiting) waitingInputs.add(inputId) else waitingInputs.remove(inputId)
+            RecorderMediaPause.paused(_state.value.inputs, waitingInputs)
+        }
+        windows.setRecorderPaused(paused)
+    }
+
     private fun stopEngines() {
+        synchronized(waitingInputs) { waitingInputs.clear() }
         synchronized(engines) {
             engines.values.forEach { it.requestStop() }
             engines.values.forEach { runCatching { it.interrupt() } }
@@ -648,6 +700,7 @@ class RecorderController(
         private const val LOG_TAG = "CamdRecorder"
         /** Watcher passes are 5 s apart: the folder is re-listed once a minute. */
         private const val RECOUNT_EVERY_PASSES = 12
+        private const val MEDIA_POLL_MS = 5_000L
         private const val PREF_ENABLED = "recorder_enabled"
         private const val PREF_FOLDER = "recorder_folder"
         private const val PREF_QUOTA_GB = "recorder_quota_gb"
