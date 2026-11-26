@@ -51,6 +51,9 @@ internal class RecorderEngine(
     @Volatile
     private var running = true
 
+    /** Frames go to GL straight from the grabber mapping; off after the first failed upload. */
+    private var directUpload = true
+
     /**
      * Set by the emergency save ([RecorderController.requestEmergencySave]): the current
      * in-flight segment closes immediately through the normal finally path —
@@ -203,7 +206,7 @@ internal class RecorderEngine(
                 mapped = read.buffer
                 mappedIno = read.inode
                 mappedLength = read.length
-                pixels = read.pixels
+                if (!directUpload) pixels = read.pixels
                 lastSeq = read.seenSeq
 
                 if (codec == null) {
@@ -237,7 +240,7 @@ internal class RecorderEngine(
                 }
 
                 val now = System.currentTimeMillis()
-                if (read.slot != null && read.seqChanged) {
+                if (read.slot != null && read.seqChanged && upload(gl, read.slot, read.pixels!!, read.buffer!!)) {
                     if (now - lastLensMs >= 500) {
                         correction = CamdLensCorrectionStore.load(prefs, inputId)
                         lastLensMs = now
@@ -246,7 +249,7 @@ internal class RecorderEngine(
                     if (frames > 0) skipped += RecorderPacing.skippedFrames(read.slot.frameNo, lastFrameNo, fpsDivisor)
                     lastFrameNo = read.slot.frameNo
                     frames += 1
-                    uploadAndDraw(gl, read.slot, correction, pixels!!)
+                    draw(gl, read.slot, correction)
                     val format = drain(eos = false)
                     if (format != null && track == -1 && muxer != null) {
                         track = muxer.addTrack(format)
@@ -293,24 +296,43 @@ internal class RecorderEngine(
         }
     }
 
-    private fun uploadAndDraw(gl: Gl, slot: UyvySlot, correction: CamdLensCorrection, pixels: ByteBuffer) {
+    /**
+     * Uploads the frame into the texture. A direct upload reads the grabber slot in place,
+     * so the frame is dropped if the grabber published past it meanwhile (it may have been
+     * rewriting that slot); the next poll takes the newer frame. Returns false for a drop.
+     */
+    private fun upload(gl: Gl, slot: UyvySlot, pixels: ByteBuffer, mapped: ByteBuffer): Boolean {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gl.texture)
-        val buffer = pixels.also { it.position(0) }
-        if (gl.uploadedWidth != slot.width || gl.uploadedHeight != slot.height) {
-            GLES20.glTexImage2D(
-                GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
-                slot.width / 2, slot.height, 0,
-                GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer,
-            )
-            gl.uploadedWidth = slot.width
-            gl.uploadedHeight = slot.height
-        } else {
-            GLES20.glTexSubImage2D(
-                GLES20.GL_TEXTURE_2D, 0, 0, 0,
-                slot.width / 2, slot.height,
-                GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer,
-            )
+        val direct = directUpload
+        val uploaded = runCatching {
+            val buffer = pixels.also { it.position(0) }
+            if (gl.uploadedWidth != slot.width || gl.uploadedHeight != slot.height) {
+                GLES20.glTexImage2D(
+                    GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
+                    slot.width / 2, slot.height, 0,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer,
+                )
+                gl.uploadedWidth = slot.width
+                gl.uploadedHeight = slot.height
+            } else {
+                GLES20.glTexSubImage2D(
+                    GLES20.GL_TEXTURE_2D, 0, 0, 0,
+                    slot.width / 2, slot.height,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer,
+                )
+            }
         }
+        if (uploaded.isFailure) {
+            if (!direct) throw uploaded.exceptionOrNull()!!
+            Log.i(LOG_TAG, "cam$inputId: прямая передача кадра не удалась, копирую кадры: ${uploaded.exceptionOrNull()}")
+            directUpload = false
+            gl.uploadedWidth = 0
+            return false
+        }
+        return !direct || mapped.getInt(16) == slot.seq
+    }
+
+    private fun draw(gl: Gl, slot: UyvySlot, correction: CamdLensCorrection) {
         GLES20.glViewport(0, 0, slot.width, slot.height)
         GLES20.glUseProgram(gl.program)
         GLES20.glUniform1i(gl.uTex, 0)
@@ -565,6 +587,12 @@ internal class RecorderEngine(
             return FrameRead(src, buf, ino, len, pixels, null, false, slot.seq)
         }
         val bytes = slot.slotBytes
+        if (directUpload) {
+            val view = mappedBuf.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+            view.position(UYVY_HEADER + slot.slot * bytes)
+            view.limit(UYVY_HEADER + slot.slot * bytes + bytes)
+            return FrameRead(src, buf, ino, len, view.slice(), slot, true, slot.seq)
+        }
         val copy = pixels?.takeIf { it.capacity() == bytes }
             ?: ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
         copy.clear()
