@@ -55,7 +55,7 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 }
 ```
 
-С главного потока не вызывать. В первые 60 с после загрузки, если сторож установлен, клиент может ждать сокет до 5 с перед fallback (`RootSvcProtocol.BOOT_WAIT_MS` / `BOOT_WINDOW_MS`).
+С главного потока не вызывать. Константы `BOOT_WAIT_MS` / `BOOT_WINDOW_MS` (5 с в первые 60 с) есть в протоколе, но `RootSvcClient` окно загрузки **сам не ждёт** — клиент (DCL и др.) реализует ожидание сам; см. [DCL_ROOT_SERVICE_FOR_VENDOR_RU.md](DCL_ROOT_SERVICE_FOR_VENDOR_RU.md).
 
 ### Ошибки и fallback (кратко)
 
@@ -66,6 +66,7 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 | `forbidden` / `bad_args` / `unknown_cmd` | **не** старый путь |
 | `failed` | **не** повторять старым путём |
 | ACK есть, результата нет → `UNKNOWN_OUTCOME` | старый путь только для идемпотентных |
+| `busy` | в текущей службе **не отдаётся** (пул без отказа); `shouldFallback(busy)` = false |
 
 ## Команды v1
 
@@ -75,7 +76,9 @@ if (FallbackContract.shouldFallback(r, "svc.ctl")) {
 
 ## Протокол захвата `mb_daemon`
 
-`MbDaemonChannel`: bind `vad.dashing.mbdaemon.lock` → ждать чужой `autorun.sh` → тело в свой файл → `autorun.sh` = `exec sh <тело>` через rename → флаг + `setprop` → ждать nonce. Скрипт **не** удаляет `$0` / общий флаг / не сбрасывает свойство.
+`MbDaemonChannel`: bind `vad.dashing.mbdaemon.lock` → ждать чужой `autorun.sh` → тело в свой файл → `autorun.sh` = `exec sh <тело>` через rename → флаг + `setprop` → ждать nonce в маркере. **Nonce в маркер пишет само тело скрипта** (`echo … > mark`); канал только ждёт. Скрипт **не** удаляет `$0` / общий флаг / не сбрасывает свойство.
+
+Авторизация пакетов на службе: `pm list packages -U` (не Binder `getPackagesForUid`). Ограничения DCL «appops/a11y/helper только для себя» в v1 **не проверяются**. `script.run` не сериализован; `wm.*` не проверяет коды выхода `am`.
 
 ## Установка (хуки для follow-up)
 

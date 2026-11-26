@@ -8,17 +8,19 @@
 
 Платформа: **только Android 9 / mbCAN (Mengbo)**. На A10 службы в v1 нет.
 
+Документ описывает **фактическое** поведение текущего кода, без обещаний плана, которые ещё не реализованы.
+
 ---
 
 ## 0. Нужно ли что-то менять в DCL?
 
 | Вердикт | Что это значит |
 |---------|----------------|
-| **Полный переход готов со стороны службы** | Root USB unlock, окна (`wm.*`), `helper.ensure`, `settings.a11y.*`, `pkg.appops`, `script.run` уже в allowlist DCL |
+| **Переход со стороны службы возможен** | Root USB unlock, окна (`wm.*`), `helper.ensure`, `settings.a11y.*`, `pkg.appops`, `script.run` уже в allowlist DCL |
 | **Fallback обязателен** | Если сокета нет — DCL работает как сейчас (`RootOrchestrator` + `dclwm`) |
-| **Старый путь тоже правится** | Даже без службы: захват канала `mb_daemon` (§6) и хвост `ArmScript` без безусловного `rm`/`setprop ''` |
+| **Старый путь тоже правится** | Даже без службы: захват канала `mb_daemon` (§6.2) и хвост `ArmScript` без безусловного `rm`/`setprop ''` |
 
-Итого: DCL сначала ходит в службу; при `UNAVAILABLE` / `unsupported` / `proto` — старый путь. При `forbidden` / `bad_args` — **не** падать на старый путь.
+Итого: DCL сначала ходит в службу; при `UNAVAILABLE` / `unsupported` / `proto` — старый путь. При `forbidden` / `bad_args` / `unknown_cmd` — **не** падать на старый путь. При `failed` — **не** повторять legacy (действие уже было).
 
 ---
 
@@ -62,7 +64,7 @@ shared/rootsvc/java/vad/dashing/rootsvc/client/*.java
 | `RootSvcClient` | `call(cmd, args, timeoutMs)`, `isUp()`, `kick(Context)` |
 | `RootSvcResult` | `Kind`: `OK` / `FAILED` / `REJECTED` / `UNKNOWN_OUTCOME` / `UNAVAILABLE` |
 | `FallbackContract` | `shouldFallback(result, cmd)`, таймауты результата |
-| `RootSvcProtocol` | константы сокета, ошибок, команд, таймаутов |
+| `RootSvcProtocol` | константы сокета, ошибок, команд, таймаутов (`BOOT_WAIT_MS` / `BOOT_WINDOW_MS` — только константы) |
 | `Allowlist` | справочно: `PKG_DCL`, набор caps (на стороне службы) |
 | `MbDaemonChannel` | протокол захвата `mb_daemon` для legacy-пути |
 
@@ -73,6 +75,8 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
     // legacy RootOrchestrator / Starter.ensure + MbDaemonChannel …
 }
 ```
+
+`RootSvcClient` **не** ждёт сокет в окне загрузки: константы `BOOT_WAIT_MS` (5 с) / `BOOT_WINDOW_MS` (60 с) есть, но общий клиент их не применяет. DCL должен сам подождать до 5 с в первые 60 с после boot, прежде чем уходить в legacy (см. §6.1).
 
 ---
 
@@ -104,11 +108,11 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 | `unknown_cmd` | неизвестная команда | **нет** |
 | `unsupported` | команды нет на этом ГУ / в этой сборке | **да** |
 | `proto` | несовместимая версия протокола | **да** |
-| `busy` | очередь полна | повтор 200–500 мс до 3 раз, затем как `UNAVAILABLE` |
+| `busy` | задумано «очередь полна» | **сейчас служба `busy` не отдаёт** (пул 4 потока с неограниченной очередью). `FallbackContract.shouldFallback` для `busy` = `false` — общий пример из §2.1 на legacy сам не уйдёт; при появлении `busy` в будущем нужен свой retry |
 | `timeout` | команда не уложилась на стороне службы | по контракту клиента |
 | `failed` | выполнилось с ошибкой (`exit` / `stderr` / `msg`) | **нет** — действие уже было |
 
-Клиентское `UNAVAILABLE` (нет сокета / нет `ACK` за 1 с) в провод не попадает: его выставляет `RootSvcClient`.
+Клиентское `UNAVAILABLE` (нет сокета / нет `ACK` за 1 с) в провод не попадает: его выставляет `RootSvcClient`. Под нагрузкой (пул занят долгими командами) `ACK` тоже может не прийти за 1 с → клиент увидит `UNAVAILABLE` и пойдёт в legacy.
 
 ### 3.3. Таймауты
 
@@ -119,34 +123,42 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 | Результат по умолчанию | 5 с |
 | `helper.ensure` / тяжёлые | 15 с |
 | `script.run` | задаёт клиент, до 120 с |
-| Окно загрузки | первые 60 с после boot: если сторож установлен, ждать сокет до **5 с** перед fallback |
+| Окно загрузки | **рекомендация:** первые 60 с после boot ждать сокет до 5 с; в общем клиенте **не реализовано** — делать в DCL |
 | Кэш «службы нет» | 30 с |
 
 ---
 
 ## 4. Allowlist DCL (возможности)
 
-Служба: `SO_PEERCRED` → uid → `getPackagesForUid`. Разрешение только если **все** пакеты этого uid есть в таблице клиентов (защита от `sharedUserId`). uid 0 — всегда.
+Служба: `SO_PEERCRED` → uid → пакеты через **`pm list packages -U`** (не Binder `getPackagesForUid`). Разрешение только если **все** пакеты этого uid есть в таблице клиентов (защита от `sharedUserId`). uid 0 — всегда.
 
-Для `ras.dashing.tbox.launcher` разрешены:
+Для `ras.dashing.tbox.launcher` в allowlist есть:
 
-| Команда | Назначение |
-|---------|------------|
+| Команда | Что делает служба |
+|---------|-------------------|
 | `ping` / `hello` | проверка и caps |
 | `usb.unlock` | `setLockScreenShown(false)` + vold secure-keyguard off |
 | `wm.list` / `wm.resize` / `wm.minimize` / `wm.dismiss` | окна (поглощение `dclwm`) |
-| `helper.ensure` | запуск/проверка помощника из `files/` вызывающего пакета |
-| `settings.a11y.add` / `settings.a11y.remove` | свои accessibility-службы, чужие не затираются |
-| `pkg.appops` | appops **для себя** |
+| `helper.ensure` | запуск/проверка помощника по `path` + SHA-256 + версия |
+| `settings.a11y.add` / `settings.a11y.remove` | дописать/убрать component в `enabled_accessibility_services` |
+| `pkg.appops` | `appops set <package> <op> <mode>` |
 | `script.run` | произвольный скрипт (тело, таймаут, `stdout`/`stderr`/`exit`) |
 
-Всё остальное (`pkg.hide`, `svc.ctl`, `wallpaper.set`, …) → `forbidden`. Чужой пакет может только `PING` (проверка «служба есть»).
+Всё остальное (`pkg.hide`, `svc.ctl`, `wallpaper.set`, …) → `forbidden`. Чужой пакет может только `ping` (проверка «служба есть»).
+
+**Ограничения «только для себя» в v1 не проверяются.** Служба не сверяет:
+
+- `pkg.appops` — любой `package`, подходящий под regex имени;
+- `settings.a11y.*` — любой `component` с `/` (логика add/remove чужие строки не затирает, но чужой компонент принять можно);
+- `helper.ensure` — любой существующий файл с верным SHA-256, не только `files/` вызывающего пакета.
+
+DCL с `script.run` и так имеет полный root; это не повышает права относительно статус-кво, но **не** стоит полагаться на «служба сама ограничит scope». Передавайте свои пути/пакет/компонент сами.
 
 ---
 
 ## 5. Команды окон `wm.*`
 
-Переносят `dclwm` один к одному (`LIST` / `RESIZE` / `MINIMIZE` / `DISMISS`). Семантика окон, freeform и кнопка «домой» — [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md). Свои задачи лаунчера служба **не** двигает (`err` с текстом `launcher` / `forbidden`).
+Переносят сценарий `dclwm` (`LIST` / `RESIZE` / `MINIMIZE` / `DISMISS`). Семантика окон, freeform и кнопка «домой» — [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md). Свои задачи пакета `ras.dashing.tbox.launcher` служба **не** двигает → `"err":"forbidden"` (msg про launcher).
 
 Порядок кнопки «домой» **не меняется**:
 
@@ -185,12 +197,15 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 ← {"id":"d06","ok":true,"exit":0,"ms":…}
 ```
 
-| Было в `dclwm` | Стало в `rootsvc` |
-|----------------|-------------------|
-| `ERR not_found` | `ok:false`, `err`/`msg` с `not_found` / `failed` |
-| `ERR launcher` | `err":"forbidden"`, msg про launcher |
-| `ERR am …` | `err":"failed"` с текстом |
-| `ERR bad_args` | `err":"bad_args"` |
+Фактические ответы (не обещания плана):
+
+| Ситуация | Ответ rootsvc |
+|----------|----------------|
+| Нет задачи | `"ok":false,"err":"failed","msg":"not_found"` → у клиента `FAILED` |
+| Задача лаунчера | `"err":"forbidden"` (msg про launcher) |
+| Коды выхода `am stack/task resize/remove` | **игнорируются**; при найденной чужой задаче ответ почти всегда `"ok":true` (в отличие от `dclwm`, где был `ERR am …`) |
+| `wm.resize` с кривыми bounds / без нужных полей | `"err":"bad_args"` |
+| `wm.minimize` / `wm.dismiss` без `taskId` | `taskId` читается как −1 → как «нет задачи»: `failed` / `not_found`, **не** `bad_args` |
 
 Координаты: −100…4000; для `MINIMIZE` off-screen rect `2000,2000–2200,2200` подставляет служба.
 
@@ -214,11 +229,11 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 | `forbidden` / `bad_args` / `unknown_cmd` | `REJECTED` | **не** legacy; журнал; сообщить нам |
 | `failed` | `FAILED` | **не** повторять legacy |
 | `ACK` есть, результата нет | `UNKNOWN_OUTCOME` | legacy только для идемпотентных: `usb.unlock`, `pkg.appops`, `helper.ensure`, `settings.a11y.*` |
-| `busy` | `REJECTED` | retry 200–500 мс ×3, затем как `UNAVAILABLE` |
+| `busy` | `REJECTED` | **сейчас не приходит**; если появится — `shouldFallback` = false, нужен свой retry; не полагаться на общий пример §2.1 |
 
 ### 6.1. Рекомендуемый порядок
 
-1. При старте процесса и на `BOOT_COMPLETED` (**не** с главного потока): `hello`. В первые 60 с после загрузки ждать сокет до 5 с.
+1. При старте процесса и на `BOOT_COMPLETED` (**не** с главного потока): в первые 60 с после загрузки **сами** ждать сокет до ~5 с, затем `hello`.
 2. Служба ответила и в `caps` есть нужное → `usb.unlock`, окна через `wm.*`, разовые сценарии — `script.run` / `helper.ensure`. **`autorun.sh` и `dclwm` в этой загрузке не трогать.**
 3. Нет сокета / нет `ACK` / `unsupported`/`proto` → прежний `RootOrchestrator` и `Starter.ensure` + сокет `dclwm`, но с протоколом захвата канала (§6.2). Послать `vad.dashing.rootsvc.ENSURE` и через ~30 с снова `hello`. Если служба поднялась — окна на `wm.*`.
 4. `forbidden`/`bad_args` — не падать на старый путь.
@@ -235,7 +250,9 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 5. Скрипт в конце **ничего общего не трогает** (ни `$0`, ни `/sdcard/autorun.flag`, ни свойство). Убирает `mb_daemon`.
 6. Отпустить блокировку после nonce или таймаута.
 
-Хвост `ArmScript` / `Starter.ensure` в `tools/dclwm/` уже правится под эти правила; DCL забирает обновлённые файлы из репозитория.
+**Nonce пишет сам скрипт.** `MbDaemonChannel.arm(..., nonce)` только ждёт, пока в файле-маркере (для rootsvc по умолчанию `/sdcard/vad_rootsvc_arm`) появится строка с `nonce`. Канал **не** дописывает nonce в тело. Без `echo … > "$MARK"` (как в `ArmScript` / `EnsureDaemon.bootScript`) `arm()` ждёт ~8 с и бросает исключение. Для legacy DCL маркер `dclwm` — `/data/local/tmp/dclwm.arm` (`Protocol.ARM_MARKER`); в теле уже есть запись nonce.
+
+Хвост `ArmScript` / `Starter.ensure` в `tools/dclwm/` уже без безусловного `rm`/`setprop ''`; DCL забирает обновлённые файлы из репозитория.
 
 ---
 
@@ -247,7 +264,7 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 
 ### 7.2. `helper.ensure`
 
-Запуск/проверка помощника из каталога файлов **своего** пакета (путь + SHA-256 + версия). Пример полей (ориентир):
+Запуск/проверка помощника: `name`, `path`, `sha256` (64 hex), `version`, `kind` (`exec`|`dex`), для dex — `mainClass`. Путь **не** ограничивается каталогом `files/` вызывающего пакета — только «файл есть» и SHA совпал. Рекомендуемый пример (свой dex):
 
 ```
 → {"v":1,"id":"d07","cmd":"helper.ensure",
@@ -261,15 +278,21 @@ if (FallbackContract.shouldFallback(r, "usb.unlock")) {
 
 ### 7.3. `settings.a11y.add` / `settings.a11y.remove`
 
-Дописать/убрать **свою** строку в `enabled_accessibility_services`, не затирая чужие.
+Аргумент: `component` (`pkg/Class`). Add/remove не затирает чужие записи в списке, но **не** проверяет, что component принадлежит вызывающему пакету. Передавайте только свой.
 
 ### 7.4. `pkg.appops`
 
-Appops для пакета вызывающего uid (себя).
+Аргументы: `package`, `op`, `mode`. Пакет **не** сверяется с uid вызывающего — передавайте свой.
 
 ### 7.5. `script.run`
 
-Тело скрипта, таймаут, ответ с `exit` / `stdout` / `stderr`. Одновременно на службе выполняется один скрипт. Журналируется. Для разовых сценариев, которых нет в закрытом списке.
+Тело скрипта, таймаут, ответ с `exit` / `stdout` / `stderr`. Для разовых сценариев, которых нет в закрытом списке.
+
+Фактически в v1:
+
+- **параллельность:** сериализации нет — несколько `script.run` могут идти сразу (пул из 4 рабочих потоков);
+- **журнал службы:** пишутся uid, команда, `ok`/`err` — **тело скрипта в лог не пишется**;
+- ответная JSON-строка должна укладываться в 16 КиБ на стороне клиента (`LINE_LIMIT`); очень длинный `stdout`/`stderr` может оборвать разбор — перенаправляйте болтливый вывод в файл на устройстве.
 
 ---
 
@@ -277,10 +300,11 @@ Appops для пакета вызывающего uid (себя).
 
 1. Скопировать `shared/rootsvc/.../client/*.java` в исходники DCL (тот же пакет `vad.dashing.rootsvc.client`).
 2. В манифест: `<queries>` на `vad.dashing.rootsvc`.
-3. На старте / `BOOT_COMPLETED`: `hello` → при успехе `usb.unlock` + `wm.*`; иначе legacy с `MbDaemonChannel`.
-4. Кнопку «домой» вести через `wm.list`/`wm.minimize` + свой `startActivity` (как в [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md)).
+3. На старте / `BOOT_COMPLETED`: своё ожидание сокета в окне boot → `hello` → при успехе `usb.unlock` + `wm.*`; иначе legacy с `MbDaemonChannel` (nonce в теле скрипта).
+4. Кнопку «домой» вести через `wm.list`/`wm.minimize` + свой `startActivity` (как в [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md)). Не полагаться на коды выхода `am` в ответе `wm.*`.
 5. Убрать безусловный `rm -f "$0"` / сброс свойства в хвосте legacy-скрипта; брать блокировку канала.
 6. При `forbidden`/`bad_args` писать в журнал DCL и не маскировать legacy-путём.
+7. Не рассчитывать на `busy` от службы и на серверную проверку «только свой пакет/путь».
 
 ---
 
