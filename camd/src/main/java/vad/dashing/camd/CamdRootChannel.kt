@@ -108,6 +108,21 @@ object CamdRootChannel {
             usedRootsvc
         }
 
+    /** rootsvc only: a legacy mb_daemon arm here would race DCL's own USB unlock script. */
+    fun usbUnlock(): RootSvcResult {
+        var result = RootSvcResult.unavailable("no attempt")
+        repeat(CamdRootBridge.BUSY_RETRIES) {
+            result = runCatching {
+                RootSvcClient.callWithBootWait(RootSvcProtocol.CMD_USB_UNLOCK, null, 5_000L)
+            }.getOrElse { error ->
+                RootSvcResult.unavailable("call: ${error.message}")
+            }
+            if (!result.isErr(RootSvcProtocol.ERR_BUSY)) return result
+            Thread.sleep(CamdRootBridge.BUSY_SLEEP_MS)
+        }
+        return result
+    }
+
     private fun callOrLegacy(
         context: Context,
         cmd: String,
