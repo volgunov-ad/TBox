@@ -391,55 +391,69 @@ class MainActivity : ComponentActivity() {
                 val dclMode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend)
                     ?: return ExternalRedirectOutcome.NotNeeded
                 // Never block onCreate / main thread on ContentResolver.call (P0-1).
+                // Always completeNormalOnCreate on failure / thrown Binder death so a crashed
+                // DCL cannot leave Main blank after PendingAsync.
                 lifecycleScope.launch {
-                    val dclOk = withContext(Dispatchers.IO) {
-                        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
-                            context = this@MainActivity,
-                            packageName = packageName,
-                            mode = dclMode,
-                            activityClass = MainActivity::class.java.name,
-                        )
-                    }
-                    val allowAdayoFallback = backend != MainAppWindowBackend.DCL_FULLSCREEN
-                    val adayoOk = !dclOk &&
-                        allowAdayoFallback &&
-                        adayoAvailable &&
-                        AdayoStockAppWindow.launchInAppWindow(
-                            context = this@MainActivity,
-                            packageName = packageName,
-                            activityClass = MainActivity::class.java.name,
-                        )
-                    when {
-                        dclOk -> {
-                            val nowMs = SystemClock.elapsedRealtime()
-                            dclAppAreaExternalRedirectConsumedThisProcess = true
-                            lastExternalRedirectAtMs = nowMs
-                            lastDclModeReapplyAtMs = nowMs
-                            // DCL reuses this singleTask (resize/move). finish() would kill the
-                            // only Main — see shouldFinishSelfAfterSuccessfulDclRedirect.
-                            if (
-                                LaunchMainInStockAppWindowDecision
-                                    .shouldFinishSelfAfterSuccessfulDclRedirect()
-                            ) {
-                                finishAfterExternalRedirect(nowMs, backend)
-                            } else {
-                                Log.i(
+                    try {
+                        val dclOk = withContext(Dispatchers.IO) {
+                            vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
+                                context = this@MainActivity,
+                                packageName = packageName,
+                                mode = dclMode,
+                                activityClass = MainActivity::class.java.name,
+                            )
+                        }
+                        val allowAdayoFallback = backend != MainAppWindowBackend.DCL_FULLSCREEN
+                        val adayoOk = !dclOk &&
+                            allowAdayoFallback &&
+                            adayoAvailable &&
+                            AdayoStockAppWindow.launchInAppWindow(
+                                context = this@MainActivity,
+                                packageName = packageName,
+                                activityClass = MainActivity::class.java.name,
+                            )
+                        when {
+                            dclOk -> {
+                                val nowMs = SystemClock.elapsedRealtime()
+                                dclAppAreaExternalRedirectConsumedThisProcess = true
+                                lastExternalRedirectAtMs = nowMs
+                                lastDclModeReapplyAtMs = nowMs
+                                // DCL reuses this singleTask (resize/move). finish() would kill the
+                                // only Main — see shouldFinishSelfAfterSuccessfulDclRedirect.
+                                if (
+                                    LaunchMainInStockAppWindowDecision
+                                        .shouldFinishSelfAfterSuccessfulDclRedirect()
+                                ) {
+                                    finishAfterExternalRedirect(nowMs, backend)
+                                } else {
+                                    Log.i(
+                                        TAG,
+                                        "External launch hosted in DCL mode=$dclMode (same task); continuing normal onCreate",
+                                    )
+                                    completeNormalOnCreate()
+                                }
+                            }
+                            adayoOk -> {
+                                finishAfterExternalRedirect(
+                                    SystemClock.elapsedRealtime(),
+                                    MainAppWindowBackend.ADAYO_STOCK,
+                                )
+                            }
+                            else -> {
+                                Log.w(
                                     TAG,
-                                    "External launch hosted in DCL mode=$dclMode (same task); continuing normal onCreate",
+                                    "Stock-window redirect failed; falling back to normal onCreate",
                                 )
                                 completeNormalOnCreate()
                             }
                         }
-                        adayoOk -> {
-                            finishAfterExternalRedirect(
-                                SystemClock.elapsedRealtime(),
-                                MainAppWindowBackend.ADAYO_STOCK,
-                            )
-                        }
-                        else -> {
-                            Log.w(TAG, "Stock-window redirect failed; falling back to normal onCreate")
-                            completeNormalOnCreate()
-                        }
+                    } catch (t: Throwable) {
+                        Log.w(
+                            TAG,
+                            "Stock-window redirect error; falling back to normal onCreate",
+                            t,
+                        )
+                        completeNormalOnCreate()
                     }
                 }
                 ExternalRedirectOutcome.PendingAsync

@@ -179,12 +179,12 @@ object DclLauncherApiRepository {
             }
             is DclCallResult.Error -> {
                 Log.w(TAG, "getCapabilities error: ${caps.error.errorCode} ${caps.error.message}")
-                // Do not mark available / keep stale null caps as "capable" (P1-4).
-                _available.value = false
+                // Do not mark available / keep stale caps as "capable" (P1-4).
+                markUnavailableLocked("getCapabilities error")
                 return false
             }
             DclCallResult.Unavailable -> {
-                _available.value = false
+                markUnavailableLocked("getCapabilities unavailable")
                 return false
             }
         }
@@ -193,7 +193,7 @@ object DclLauncherApiRepository {
             is DclCallResult.Error ->
                 Log.w(TAG, "getUiState error: ${state.error.errorCode} ${state.error.message}")
             DclCallResult.Unavailable -> {
-                _available.value = false
+                markUnavailableLocked("getUiState unavailable")
                 return false
             }
         }
@@ -234,6 +234,26 @@ object DclLauncherApiRepository {
         if (_capabilities.value != null) {
             _available.value = true
         }
+    }
+
+    /**
+     * Clears cached caps / availability after a Binder failure or confirmed dead launcher so
+     * the next launch takes the immediate capability-missing / raw path instead of waiting on
+     * a hung provider again. Stale uiState is dropped so anti-loop does not treat a dead
+     * launcher as still hosting Main.
+     */
+    fun markUnavailable(reason: String? = null) {
+        markUnavailableLocked(reason)
+    }
+
+    private fun markUnavailableLocked(reason: String?) {
+        if (reason != null) {
+            Log.w(TAG, "DCL marked unavailable: $reason")
+        }
+        _available.value = false
+        _capabilities.value = null
+        _uiState.value = null
+        _smartAccState.value = null
     }
 
     /** Test-only: publish a UI snapshot without Binder / broadcast. */
