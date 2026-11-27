@@ -3,7 +3,7 @@ package vad.dashing.tbox.externalapi
 object ExternalApiConstants {
     const val API_VERSION = 1
     /** 10 — camd recorder action/signals (`camd_recorder`, `camd_recorder_enabled`, `camd_recording_active`). */
-    const val CATALOG_VERSION = 11
+    const val CATALOG_VERSION = 12
 
     const val DEFAULT_PORT = 8765
     const val MIN_PORT = 1024

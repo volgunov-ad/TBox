@@ -25,6 +25,8 @@ sealed class VoiceIntent {
         val action: CatalogAction,
         val matchedAlias: String,
         val score: Int,
+        /** When set (cloud tool / «ещё»), skips re-parsing the spoken phrase. */
+        val slotOverride: VoiceSlotParser.Slot? = null,
     ) : VoiceIntent()
 
     data class RunAutomation(

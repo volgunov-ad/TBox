@@ -580,14 +580,51 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.MEDIA_NEXT to listOf("следующий", "дальше", "некст", "следующий трек"),
         AutomationBuiltinActionType.MEDIA_PREVIOUS to listOf("предыдущий", "назад", "предыдущий трек"),
         AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE to listOf("лайк", "лайкни", "мне нравится"),
-        // set_hu_screen_brightness / wifi_set_enabled / cruise_* / camd_* / place_call —
-        // ещё без слотов в Voice; volume — слоты F (тише/громче / число).
+        // camd_* / place_call — ещё без слотов; volume/brightness/wifi/cruise — хвосты F.
         AutomationBuiltinActionType.SET_MEDIA_VOLUME to listOf(
             "тише",
             "громче",
             "потише",
             "погромче",
             "громкость",
+        ),
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS to listOf(
+            "ярче",
+            "темнее",
+            "посветлее",
+            "потемнее",
+            "яркость",
+            "яркость экрана",
+        ),
+        AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf(
+            "вайфай",
+            "wifi",
+            "включи вайфай",
+            "выключи вайфай",
+            "включи wifi",
+            "выключи wifi",
+        ),
+        AutomationBuiltinActionType.CRUISE_NUDGE to listOf(
+            "круиз плюс",
+            "круиз минус",
+            "плюс круиз",
+            "минус круиз",
+            "быстрее круиз",
+            "медленнее круиз",
+            "увеличь круиз",
+            "убавь круиз",
+        ),
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET to listOf(
+            "уставка круиза",
+            "круиз на",
+        ),
+        AutomationBuiltinActionType.CRUISE_PAUSE to listOf("пауза круиза", "приостанови круиз"),
+        AutomationBuiltinActionType.CRUISE_RESUME to listOf("возобнови круиз", "продолжи круиз"),
+        AutomationBuiltinActionType.CRUISE_FULL_OFF to listOf("выключи круиз", "отключи круиз"),
+        AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED to listOf(
+            "включи круиз",
+            "круиз на текущей",
+            "круиз по скорости",
         ),
         AutomationBuiltinActionType.SHOW_TOAST to listOf("тост", "уведомление"),
         AutomationBuiltinActionType.SHOW_ALERT to listOf("алерт", "сообщение на экран"),
@@ -598,7 +635,6 @@ object ExternalApiVoiceAliasesRu {
             "смени тему",
             "тема приложения",
         ),
-        AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf("вайфай", "wifi"),
         AutomationBuiltinActionType.DCL_SET_SMART_ACC to listOf(
             "умный acc",
             "smart acc",

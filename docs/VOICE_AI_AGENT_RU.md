@@ -129,7 +129,7 @@ Tools (имена условные):
 |------|------------------|
 | `list_catalog` / вшитый snapshot | кэш `/v1/catalog` + `/v1/automations` |
 | `query_signal` | `GET /v1/signals?ids=…&source=…` |
-| `invoke_action` | `POST /v1/actions/invoke` (cloud tool пока builtin / open_main_screen; aliases/local — ещё can_command + volume со слотами, этап F) |
+| `invoke_action` | `POST /v1/actions/invoke` (builtin / open_main_screen / can_command+write; value/delta/intValue/boolValue) |
 | `run_automation` | `POST /v1/automations/{id}/run` |
 
 Валидация: id действия/сигнала/автоматизации сверяются с кэшем каталога **до** HTTP.
@@ -163,7 +163,7 @@ Aliases остаются обязательным этапом MVP и страх
 | C | Cloud tool-calling поверх каталога (без UI диалога) | **сделано** (`VoiceCloudAgent` → тот же `handleIntent` / TTS) |
 | D | Диалог уточнения (1 follow-up) | **сделано** (`CloudAgentOutcome.Clarify` + один `continueClarify`) |
 | E | Локальный классификатор (офлайн) | **сделано** (`NgramLocalIntentClassifier`; ONNX — позже) |
-| F | Слоты: потеплее / тише / can_command | **сделано** (`VoiceSlotParser`, `RelativeAdjustSolver`, `VoiceInvokePlanner`; catalog `write`/`signalId`) |
+| F | Слоты: потеплее / тише / can_command | **сделано** (+ хвосты: cloud can_command, brightness/wifi/cruise, «ещё», EncryptedSharedPreferences для ключа) |
 | G | Длинные свободные ответы + chunked TTS | **сделано** (`allowFreeformSpeak`, `TtsTextChunker`) |
 
 Порядок B→C обязателен; E не блокирует облако.
@@ -174,12 +174,12 @@ Aliases остаются обязательным этапом MVP и страх
 
 | Риск | Митигация |
 |------|-----------|
-| Утечка ключа / фраз | Opt-in «отправка фраз»; ключ только в Voice DataStore; не логировать key/phrase; EncryptedSharedPreferences — позже |
+| Утечка ключа / фраз | Opt-in «отправка фраз»; cloud API key в EncryptedSharedPreferences; не логировать key/phrase |
 | Галлюцинации id | Whitelist по каталогу; отказ без invoke |
 | Латентность ГУ↔API | Короткий prompt; таймаут; параллельно не блокировать UI |
 | ГУ без интернета | SoftAP / телефон как мост — вне Voice; иначе aliases/local |
 | Размер локальной модели | E1 = n-gram без веса; нейросеть — отдельная загрузка, не в APK |
-| can_command из голоса | Aliases/local: только с `write` в каталоге + слот (включи / потеплее / число); cloud tool пока без can_command |
+| can_command из голоса | Aliases/local/cloud: только с `write` + слот (включи / потеплее / число / delta) |
 
 ---
 

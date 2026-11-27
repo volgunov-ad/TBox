@@ -278,7 +278,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 11,
+  "catalogVersion": 12,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -336,7 +336,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **11** — расширенные `voiceAliasesRu` для голоса; **10** — регистратор camd: действие `camd_recorder`,
+- `catalogVersion` (сейчас **12** — write+signalId у builtin brightness/wifi/cruise_nudge/engage;
+  **11** — расширенные `voiceAliasesRu` для голоса; **10** — регистратор camd: действие `camd_recorder`,
   сигналы `camd_recorder_enabled` / `camd_recording_active`; **9** — DCL Smart ACC: сигналы `dcl_smart_acc_*` /
   `dcl_effective_speed_limit` и builtin `dcl_set_smart_acc` / `dcl_toggle_smart_acc`;
   **8** — сигнал `dcl_notification_shade_expanded`;
@@ -346,14 +347,14 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   **4** — у `can_command` добавлены `operations`, `signalId` и `write`, а у builtin `set_media_volume` — `write`).
 
 `write` — схема записи для сопряжённых клиентов (TBox MQTT и VAD Voice).
-Voice читает `write` / `signalId` / `operations` для слотов («потеплее», «тише»,
-can_command on/off).
+Voice читает `write` / `signalId` / `operations` для слотов («потеплее», «тише», «ярче»,
+wifi, круиз, can_command on/off).
 
 | `write.kind` | Смысл |
 |--------------|--------|
-| `binary` | пары `off`/`on` → значение invoke |
+| `binary` | пары `off`/`on` → значение invoke (у `wifi_set_enabled` → `boolValue`) |
 | `options` | `state` как у сигнала, `value` — тело команды (ключ или целое) |
-| `number` | `min`/`max`/`step`/`unit` и пары «число сигнала → value» (для builtin `set_media_volume` — диапазон `0..31`, `step = 1`, `options = []`) |
+| `number` | `min`/`max`/`step`/`unit` и пары «число сигнала → value»; builtins: volume `0..31`, brightness `1..10`, cruise_nudge `±1`, cruise_engage `30..150` |
 | `pulse` | кнопки `open`/`close`, без `signalId` |
 
 Если для `can_command` пару надёжно построить нельзя, `write` = `null`, а `signalId` всё равно указывает сигнал-подтверждение, когда он один. `catalogVersion` **3** остаётся в истории как aliases + `start_vad_voice`.

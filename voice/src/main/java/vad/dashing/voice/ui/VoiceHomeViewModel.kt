@@ -1,6 +1,7 @@
 package vad.dashing.voice.ui
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -22,11 +23,13 @@ import vad.dashing.voice.api.ExternalApiClient
 import vad.dashing.voice.api.ExternalApiHttpException
 import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
+import vad.dashing.voice.nlu.LastRelativeAdjust
 import vad.dashing.voice.nlu.LocalIntentClassifier
 import vad.dashing.voice.nlu.NgramLocalIntentClassifier
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
 import vad.dashing.voice.nlu.VoiceInvokePlanner
+import vad.dashing.voice.nlu.VoiceSlotParser
 import vad.dashing.voice.llm.ClarifySession
 import vad.dashing.voice.llm.CloudAgentOutcome
 import vad.dashing.voice.llm.CloudBaseUrlNormalizer
@@ -109,6 +112,9 @@ class VoiceHomeViewModel(
 
     @Volatile
     private var pendingClarify: ClarifySession? = null
+
+    @Volatile
+    private var lastRelativeAdjust: LastRelativeAdjust? = null
 
     init {
         viewModelScope.launch {
@@ -490,6 +496,13 @@ class VoiceHomeViewModel(
                 loaded
             }
 
+            // «ещё» / «ещё раз» — replay last relative slot (хвост F).
+            val repeat = tryRepeatLastRelative(state.phrase)
+            if (repeat != null) {
+                handleIntent(repeat, state, port, catalog, sourceTag = "repeat")
+                return@launch
+            }
+
             val cloudSettings = state.cloudSettings()
             val clarify = pendingClarify
             if (cloudSettings.looksConfigured() && cloudSettings.preferCloud) {
@@ -656,7 +669,13 @@ class VoiceHomeViewModel(
                 val name = intent.action.label
                     ?: intent.action.actionType
                     ?: intent.action.type
-                val plan = VoiceInvokePlanner.plan(state.phrase, intent.action, catalog)
+                val effectiveSlot = intent.slotOverride ?: VoiceSlotParser.parse(state.phrase)
+                val plan = VoiceInvokePlanner.plan(
+                    phrase = state.phrase,
+                    action = intent.action,
+                    catalog = catalog,
+                    slotOverride = intent.slotOverride,
+                )
                 val payload = when (plan) {
                     is VoiceInvokePlanner.Plan.Immediate -> plan.payload
                     is VoiceInvokePlanner.Plan.Fail -> {
@@ -674,7 +693,13 @@ class VoiceHomeViewModel(
                     is VoiceInvokePlanner.Plan.NeedsSignal -> {
                         val signalMeta = catalog.signals.firstOrNull { it.id == plan.signalId }
                         val source = signalMeta?.let { SignalAnswerFormatter.preferredSource(it) }
-                            ?: if (plan.signalId == "hu_media_volume") "app" else "head_unit"
+                            ?: when (plan.signalId) {
+                                "hu_media_volume",
+                                "hu_screen_brightness",
+                                "wifi_enabled",
+                                -> "app"
+                                else -> "head_unit"
+                            }
                         val snapshot = withContext(Dispatchers.IO) {
                             withFreshToken(state, port) { token ->
                                 apiClient.signals(
@@ -749,6 +774,13 @@ class VoiceHomeViewModel(
                     detail != null -> "Ошибка: $detail"
                     else -> "Действие «$name» не выполнено"
                 }
+                if (ok && effectiveSlot is VoiceSlotParser.Slot.Relative) {
+                    lastRelativeAdjust = LastRelativeAdjust(
+                        action = intent.action,
+                        steps = effectiveSlot.steps,
+                        savedAtElapsedMs = SystemClock.elapsedRealtime(),
+                    )
+                }
                 _uiState.update {
                     it.copy(
                         busy = false,
@@ -822,6 +854,22 @@ class VoiceHomeViewModel(
         tts.stop()
         tts.release()
         super.onCleared()
+    }
+
+    private fun tryRepeatLastRelative(phrase: String): VoiceIntent.InvokeAction? {
+        val slot = VoiceSlotParser.parse(phrase)
+        if (slot !is VoiceSlotParser.Slot.RepeatLast) return null
+        val last = lastRelativeAdjust ?: return null
+        if (!last.isFresh(SystemClock.elapsedRealtime())) {
+            lastRelativeAdjust = null
+            return null
+        }
+        return VoiceIntent.InvokeAction(
+            action = last.action,
+            matchedAlias = "ещё",
+            score = 950,
+            slotOverride = VoiceSlotParser.Slot.Relative(last.steps),
+        )
     }
 
     private fun speakAnswer(text: String) {

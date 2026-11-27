@@ -42,4 +42,23 @@ class VoiceSlotParserTest {
         assertTrue(slot is VoiceSlotParser.Slot.AbsoluteNumber)
         assertEquals(15.0, (slot as VoiceSlotParser.Slot.AbsoluteNumber).value, 1e-6)
     }
+
+    @Test
+    fun relativeBrightness() {
+        assertEquals(VoiceSlotParser.Slot.Relative(+1), VoiceSlotParser.parse("ярче"))
+        assertEquals(VoiceSlotParser.Slot.Relative(-1), VoiceSlotParser.parse("темнее"))
+    }
+
+    @Test
+    fun relativeCruise() {
+        assertEquals(VoiceSlotParser.Slot.Relative(+1), VoiceSlotParser.parse("круиз плюс"))
+        assertEquals(VoiceSlotParser.Slot.Relative(-1), VoiceSlotParser.parse("круиз минус"))
+    }
+
+    @Test
+    fun repeatCue() {
+        assertEquals(VoiceSlotParser.Slot.RepeatLast, VoiceSlotParser.parse("ещё"))
+        assertEquals(VoiceSlotParser.Slot.RepeatLast, VoiceSlotParser.parse("еще раз"))
+        assertEquals(VoiceSlotParser.Slot.Relative(+1), VoiceSlotParser.parse("ещё потеплее"))
+    }
 }
