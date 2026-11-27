@@ -580,8 +580,15 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.MEDIA_NEXT to listOf("следующий", "дальше", "некст", "следующий трек"),
         AutomationBuiltinActionType.MEDIA_PREVIOUS to listOf("предыдущий", "назад", "предыдущий трек"),
         AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE to listOf("лайк", "лайкни", "мне нравится"),
-        // set_*_volume / set_hu_screen_brightness / wifi_set_enabled / cruise_* / camd_* /
-        // place_call — нужны слоты; spoken extras не добавляем, пока Voice шлёт intValue=0.
+        // set_hu_screen_brightness / wifi_set_enabled / cruise_* / camd_* / place_call —
+        // ещё без слотов в Voice; volume — слоты F (тише/громче / число).
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME to listOf(
+            "тише",
+            "громче",
+            "потише",
+            "погромче",
+            "громкость",
+        ),
         AutomationBuiltinActionType.SHOW_TOAST to listOf("тост", "уведомление"),
         AutomationBuiltinActionType.SHOW_ALERT to listOf("алерт", "сообщение на экран"),
         AutomationBuiltinActionType.RESTART_TBOX to listOf("рестарт тбокс", "перезагрузка тбокс"),
@@ -627,8 +634,6 @@ object ExternalApiVoiceAliasesRu {
             "включи климат",
             "выключи климат",
             "климат-контроль",
-            // Voice NLU пока не invoke'ит can_command; фразы остаются для MQTT/других клиентов
-            // и будущего слотового агента.
         ),
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to listOf("авто климат", "климат авто"),
         MbCanKnownVehiclePropertyId.HVAC_AC_MAX to listOf("макс охлаждение", "ac max"),

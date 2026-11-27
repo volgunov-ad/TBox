@@ -87,8 +87,8 @@ priors по RU-cue), без native-модели — безопасно по RAM/
 | Длинные свободные ответы | Отдельный opt-in «Длинные свободные ответы»; без него Speak ≤240 знаков |
 | Dangerous | Как сейчас: токен + тумблер Monitor; Voice не дублирует запреты |
 
-Вне этого дизайна (позже): телефон как клиент; стриминг TTS по предложениям;
-относительные «потеплее/тише» со слотами; can_command invoke из голоса.
+Вне этого дизайна (позже): телефон как клиент; стриминг TTS по предложениям.
+Слоты «потеплее/тише» и can_command invoke — этап F (см. §7).
 
 ---
 
@@ -129,7 +129,7 @@ Tools (имена условные):
 |------|------------------|
 | `list_catalog` / вшитый snapshot | кэш `/v1/catalog` + `/v1/automations` |
 | `query_signal` | `GET /v1/signals?ids=…&source=…` |
-| `invoke_action` | `POST /v1/actions/invoke` (пока только то, что умеет Voice: builtin / open_main_screen) |
+| `invoke_action` | `POST /v1/actions/invoke` (cloud tool пока builtin / open_main_screen; aliases/local — ещё can_command + volume со слотами, этап F) |
 | `run_automation` | `POST /v1/automations/{id}/run` |
 
 Валидация: id действия/сигнала/автоматизации сверяются с кэшем каталога **до** HTTP.
@@ -163,7 +163,7 @@ Aliases остаются обязательным этапом MVP и страх
 | C | Cloud tool-calling поверх каталога (без UI диалога) | **сделано** (`VoiceCloudAgent` → тот же `handleIntent` / TTS) |
 | D | Диалог уточнения (1 follow-up) | **сделано** (`CloudAgentOutcome.Clarify` + один `continueClarify`) |
 | E | Локальный классификатор (офлайн) | **сделано** (`NgramLocalIntentClassifier`; ONNX — позже) |
-| F | Слоты: потеплее / тише / can_command | Invoke с value; тесты |
+| F | Слоты: потеплее / тише / can_command | **сделано** (`VoiceSlotParser`, `RelativeAdjustSolver`, `VoiceInvokePlanner`; catalog `write`/`signalId`) |
 | G | Длинные свободные ответы + chunked TTS | **сделано** (`allowFreeformSpeak`, `TtsTextChunker`) |
 
 Порядок B→C обязателен; E не блокирует облако.
@@ -179,7 +179,7 @@ Aliases остаются обязательным этапом MVP и страх
 | Латентность ГУ↔API | Короткий prompt; таймаут; параллельно не блокировать UI |
 | ГУ без интернета | SoftAP / телефон как мост — вне Voice; иначе aliases/local |
 | Размер локальной модели | E1 = n-gram без веса; нейросеть — отдельная загрузка, не в APK |
-| can_command из голоса | Пока не в tools Voice; матчер aliases не выбирает can_command (см. VOICE_APK §5) |
+| can_command из голоса | Aliases/local: только с `write` в каталоге + слот (включи / потеплее / число); cloud tool пока без can_command |
 
 ---
 

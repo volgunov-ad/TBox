@@ -26,6 +26,7 @@ import vad.dashing.voice.nlu.LocalIntentClassifier
 import vad.dashing.voice.nlu.NgramLocalIntentClassifier
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.nlu.VoiceInvokePlanner
 import vad.dashing.voice.llm.ClarifySession
 import vad.dashing.voice.llm.CloudAgentOutcome
 import vad.dashing.voice.llm.CloudBaseUrlNormalizer
@@ -655,17 +656,71 @@ class VoiceHomeViewModel(
                 val name = intent.action.label
                     ?: intent.action.actionType
                     ?: intent.action.type
-                val payload = InvokeActionPayloadBuilder.build(intent.action).getOrElse { error ->
-                    val msg = error.message ?: "Нельзя вызвать действие"
-                    _uiState.update {
-                        it.copy(
-                            busy = false,
-                            answerMessage = msg,
-                            statusMessage = "intent=invoke/$sourceTag alias=${intent.matchedAlias}",
-                        )
+                val plan = VoiceInvokePlanner.plan(state.phrase, intent.action, catalog)
+                val payload = when (plan) {
+                    is VoiceInvokePlanner.Plan.Immediate -> plan.payload
+                    is VoiceInvokePlanner.Plan.Fail -> {
+                        val msg = plan.message
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                answerMessage = msg,
+                                statusMessage = "intent=invoke/$sourceTag alias=${intent.matchedAlias}",
+                            )
+                        }
+                        speakAnswer(msg)
+                        return
                     }
-                    speakAnswer(msg)
-                    return
+                    is VoiceInvokePlanner.Plan.NeedsSignal -> {
+                        val signalMeta = catalog.signals.firstOrNull { it.id == plan.signalId }
+                        val source = signalMeta?.let { SignalAnswerFormatter.preferredSource(it) }
+                            ?: if (plan.signalId == "hu_media_volume") "app" else "head_unit"
+                        val snapshot = withContext(Dispatchers.IO) {
+                            withFreshToken(state, port) { token ->
+                                apiClient.signals(
+                                    host = state.host,
+                                    port = port,
+                                    token = token,
+                                    ids = listOf(plan.signalId),
+                                    source = source,
+                                )
+                            }
+                        }.getOrElse { error ->
+                            val msg = "Не удалось прочитать ${plan.signalId}: " +
+                                (error.message ?: error.javaClass.simpleName)
+                            _uiState.update {
+                                it.copy(
+                                    busy = false,
+                                    lastHealthOk = false,
+                                    answerMessage = msg,
+                                    statusMessage = "signals for adjust failed",
+                                )
+                            }
+                            speakAnswer(msg)
+                            return
+                        }
+                        val reading = snapshot.signals.firstOrNull { it.id == plan.signalId }
+                        if (reading == null) {
+                            val msg = "Нет данных: ${plan.signalId}"
+                            _uiState.update {
+                                it.copy(busy = false, answerMessage = msg, statusMessage = "adjust miss")
+                            }
+                            speakAnswer(msg)
+                            return
+                        }
+                        plan.apply(reading).getOrElse { error ->
+                            val msg = error.message ?: "Нельзя подобрать значение"
+                            _uiState.update {
+                                it.copy(
+                                    busy = false,
+                                    answerMessage = msg,
+                                    statusMessage = "intent=invoke/$sourceTag alias=${intent.matchedAlias}",
+                                )
+                            }
+                            speakAnswer(msg)
+                            return
+                        }
+                    }
                 }
                 val body = InvokeActionPayloadBuilder.wrapActions(payload)
                 val result = withContext(Dispatchers.IO) {

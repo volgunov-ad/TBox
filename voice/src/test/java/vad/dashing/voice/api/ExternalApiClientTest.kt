@@ -72,6 +72,61 @@ class ExternalApiClientTest {
     }
 
     @Test
+    fun parseCatalog_readsWriteSchema() {
+        val catalog = ExternalApiClient.parseCatalog(
+            """
+            {
+              "catalogVersion": 4,
+              "signals": [],
+              "actionTypes": [
+                {
+                  "type": "can_command",
+                  "bus": "vehicle",
+                  "propertyId": 37,
+                  "label": "Температура",
+                  "safety": "confirm",
+                  "operations": ["set"],
+                  "signalId": "hvac_temperature_left",
+                  "write": {
+                    "kind": "number",
+                    "options": [{"state": "22.5", "value": 225}],
+                    "min": 15.5,
+                    "max": 32.5,
+                    "step": 0.5,
+                    "unit": "°C"
+                  },
+                  "voiceAliasesRu": ["потеплее"]
+                },
+                {
+                  "type": "builtin",
+                  "actionType": "set_media_volume",
+                  "safety": "safe",
+                  "write": {
+                    "kind": "number",
+                    "options": [],
+                    "min": 0,
+                    "max": 31,
+                    "step": 1,
+                    "unit": ""
+                  },
+                  "voiceAliasesRu": ["тише"]
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val can = catalog.actionTypes.first { it.type == "can_command" }
+        assertEquals("hvac_temperature_left", can.signalId)
+        assertEquals(listOf("set"), can.operations)
+        assertEquals("number", can.write?.kind)
+        assertEquals(0.5, can.write?.step)
+        assertEquals(225, can.write?.options?.first()?.value)
+        val volume = catalog.actionTypes.first { it.actionType == "set_media_volume" }
+        assertEquals(31.0, volume.write?.max)
+        assertTrue(volume.write?.options?.isEmpty() == true)
+    }
+
+    @Test
     fun parseSignals_readsAvailableValue() {
         val snapshot = ExternalApiClient.parseSignals(
             """

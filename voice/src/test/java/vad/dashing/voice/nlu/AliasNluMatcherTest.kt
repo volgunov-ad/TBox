@@ -10,6 +10,8 @@ import vad.dashing.voice.api.ApiCatalog
 import vad.dashing.voice.api.AutomationSummary
 import vad.dashing.voice.api.CatalogAction
 import vad.dashing.voice.api.CatalogSignal
+import vad.dashing.voice.api.CatalogWriteOption
+import vad.dashing.voice.api.CatalogWriteSchema
 import vad.dashing.voice.api.SignalReading
 
 @RunWith(RobolectricTestRunner::class)
@@ -69,6 +71,37 @@ class AliasNluMatcherTest {
                     "выключи климат",
                     "климат-контроль",
                 ),
+                // No write → still not voice-invokable (legacy catalog / incomplete pair).
+            ),
+            CatalogAction(
+                type = "can_command",
+                bus = "vehicle",
+                propertyId = 37,
+                label = "Температура климата",
+                voiceAliasesRu = listOf("потеплее", "похолоднее"),
+                operations = listOf("set"),
+                signalId = "hvac_temperature_left",
+                write = CatalogWriteSchema(
+                    kind = CatalogWriteSchema.KIND_NUMBER,
+                    options = listOf(CatalogWriteOption("22.5", 225)),
+                    step = 0.5,
+                ),
+            ),
+            CatalogAction(
+                type = "can_command",
+                bus = "vehicle",
+                propertyId = 188,
+                label = "Климат питание",
+                voiceAliasesRu = listOf("включи климат-контроль полностью"),
+                operations = listOf("set"),
+                signalId = "hvac_power",
+                write = CatalogWriteSchema(
+                    kind = CatalogWriteSchema.KIND_BINARY,
+                    options = listOf(
+                        CatalogWriteOption("off", "off"),
+                        CatalogWriteOption("on", "on"),
+                    ),
+                ),
             ),
             CatalogAction(
                 type = "delay",
@@ -115,11 +148,33 @@ class AliasNluMatcherTest {
     }
 
     @Test
-    fun skipsCanCommand_fallsBackToClimateSignalWithoutAutomation() {
+    fun skipsCanCommandWithoutWrite_fallsBackToClimateSignal() {
         val intent = matcher.match("состояние климата", catalog, automations = emptyList())
         assertTrue(intent is VoiceIntent.QuerySignal)
         intent as VoiceIntent.QuerySignal
         assertEquals("hvac_power", intent.signal.id)
+    }
+
+    @Test
+    fun matchesRelativeCanCommandWhenWritePresent() {
+        val intent = matcher.match("потеплее", catalog, automations = emptyList())
+        assertTrue(intent is VoiceIntent.InvokeAction)
+        intent as VoiceIntent.InvokeAction
+        assertEquals("can_command", intent.action.type)
+        assertEquals(37, intent.action.propertyId)
+    }
+
+    @Test
+    fun matchesBinaryCanCommandWhenWritePresent() {
+        val intent = matcher.match(
+            "включи климат-контроль полностью",
+            catalog,
+            automations = emptyList(),
+        )
+        assertTrue(intent is VoiceIntent.InvokeAction)
+        intent as VoiceIntent.InvokeAction
+        assertEquals(188, intent.action.propertyId)
+        assertEquals(CatalogWriteSchema.KIND_BINARY, intent.action.write?.kind)
     }
 
     @Test

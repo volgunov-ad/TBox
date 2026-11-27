@@ -181,14 +181,14 @@ Extra (opt): source = ui | wake | hard_key | automation
    («сколько», «какая», …) — небольшой boost сигналам; для run
    («запусти», «включи», «выполни», …) — boost автоматизациям.
 4. Приоритет: run automation → invoke → query signal.
-5. **Invoke из матчера только для типов, которые Voice реально вызывает:**
-   `builtin`, `open_main_screen`. Типы `can_command`, `launch_application`,
-   `http_request`, `delay` в NLU **не выбираются** (иначе фраза вроде
-   «включи климат» матчилась бы на HVAC can_command и падала на
-   «пока без значения»). Климат/окна/люк пока — через правило (automation)
-   или вопрос по сигналу; полный can_command из голоса — этап агента/слотов.
-6. Relative «потеплее» / «тише» — после MVP / в агенте (GET → ± → invoke);
-   такие aliases у volume/brightness не держим, пока нет слотов.
+5. **Invoke из матчера** для `builtin`, `open_main_screen` и `can_command` **с**
+   полем `write` в каталоге. Без `write` / типы `launch_application`,
+   `http_request`, `delay` не выбираются. Слоты: `VoiceSlotParser` +
+   `VoiceInvokePlanner` (GET сигнала → абсолют → invoke) для «потеплее» /
+   «тише» / «включи климат» / числа / багажника.
+6. Relative «потеплее» / «тише» — **сделано** (этап F); aliases volume
+   (`тише`/`громче`) и HVAC temp снова в каталоге. Яркость / wifi / cruise —
+   ещё без слотов.
 
 ---
 
@@ -245,6 +245,7 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 | D | Уточняющий follow-up (1 раунд) | voice | **сделано** |
 | G | Длинные свободные ответы + chunked Piper | voice | **сделано** |
 | E | Локальный офлайн-классификатор (n-gram) | voice | **сделано** |
+| F | Слоты: потеплее / тише / can_command | voice | **сделано** |
 
 Этапы 7–9 не откладывать «на потом после MVP»: они в scope; порядок после
 рабочего PTT-цикла (1–6).

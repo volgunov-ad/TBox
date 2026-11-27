@@ -19,6 +19,28 @@ data class CatalogSignal(
     val namedValues: Map<String, String> = emptyMap(),
 )
 
+data class CatalogWriteOption(
+    val state: String,
+    /** Portable key (String) or raw CAN int (Number) for invoke `value`. */
+    val value: Any,
+)
+
+data class CatalogWriteSchema(
+    val kind: String,
+    val options: List<CatalogWriteOption> = emptyList(),
+    val min: Double? = null,
+    val max: Double? = null,
+    val step: Double? = null,
+    val unit: String? = null,
+) {
+    companion object {
+        const val KIND_BINARY = "binary"
+        const val KIND_OPTIONS = "options"
+        const val KIND_NUMBER = "number"
+        const val KIND_PULSE = "pulse"
+    }
+}
+
 data class CatalogAction(
     val type: String,
     val actionType: String? = null,
@@ -27,6 +49,9 @@ data class CatalogAction(
     val label: String? = null,
     val safety: String? = null,
     val voiceAliasesRu: List<String>,
+    val operations: List<String> = emptyList(),
+    val signalId: String? = null,
+    val write: CatalogWriteSchema? = null,
 )
 
 data class ApiCatalog(

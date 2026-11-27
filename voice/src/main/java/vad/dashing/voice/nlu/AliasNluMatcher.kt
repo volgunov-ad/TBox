@@ -141,12 +141,13 @@ class AliasNluMatcher(
 
     companion object {
         /**
-         * Voice [vad.dashing.voice.api.InvokeActionPayloadBuilder] only builds these.
-         * Matching can_command / delay / etc. produced dead-end answers.
+         * Only actions Voice can actually invoke after slot resolution.
+         * can_command needs a catalog `write` schema (binary / number / options / pulse).
          */
         fun isVoiceInvokable(action: CatalogAction): Boolean =
             when (action.type) {
                 "builtin", "open_main_screen" -> true
+                "can_command" -> action.write != null
                 else -> false
             }
 
