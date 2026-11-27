@@ -240,6 +240,7 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 | 8 | Настройка кнопки руля (Monitor→Intent) | app(+voice) | вкл/выбор/выкл, default выкл |
 | 9 | Wake-word opt-in | voice | своё слово, default выкл; расход батареи/CPU ок на ГУ |
 | 10 | Полевая полировка | оба | ошибки сети, sentinel −40, audio focus |
+| B | Облачные настройки ИИ (пресет/ключ/модель/`/models`) | voice | **сделано** (агент — [VOICE_AI_AGENT_RU.md](VOICE_AI_AGENT_RU.md) этап C) |
 
 Этапы 7–9 не откладывать «на потом после MVP»: они в scope; порядок после
 рабочего PTT-цикла (1–6).

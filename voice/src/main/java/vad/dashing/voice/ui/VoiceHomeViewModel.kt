@@ -24,6 +24,10 @@ import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.llm.CloudBaseUrlNormalizer
+import vad.dashing.voice.llm.CloudLlmPreset
+import vad.dashing.voice.llm.CloudLlmSettings
+import vad.dashing.voice.llm.OpenAiCompatibleClient
 import vad.dashing.voice.settings.AccessTokenNormalizer
 import vad.dashing.voice.settings.VoiceConnectionSettings
 import vad.dashing.voice.settings.VoiceSettingsRepository
@@ -37,6 +41,16 @@ data class VoiceHomeUiState(
     val host: String = VoiceConnectionSettings.DEFAULT_HOST,
     val portText: String = VoiceConnectionSettings.DEFAULT_PORT.toString(),
     val token: String = "",
+    val cloudEnabled: Boolean = false,
+    val cloudPrefer: Boolean = true,
+    val cloudAllowPhrases: Boolean = false,
+    val cloudPreset: CloudLlmPreset = CloudLlmPreset.AITUNNEL,
+    val cloudBaseUrl: String = CloudLlmPreset.AITUNNEL.defaultBaseUrl,
+    val cloudApiKey: String = "",
+    val cloudModel: String = "",
+    val cloudModelIds: List<String> = emptyList(),
+    val cloudStatusMessage: String = "",
+    val cloudLastOk: Boolean? = null,
     val phrase: String = "сколько градусов на улице",
     val statusMessage: String = "",
     val answerMessage: String = "",
@@ -45,12 +59,24 @@ data class VoiceHomeUiState(
     val speaking: Boolean = false,
     val listening: Boolean = false,
     val lastHealthOk: Boolean? = null,
-)
+) {
+    fun cloudSettings(): CloudLlmSettings =
+        CloudLlmSettings(
+            enabled = cloudEnabled,
+            preferCloud = cloudPrefer,
+            allowSendPhrases = cloudAllowPhrases,
+            preset = cloudPreset,
+            baseUrl = cloudBaseUrl,
+            apiKey = cloudApiKey,
+            model = cloudModel,
+        )
+}
 
 class VoiceHomeViewModel(
     application: Application,
     private val settingsRepository: VoiceSettingsRepository = VoiceSettingsRepository(application),
     private val apiClient: ExternalApiClient = ExternalApiClient(),
+    private val cloudClient: OpenAiCompatibleClient = OpenAiCompatibleClient(),
     private val nlu: AliasNluMatcher = AliasNluMatcher(),
     private val tts: VoiceTts = PiperVoiceTts.createOrNoOp(application),
     private val stt: VoiceStt = VoskVoiceStt.createOrNoOp(application),
@@ -71,11 +97,19 @@ class VoiceHomeViewModel(
     init {
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
+                val cloud = settings.cloud
                 _uiState.update {
                     it.copy(
-                        host = settings.host,
-                        portText = settings.port.toString(),
-                        token = settings.accessToken,
+                        host = settings.connection.host,
+                        portText = settings.connection.port.toString(),
+                        token = settings.connection.accessToken,
+                        cloudEnabled = cloud.enabled,
+                        cloudPrefer = cloud.preferCloud,
+                        cloudAllowPhrases = cloud.allowSendPhrases,
+                        cloudPreset = cloud.preset,
+                        cloudBaseUrl = cloud.baseUrl,
+                        cloudApiKey = cloud.apiKey,
+                        cloudModel = cloud.model,
                     )
                 }
             }
@@ -86,7 +120,11 @@ class VoiceHomeViewModel(
         }
         viewModelScope.launch {
             val saved = settingsRepository.settings.first()
-            if (saved.accessToken.isBlank() && isLocalMonitor(saved.host)) requestMonitorAccess()
+            if (saved.connection.accessToken.isBlank() &&
+                isLocalMonitor(saved.connection.host)
+            ) {
+                requestMonitorAccess()
+            }
         }
     }
 
@@ -106,6 +144,49 @@ class VoiceHomeViewModel(
         _uiState.update { it.copy(phrase = value) }
     }
 
+    fun onCloudEnabledChange(value: Boolean) {
+        _uiState.update { it.copy(cloudEnabled = value) }
+    }
+
+    fun onCloudPreferChange(value: Boolean) {
+        _uiState.update { it.copy(cloudPrefer = value) }
+    }
+
+    fun onCloudAllowPhrasesChange(value: Boolean) {
+        _uiState.update { it.copy(cloudAllowPhrases = value) }
+    }
+
+    fun onCloudPresetChange(preset: CloudLlmPreset) {
+        _uiState.update {
+            val url = if (preset == CloudLlmPreset.CUSTOM) {
+                it.cloudBaseUrl
+            } else {
+                preset.defaultBaseUrl
+            }
+            it.copy(cloudPreset = preset, cloudBaseUrl = url)
+        }
+    }
+
+    fun onCloudBaseUrlChange(value: String) {
+        _uiState.update { it.copy(cloudBaseUrl = value, cloudPreset = CloudLlmPreset.CUSTOM) }
+    }
+
+    fun onCloudApiKeyChange(value: String) {
+        _uiState.update { it.copy(cloudApiKey = value) }
+    }
+
+    fun onCloudModelChange(value: String) {
+        _uiState.update { it.copy(cloudModel = value) }
+    }
+
+    fun selectNextCloudModel() {
+        val state = _uiState.value
+        val ids = state.cloudModelIds
+        if (ids.isEmpty()) return
+        val index = ids.indexOf(state.cloudModel).let { if (it < 0) 0 else (it + 1) % ids.size }
+        _uiState.update { it.copy(cloudModel = ids[index]) }
+    }
+
     fun onMicPermissionDenied() {
         _uiState.update {
             it.copy(
@@ -119,14 +200,66 @@ class VoiceHomeViewModel(
         val state = _uiState.value
         val port = state.portText.toIntOrNull() ?: VoiceConnectionSettings.DEFAULT_PORT
         val token = AccessTokenNormalizer.normalize(state.token)
+        val cloud = state.cloudSettings().copy(
+            apiKey = AccessTokenNormalizer.normalize(state.cloudApiKey),
+            baseUrl = CloudBaseUrlNormalizer.normalize(state.cloudBaseUrl),
+            model = state.cloudModel.trim(),
+        )
         viewModelScope.launch {
-            settingsRepository.save(state.host, port, token)
+            settingsRepository.save(state.host, port, token, cloud)
             _uiState.update {
                 it.copy(
                     token = token,
+                    cloudApiKey = cloud.apiKey,
+                    cloudBaseUrl = cloud.baseUrl,
+                    cloudModel = cloud.model,
                     statusMessage = "Сохранено",
                 )
             }
+        }
+    }
+
+    fun checkCloudModels() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(busy = true, cloudStatusMessage = "Загрузка моделей…", cloudLastOk = null)
+            }
+            val result = withContext(Dispatchers.IO) {
+                cloudClient.listModels(state.cloudBaseUrl, state.cloudApiKey)
+            }
+            result.fold(
+                onSuccess = { models ->
+                    val ids = models.modelIds
+                    val selected = when {
+                        state.cloudModel.isNotBlank() && state.cloudModel in ids -> state.cloudModel
+                        ids.isNotEmpty() -> ids.first()
+                        else -> state.cloudModel
+                    }
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            cloudModelIds = ids,
+                            cloudModel = selected,
+                            cloudLastOk = true,
+                            cloudStatusMessage = if (ids.isEmpty()) {
+                                "Связь OK, но список моделей пуст"
+                            } else {
+                                "Облако OK — моделей ${ids.size}"
+                            },
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            cloudLastOk = false,
+                            cloudStatusMessage = "Облако: ${error.message ?: error.javaClass.simpleName}",
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -566,7 +699,7 @@ class VoiceHomeViewModel(
         val token = result.accessToken.orEmpty()
         val port = result.port ?: fallbackPort
         _uiState.update { it.copy(token = token, portText = port.toString()) }
-        settingsRepository.save(state.host, port, token)
+        settingsRepository.saveConnection(state.host, port, token)
     }
 
     private fun isLocalMonitor(host: String): Boolean =

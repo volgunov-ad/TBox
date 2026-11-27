@@ -1,12 +1,16 @@
 package vad.dashing.voice.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vad.dashing.voice.llm.CloudBaseUrlNormalizer
+import vad.dashing.voice.llm.CloudLlmPreset
+import vad.dashing.voice.llm.CloudLlmSettings
 
 private val Context.voiceDataStore by preferencesDataStore(name = "vad_voice_settings")
 
@@ -21,20 +25,73 @@ data class VoiceConnectionSettings(
     }
 }
 
+data class VoiceStoredSettings(
+    val connection: VoiceConnectionSettings = VoiceConnectionSettings(),
+    val cloud: CloudLlmSettings = CloudLlmSettings(),
+)
+
 class VoiceSettingsRepository(private val context: Context) {
     private val hostKey = stringPreferencesKey("host")
     private val portKey = intPreferencesKey("port")
     private val tokenKey = stringPreferencesKey("access_token")
 
-    val settings: Flow<VoiceConnectionSettings> = context.voiceDataStore.data.map { prefs ->
-        VoiceConnectionSettings(
-            host = prefs[hostKey] ?: VoiceConnectionSettings.DEFAULT_HOST,
-            port = prefs[portKey] ?: VoiceConnectionSettings.DEFAULT_PORT,
-            accessToken = AccessTokenNormalizer.normalize(prefs[tokenKey].orEmpty()),
+    private val cloudEnabledKey = booleanPreferencesKey("cloud_enabled")
+    private val cloudPreferKey = booleanPreferencesKey("cloud_prefer")
+    private val cloudAllowPhrasesKey = booleanPreferencesKey("cloud_allow_phrases")
+    private val cloudPresetKey = stringPreferencesKey("cloud_preset")
+    private val cloudBaseUrlKey = stringPreferencesKey("cloud_base_url")
+    private val cloudApiKeyKey = stringPreferencesKey("cloud_api_key")
+    private val cloudModelKey = stringPreferencesKey("cloud_model")
+
+    val settings: Flow<VoiceStoredSettings> = context.voiceDataStore.data.map { prefs ->
+        val preset = CloudLlmPreset.fromStorageKey(prefs[cloudPresetKey])
+        val storedUrl = prefs[cloudBaseUrlKey]
+        val baseUrl = when {
+            !storedUrl.isNullOrBlank() -> CloudBaseUrlNormalizer.normalize(storedUrl)
+            preset != CloudLlmPreset.CUSTOM -> preset.defaultBaseUrl
+            else -> ""
+        }
+        VoiceStoredSettings(
+            connection = VoiceConnectionSettings(
+                host = prefs[hostKey] ?: VoiceConnectionSettings.DEFAULT_HOST,
+                port = prefs[portKey] ?: VoiceConnectionSettings.DEFAULT_PORT,
+                accessToken = AccessTokenNormalizer.normalize(prefs[tokenKey].orEmpty()),
+            ),
+            cloud = CloudLlmSettings(
+                enabled = prefs[cloudEnabledKey] ?: false,
+                preferCloud = prefs[cloudPreferKey] ?: true,
+                allowSendPhrases = prefs[cloudAllowPhrasesKey] ?: false,
+                preset = preset,
+                baseUrl = baseUrl,
+                apiKey = AccessTokenNormalizer.normalize(prefs[cloudApiKeyKey].orEmpty()),
+                model = prefs[cloudModelKey].orEmpty().trim(),
+            ),
         )
     }
 
-    suspend fun save(host: String, port: Int, accessToken: String) {
+    suspend fun save(
+        host: String,
+        port: Int,
+        accessToken: String,
+        cloud: CloudLlmSettings,
+    ) {
+        context.voiceDataStore.edit { prefs ->
+            prefs[hostKey] = host.trim().ifEmpty { VoiceConnectionSettings.DEFAULT_HOST }
+            prefs[portKey] = port.coerceIn(1024, 65535)
+            prefs[tokenKey] = AccessTokenNormalizer.normalize(accessToken)
+
+            prefs[cloudEnabledKey] = cloud.enabled
+            prefs[cloudPreferKey] = cloud.preferCloud
+            prefs[cloudAllowPhrasesKey] = cloud.allowSendPhrases
+            prefs[cloudPresetKey] = cloud.preset.storageKey
+            prefs[cloudBaseUrlKey] = CloudBaseUrlNormalizer.normalize(cloud.baseUrl)
+            prefs[cloudApiKeyKey] = AccessTokenNormalizer.normalize(cloud.apiKey)
+            prefs[cloudModelKey] = cloud.model.trim()
+        }
+    }
+
+    /** Monitor-only save kept for call sites that only refresh the token. */
+    suspend fun saveConnection(host: String, port: Int, accessToken: String) {
         context.voiceDataStore.edit { prefs ->
             prefs[hostKey] = host.trim().ifEmpty { VoiceConnectionSettings.DEFAULT_HOST }
             prefs[portKey] = port.coerceIn(1024, 65535)

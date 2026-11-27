@@ -1,7 +1,8 @@
 # Voice AI Agent — дизайн (облако + локально + aliases)
 
-Статус: **дизайн** (код агента ещё не пишем). Текущий MVP Voice остаётся на
-`voiceAliasesRu` + Vosk/Piper; этот документ фиксирует следующий слой.
+Статус: **дизайн + этап B** (настройки облака и ping `/models` в Voice).
+Вызов LLM / tool-calling — этап C. Текущий разбор фраз по-прежнему
+`voiceAliasesRu` + Vosk/Piper.
 
 Связанные документы:
 
@@ -77,7 +78,7 @@ Vosk (текст)
 | Облачный протокол | **OpenAI-compatible** `…/v1` (`chat/completions`, `models`) |
 | Пресеты провайдеров | Несколько готовых + «Свой URL» (см. §4) |
 | Выбор модели | Список из `GET {base}/models` (или аналог); пользователь выбирает |
-| Ключ API | Только в Voice (encrypted prefs), не в Monitor |
+| Ключ API | Только в Voice (DataStore prefs, как Monitor-токен; EncryptedSharedPreferences — позже), не в Monitor |
 | Tools агента | Только обёртки над External API: signals / invoke / run (+ позже clarify) |
 | Fallback | cloud → local classifier (позже) → **aliases** |
 | Отправка речи в облако | Явный opt-in в настройках Voice |
@@ -151,8 +152,8 @@ Aliases остаются обязательным этапом MVP и страх
 
 | # | Этап | Критерий |
 |---|------|----------|
-| A | Дизайн (этот документ) + полировка aliases | **сейчас** |
-| B | Настройки Voice: пресеты, ключ, модель, opt-in, ping `/models` | UI + prefs + unit-тесты нормализации URL |
+| A | Дизайн (этот документ) + полировка aliases | **сделано** |
+| B | Настройки Voice: пресеты, ключ, модель, opt-in, ping `/models` | **сделано** (`CloudLlmSettings`, UI, `OpenAiCompatibleClient.listModels`) |
 | C | Cloud tool-calling поверх каталога (без UI диалога) | Фраза → tool → тот же formatter/TTS |
 | D | Диалог уточнения (1 follow-up) | «какой сигнал?» / «какое правило?» |
 | E | Локальный классификатор (выбор runtime/модели под ГУ) | Офлайн intent без WAN |
@@ -166,7 +167,7 @@ Aliases остаются обязательным этапом MVP и страх
 
 | Риск | Митигация |
 |------|-----------|
-| Утечка ключа / фраз | Encrypted prefs; opt-in; не логировать key/phrase в app log |
+| Утечка ключа / фраз | Opt-in «отправка фраз»; ключ только в Voice DataStore; не логировать key/phrase; EncryptedSharedPreferences — позже |
 | Галлюцинации id | Whitelist по каталогу; отказ без invoke |
 | Латентность ГУ↔API | Короткий prompt; таймаут; параллельно не блокировать UI |
 | ГУ без интернета | SoftAP / телефон как мост — вне Voice; иначе aliases/local |

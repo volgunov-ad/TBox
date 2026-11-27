@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,13 +16,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -28,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.voice.R
+import vad.dashing.voice.llm.CloudLlmPreset
 
 @Composable
 fun VoiceHomeScreen(
@@ -108,6 +114,106 @@ fun VoiceHomeScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Text(
+            text = stringResource(R.string.cloud_section_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = stringResource(R.string.cloud_section_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SettingSwitchRow(
+            label = stringResource(R.string.cloud_enabled),
+            checked = state.cloudEnabled,
+            onCheckedChange = viewModel::onCloudEnabledChange,
+            enabled = !state.busy && !state.listening,
+        )
+        SettingSwitchRow(
+            label = stringResource(R.string.cloud_prefer),
+            checked = state.cloudPrefer,
+            onCheckedChange = viewModel::onCloudPreferChange,
+            enabled = !state.busy && !state.listening && state.cloudEnabled,
+        )
+        SettingSwitchRow(
+            label = stringResource(R.string.cloud_allow_phrases),
+            checked = state.cloudAllowPhrases,
+            onCheckedChange = viewModel::onCloudAllowPhrasesChange,
+            enabled = !state.busy && !state.listening && state.cloudEnabled,
+        )
+        Text(
+            text = stringResource(R.string.cloud_preset),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CloudLlmPreset.entries.forEach { preset ->
+                FilterChip(
+                    selected = state.cloudPreset == preset,
+                    onClick = { viewModel.onCloudPresetChange(preset) },
+                    enabled = !state.busy && !state.listening,
+                    label = { Text(preset.labelRu) },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = state.cloudBaseUrl,
+            onValueChange = viewModel::onCloudBaseUrlChange,
+            label = { Text(stringResource(R.string.cloud_base_url)) },
+            singleLine = true,
+            enabled = !state.busy && !state.listening,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.cloudApiKey,
+            onValueChange = viewModel::onCloudApiKeyChange,
+            label = { Text(stringResource(R.string.cloud_api_key)) },
+            placeholder = { Text(stringResource(R.string.cloud_api_key_hint)) },
+            singleLine = true,
+            enabled = !state.busy && !state.listening,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.cloudModel,
+            onValueChange = viewModel::onCloudModelChange,
+            label = { Text(stringResource(R.string.cloud_model)) },
+            singleLine = true,
+            enabled = !state.busy && !state.listening,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedButton(
+            onClick = viewModel::checkCloudModels,
+            enabled = !state.busy && !state.listening && state.cloudApiKey.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_check_cloud))
+        }
+        if (state.cloudModelIds.size > 1) {
+            OutlinedButton(
+                onClick = viewModel::selectNextCloudModel,
+                enabled = !state.busy && !state.listening,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.action_next_cloud_model))
+            }
+        }
+        if (state.cloudStatusMessage.isNotBlank()) {
+            val cloudColor = when (state.cloudLastOk) {
+                true -> MaterialTheme.colorScheme.primary
+                false -> MaterialTheme.colorScheme.error
+                null -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Text(
+                text = state.cloudStatusMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = cloudColor,
+            )
+        }
 
         Button(
             onClick = viewModel::saveSettings,
@@ -207,5 +313,32 @@ fun VoiceHomeScreen(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }
