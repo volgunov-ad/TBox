@@ -23,7 +23,12 @@ object VoiceInvokePlanner {
         data class Fail(val message: String) : Plan()
     }
 
-    fun plan(phrase: String, action: CatalogAction, catalog: ApiCatalog): Plan {
+    fun plan(
+        phrase: String,
+        action: CatalogAction,
+        catalog: ApiCatalog,
+        slotOverride: VoiceSlotParser.Slot? = null,
+    ): Plan {
         if (!InvokeActionPayloadBuilder.needsValue(action)) {
             return InvokeActionPayloadBuilder.build(action).fold(
                 onSuccess = { Plan.Immediate(it) },
@@ -33,7 +38,10 @@ object VoiceInvokePlanner {
 
         val write = action.write
             ?: return Plan.Fail("У действия нет схемы записи")
-        val slot = VoiceSlotParser.parse(phrase)
+        val slot = slotOverride ?: VoiceSlotParser.parse(phrase)
+        if (slot is VoiceSlotParser.Slot.RepeatLast) {
+            return Plan.Fail("Нет предыдущей настройки для «ещё»")
+        }
 
         return when (write.kind) {
             CatalogWriteSchema.KIND_BINARY -> planBinary(action, write, slot)
@@ -46,10 +54,12 @@ object VoiceInvokePlanner {
 
     fun linkedSignalId(action: CatalogAction): String? {
         action.signalId?.takeIf { it.isNotBlank() }?.let { return it }
-        if (action.type == "builtin" && action.actionType == "set_media_volume") {
-            return "hu_media_volume"
+        return when (action.actionType) {
+            "set_media_volume" -> "hu_media_volume"
+            "set_hu_screen_brightness" -> "hu_screen_brightness"
+            "wifi_set_enabled" -> "wifi_enabled"
+            else -> null
         }
-        return null
     }
 
     private fun planBinary(
@@ -63,7 +73,7 @@ object VoiceInvokePlanner {
         }
         val solved = RelativeAdjustSolver.binary(on, write)
             ?: return Plan.Fail("Нет значения on/off в каталоге")
-        return canPayload(action, operation = "set", value = solved.invokeValue)
+        return valuedPayload(action, solved.invokeValue)
     }
 
     private fun planPulse(
@@ -96,8 +106,10 @@ object VoiceInvokePlanner {
             }
             is VoiceSlotParser.Slot.Relative -> {
                 val signalId = linkedSignalId(action)
-                    ?: return Plan.Fail("Нет сигнала для относительной настройки")
-                // Empty catalog (unit tests with partial fixtures) skips the check.
+                if (signalId == null) {
+                    // cruise_nudge: ±1 is the invoke value itself.
+                    return valuedPayload(action, slot.steps)
+                }
                 if (catalog.signals.isNotEmpty() &&
                     catalog.signals.none { it.id == signalId }
                 ) {
@@ -123,7 +135,7 @@ object VoiceInvokePlanner {
             }
             is VoiceSlotParser.Slot.Binary, is VoiceSlotParser.Slot.Pulse ->
                 Plan.Fail("Для этого действия скажите число или «потеплее» / «тише»")
-            VoiceSlotParser.Slot.None ->
+            VoiceSlotParser.Slot.RepeatLast, VoiceSlotParser.Slot.None ->
                 Plan.Fail("Скажите число или «потеплее» / «тише»")
         }
     }
@@ -139,14 +151,27 @@ object VoiceInvokePlanner {
             "builtin" -> {
                 val actionType = action.actionType?.takeIf { it.isNotBlank() }
                     ?: error("builtin without actionType")
-                val intValue = when (value) {
-                    is Int -> value
-                    is Number -> value.toInt()
-                    is String -> value.toDoubleOrNull()?.toInt()
-                        ?: error("Нужно целое значение громкости")
-                    else -> error("Нужно целое значение громкости")
+                when (actionType) {
+                    "wifi_set_enabled" -> {
+                        val on = when (value) {
+                            is Boolean -> value
+                            is Number -> value.toInt() != 0
+                            is String -> value.equals("on", ignoreCase = true) || value == "1"
+                            else -> error("Нужно on/off для Wi‑Fi")
+                        }
+                        InvokeActionPayloadBuilder.buildBuiltin(actionType, boolValue = on)
+                    }
+                    else -> {
+                        val intValue = when (value) {
+                            is Int -> value
+                            is Number -> value.toInt()
+                            is String -> value.toDoubleOrNull()?.toInt()
+                                ?: error("Нужно целое значение")
+                            else -> error("Нужно целое значение")
+                        }
+                        InvokeActionPayloadBuilder.buildBuiltin(actionType, intValue = intValue)
+                    }
                 }
-                InvokeActionPayloadBuilder.buildBuiltin(actionType, intValue)
             }
             "can_command" -> {
                 val bus = action.bus?.takeIf { it.isNotBlank() } ?: error("can_command without bus")

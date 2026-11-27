@@ -59,6 +59,22 @@ class VoiceCloudAgentTest {
                 label = "Климат",
                 voiceAliasesRu = listOf("включи климат"),
             ),
+            CatalogAction(
+                type = "can_command",
+                bus = "vehicle",
+                propertyId = 188,
+                label = "Климат питание",
+                voiceAliasesRu = listOf("включи климат"),
+                operations = listOf("set"),
+                signalId = "hvac_power",
+                write = vad.dashing.voice.api.CatalogWriteSchema(
+                    kind = vad.dashing.voice.api.CatalogWriteSchema.KIND_BINARY,
+                    options = listOf(
+                        vad.dashing.voice.api.CatalogWriteOption("off", "off"),
+                        vad.dashing.voice.api.CatalogWriteOption("on", "on"),
+                    ),
+                ),
+            ),
         ),
     )
 
@@ -112,7 +128,7 @@ class VoiceCloudAgentTest {
     }
 
     @Test
-    fun mapToolCall_rejectsCanCommand() {
+    fun mapToolCall_rejectsCanCommandWithoutWrite() {
         val outcome = agent.mapToolCall(
             CloudToolCall(
                 "1",
@@ -123,6 +139,27 @@ class VoiceCloudAgentTest {
             automations,
         )
         assertEquals(null, outcome)
+    }
+
+    @Test
+    fun mapToolCall_acceptsCanCommandWithWriteAndValue() {
+        val outcome = agent.mapToolCall(
+            CloudToolCall(
+                "1",
+                VoiceAgentTools.INVOKE_ACTION,
+                """{"type":"can_command","bus":"vehicle","propertyId":188,"value":"on"}""",
+            ),
+            catalog,
+            automations,
+        )
+        assertTrue(outcome?.intent is VoiceIntent.InvokeAction)
+        val intent = outcome!!.intent as VoiceIntent.InvokeAction
+        assertEquals(188, intent.action.propertyId)
+        assertTrue(intent.slotOverride is vad.dashing.voice.nlu.VoiceSlotParser.Slot.Binary)
+        assertEquals(
+            true,
+            (intent.slotOverride as vad.dashing.voice.nlu.VoiceSlotParser.Slot.Binary).on,
+        )
     }
 
     @Test
@@ -290,11 +327,12 @@ class VoiceCloudAgentTest {
     }
 
     @Test
-    fun catalogPrompt_includesSignalAndSkipsCanCommand() {
+    fun catalogPrompt_includesSignalAndWritableCanCommand() {
         val text = CatalogPromptBuilder.build(catalog, automations)
         assertTrue(text.contains("outside_temperature"))
         assertTrue(text.contains("media_next"))
-        assertTrue(!text.contains("can_command"))
+        assertTrue(text.contains("can_command"))
+        assertTrue(text.contains("188"))
         assertTrue(text.contains("климат"))
     }
 

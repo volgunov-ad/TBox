@@ -135,4 +135,58 @@ class VoiceInvokePlannerTest {
         plan as VoiceInvokePlanner.Plan.Immediate
         assertEquals(18, plan.payload.getInt("intValue"))
     }
+
+    @Test
+    fun wifiOnUsesBoolValue() {
+        val wifi = CatalogAction(
+            type = "builtin",
+            actionType = "wifi_set_enabled",
+            voiceAliasesRu = listOf("включи вайфай"),
+            signalId = "wifi_enabled",
+            write = CatalogWriteSchema(
+                kind = CatalogWriteSchema.KIND_BINARY,
+                options = listOf(
+                    CatalogWriteOption("off", "off"),
+                    CatalogWriteOption("on", "on"),
+                ),
+            ),
+        )
+        val plan = VoiceInvokePlanner.plan("включи вайфай", wifi, catalog)
+        assertTrue(plan is VoiceInvokePlanner.Plan.Immediate)
+        plan as VoiceInvokePlanner.Plan.Immediate
+        assertEquals(true, plan.payload.getBoolean("boolValue"))
+    }
+
+    @Test
+    fun cruiseNudgeRelativeWithoutSignal() {
+        val nudge = CatalogAction(
+            type = "builtin",
+            actionType = "cruise_nudge",
+            voiceAliasesRu = listOf("круиз плюс"),
+            write = CatalogWriteSchema(
+                kind = CatalogWriteSchema.KIND_NUMBER,
+                options = emptyList(),
+                min = -1.0,
+                max = 1.0,
+                step = 1.0,
+            ),
+        )
+        val plan = VoiceInvokePlanner.plan("круиз плюс", nudge, catalog)
+        assertTrue(plan is VoiceInvokePlanner.Plan.Immediate)
+        plan as VoiceInvokePlanner.Plan.Immediate
+        assertEquals(1, plan.payload.getInt("intValue"))
+    }
+
+    @Test
+    fun slotOverrideSkipsPhrase() {
+        val plan = VoiceInvokePlanner.plan(
+            phrase = "что угодно",
+            action = volume,
+            catalog = catalog,
+            slotOverride = VoiceSlotParser.Slot.AbsoluteNumber(20.0),
+        )
+        assertTrue(plan is VoiceInvokePlanner.Plan.Immediate)
+        plan as VoiceInvokePlanner.Plan.Immediate
+        assertEquals(20, plan.payload.getInt("intValue"))
+    }
 }

@@ -205,6 +205,9 @@ class ExternalApiRouter(
                 )
             ExternalApiCatalogWrite.builtinWrite(type)?.let { schema ->
                 item.put("write", ExternalApiCatalogWrite.writeJson(schema))
+                ExternalApiCatalogWrite.builtinSignalId(type)?.let { signalId ->
+                    item.put("signalId", signalId)
+                }
             }
             builtins.put(item)
         }

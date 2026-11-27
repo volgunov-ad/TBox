@@ -186,9 +186,9 @@ Extra (opt): source = ui | wake | hard_key | automation
    `http_request`, `delay` не выбираются. Слоты: `VoiceSlotParser` +
    `VoiceInvokePlanner` (GET сигнала → абсолют → invoke) для «потеплее» /
    «тише» / «включи климат» / числа / багажника.
-6. Relative «потеплее» / «тише» — **сделано** (этап F); aliases volume
-   (`тише`/`громче`) и HVAC temp снова в каталоге. Яркость / wifi / cruise —
-   ещё без слотов.
+6. Relative «потеплее» / «тише» / «ярче» / wifi / cruise — **сделано** (этап F +
+   хвосты); «ещё» повторяет последний relative adjust (~60 с). Cloud
+   `invoke_action` умеет can_command+write и value/delta.
 
 ---
 
@@ -245,7 +245,7 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 | D | Уточняющий follow-up (1 раунд) | voice | **сделано** |
 | G | Длинные свободные ответы + chunked Piper | voice | **сделано** |
 | E | Локальный офлайн-классификатор (n-gram) | voice | **сделано** |
-| F | Слоты: потеплее / тише / can_command | voice | **сделано** |
+| F | Слоты: потеплее / тише / can_command | voice | **сделано** (+ cloud/brightness/wifi/cruise/«ещё»/encrypted key) |
 
 Этапы 7–9 не откладывать «на потом после MVP»: они в scope; порядок после
 рабочего PTT-цикла (1–6).

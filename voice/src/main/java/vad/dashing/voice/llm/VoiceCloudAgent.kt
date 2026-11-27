@@ -7,6 +7,7 @@ import vad.dashing.voice.api.CatalogAction
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.TextNormalizer
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.nlu.VoiceSlotParser
 
 data class ClarifySession(
     val history: List<CloudChatMessage>,
@@ -156,7 +157,13 @@ class VoiceCloudAgent(
             VoiceAgentTools.INVOKE_ACTION -> {
                 val action = resolveAction(args, catalog.actionTypes) ?: return null
                 if (!AliasNluMatcher.isVoiceInvokable(action)) return null
-                VoiceIntent.InvokeAction(action, matchedAlias = "cloud", score = 900)
+                val slot = slotFromToolArgs(args)
+                VoiceIntent.InvokeAction(
+                    action = action,
+                    matchedAlias = "cloud",
+                    score = 900,
+                    slotOverride = slot,
+                )
             }
             VoiceAgentTools.RUN_AUTOMATION -> {
                 val automation = resolveAutomation(args, automations) ?: return null
@@ -170,13 +177,72 @@ class VoiceCloudAgent(
     private fun resolveAction(args: JSONObject, actions: List<CatalogAction>): CatalogAction? {
         val type = args.optString("type").trim().ifBlank { "builtin" }
         val actionType = args.optString("actionType").trim().takeIf { it.isNotBlank() }
+        val signalId = args.optString("signalId").trim().takeIf { it.isNotBlank() }
+        val bus = args.optString("bus").trim().takeIf { it.isNotBlank() }
+        val propertyId = if (args.has("propertyId") && !args.isNull("propertyId")) {
+            args.optInt("propertyId")
+        } else {
+            null
+        }
         return actions.firstOrNull { action ->
             when (type) {
                 "open_main_screen" -> action.type == "open_main_screen"
-                "builtin" -> action.type == "builtin" && action.actionType == actionType
+                "builtin" -> {
+                    action.type == "builtin" && (
+                        (actionType != null && action.actionType == actionType) ||
+                            (signalId != null && action.signalId == signalId)
+                        )
+                }
+                "can_command" -> {
+                    action.type == "can_command" && action.write != null && (
+                        (propertyId != null && action.propertyId == propertyId &&
+                            (bus == null || action.bus == bus)) ||
+                            (signalId != null && action.signalId == signalId)
+                        )
+                }
                 else -> false
             }
         }
+    }
+
+    private fun slotFromToolArgs(args: JSONObject): VoiceSlotParser.Slot? {
+        if (args.has("delta") && !args.isNull("delta")) {
+            val delta = args.optInt("delta")
+            if (delta != 0) return VoiceSlotParser.Slot.Relative(if (delta > 0) 1 else -1)
+        }
+        if (args.has("boolValue") && !args.isNull("boolValue")) {
+            return VoiceSlotParser.Slot.Binary(args.optBoolean("boolValue"))
+        }
+        if (args.has("intValue") && !args.isNull("intValue")) {
+            return VoiceSlotParser.Slot.AbsoluteNumber(args.optInt("intValue").toDouble())
+        }
+        if (args.has("value") && !args.isNull("value")) {
+            val raw = args.get("value")
+            when (raw) {
+                is Boolean -> return VoiceSlotParser.Slot.Binary(raw)
+                is Number -> return VoiceSlotParser.Slot.AbsoluteNumber(raw.toDouble())
+                is String -> {
+                    val trimmed = raw.trim()
+                    when {
+                        trimmed.equals("on", ignoreCase = true) ->
+                            return VoiceSlotParser.Slot.Binary(true)
+                        trimmed.equals("off", ignoreCase = true) ->
+                            return VoiceSlotParser.Slot.Binary(false)
+                        trimmed.equals("open", ignoreCase = true) ->
+                            return VoiceSlotParser.Slot.Pulse(true)
+                        trimmed.equals("close", ignoreCase = true) ->
+                            return VoiceSlotParser.Slot.Pulse(false)
+                        else -> {
+                            val number = trimmed.replace(',', '.').toDoubleOrNull()
+                            if (number != null) {
+                                return VoiceSlotParser.Slot.AbsoluteNumber(number)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun resolveAutomation(

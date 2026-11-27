@@ -41,7 +41,7 @@ object CatalogPromptBuilder {
         return buildString {
             appendLine("signals (id|label|aliases):")
             appendLine(signals.ifBlank { "(none)" })
-            appendLine("actions (type|actionType|label|aliases):")
+            appendLine("actions (type|actionType|bus|propertyId|signalId|writeKind|label|aliases):")
             appendLine(actions.ifBlank { "(none)" })
             appendLine("automations (id|name):")
             append(rules.ifBlank { "(none)" })
@@ -53,6 +53,10 @@ object CatalogPromptBuilder {
         return listOfNotNull(
             action.type,
             action.actionType.orEmpty(),
+            action.bus.orEmpty(),
+            action.propertyId?.toString().orEmpty(),
+            action.signalId.orEmpty(),
+            action.write?.kind.orEmpty(),
             action.label.orEmpty(),
             aliases.takeIf { it.isNotBlank() },
         ).joinToString("|")

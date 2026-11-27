@@ -43,9 +43,12 @@ class VoiceSettingsRepository(private val context: Context) {
     private val cloudAllowFreeformKey = booleanPreferencesKey("cloud_allow_freeform")
     private val cloudPresetKey = stringPreferencesKey("cloud_preset")
     private val cloudBaseUrlKey = stringPreferencesKey("cloud_base_url")
+    /** Legacy plaintext key — migrated into [CloudApiKeyStore] then cleared. */
     private val cloudApiKeyKey = stringPreferencesKey("cloud_api_key")
     private val cloudModelKey = stringPreferencesKey("cloud_model")
     private val localClassifierKey = booleanPreferencesKey("local_classifier_enabled")
+
+    private val apiKeyStore = CloudApiKeyStore(context)
 
     val settings: Flow<VoiceStoredSettings> = context.voiceDataStore.data.map { prefs ->
         val preset = CloudLlmPreset.fromStorageKey(prefs[cloudPresetKey])
@@ -53,6 +56,16 @@ class VoiceSettingsRepository(private val context: Context) {
         val baseUrl = when {
             !storedUrl.isNullOrBlank() -> CloudBaseUrlNormalizer.normalize(storedUrl)
             preset != CloudLlmPreset.CUSTOM -> preset.defaultBaseUrl
+            else -> ""
+        }
+        val legacyKey = AccessTokenNormalizer.normalize(prefs[cloudApiKeyKey].orEmpty())
+        val secureKey = apiKeyStore.read()
+        val apiKey = when {
+            secureKey.isNotBlank() -> secureKey
+            legacyKey.isNotBlank() -> {
+                apiKeyStore.write(legacyKey)
+                legacyKey
+            }
             else -> ""
         }
         VoiceStoredSettings(
@@ -68,7 +81,7 @@ class VoiceSettingsRepository(private val context: Context) {
                 allowFreeformSpeak = prefs[cloudAllowFreeformKey] ?: false,
                 preset = preset,
                 baseUrl = baseUrl,
-                apiKey = AccessTokenNormalizer.normalize(prefs[cloudApiKeyKey].orEmpty()),
+                apiKey = apiKey,
                 model = prefs[cloudModelKey].orEmpty().trim(),
             ),
             localClassifierEnabled = prefs[localClassifierKey] ?: true,
@@ -82,6 +95,7 @@ class VoiceSettingsRepository(private val context: Context) {
         cloud: CloudLlmSettings,
         localClassifierEnabled: Boolean = true,
     ) {
+        apiKeyStore.write(cloud.apiKey)
         context.voiceDataStore.edit { prefs ->
             prefs[hostKey] = host.trim().ifEmpty { VoiceConnectionSettings.DEFAULT_HOST }
             prefs[portKey] = port.coerceIn(1024, 65535)
@@ -93,7 +107,8 @@ class VoiceSettingsRepository(private val context: Context) {
             prefs[cloudAllowFreeformKey] = cloud.allowFreeformSpeak
             prefs[cloudPresetKey] = cloud.preset.storageKey
             prefs[cloudBaseUrlKey] = CloudBaseUrlNormalizer.normalize(cloud.baseUrl)
-            prefs[cloudApiKeyKey] = AccessTokenNormalizer.normalize(cloud.apiKey)
+            // Drop legacy plaintext copy after moving to EncryptedSharedPreferences.
+            prefs.remove(cloudApiKeyKey)
             prefs[cloudModelKey] = cloud.model.trim()
             prefs[localClassifierKey] = localClassifierEnabled
         }

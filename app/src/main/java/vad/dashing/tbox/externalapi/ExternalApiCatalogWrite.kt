@@ -70,7 +70,10 @@ object ExternalApiCatalogWrite {
         return CommandSchema(operations, signal?.id?.storageKey, write)
     }
 
-    /** Mixer volume is a builtin with an int argument, not a CAN pair list. */
+    /**
+     * Builtins with a typed argument publish a write schema so Voice/MQTT can slot
+     * relative/absolute phrases (volume, brightness, wifi, cruise nudge/target).
+     */
     fun builtinWrite(type: AutomationBuiltinActionType): WriteSchema? = when (type) {
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> WriteSchema(
             kind = KIND_NUMBER,
@@ -79,6 +82,51 @@ object ExternalApiCatalogWrite {
             max = 31.0,
             step = 1.0,
         )
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> WriteSchema(
+            kind = KIND_NUMBER,
+            options = emptyList(),
+            min = 1.0,
+            max = 10.0,
+            step = 1.0,
+        )
+        AutomationBuiltinActionType.WIFI_SET_ENABLED -> WriteSchema(
+            kind = KIND_BINARY,
+            // Portable on/off keys; Voice maps them to builtin boolValue.
+            options = listOf(
+                WriteOption("off", "off"),
+                WriteOption("on", "on"),
+            ),
+        )
+        AutomationBuiltinActionType.CRUISE_NUDGE -> WriteSchema(
+            kind = KIND_NUMBER,
+            options = emptyList(),
+            min = -1.0,
+            max = 1.0,
+            step = 1.0,
+            unit = "step",
+        )
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> WriteSchema(
+            kind = KIND_NUMBER,
+            options = emptyList(),
+            min = vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN.toDouble(),
+            max = vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX.toDouble(),
+            step = 1.0,
+            unit = "км/ч",
+        )
+        else -> null
+    }
+
+    /**
+     * Linked telemetry id for relative GET→adjust (Voice).
+     * Cruise nudge has no signal: ±1 is the invoke intValue itself.
+     */
+    fun builtinSignalId(type: AutomationBuiltinActionType): String? = when (type) {
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME ->
+            AutomationSignalId.HU_MEDIA_VOLUME.storageKey
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS ->
+            AutomationSignalId.HU_SCREEN_BRIGHTNESS.storageKey
+        AutomationBuiltinActionType.WIFI_SET_ENABLED ->
+            AutomationSignalId.WIFI_ENABLED.storageKey
         else -> null
     }
 

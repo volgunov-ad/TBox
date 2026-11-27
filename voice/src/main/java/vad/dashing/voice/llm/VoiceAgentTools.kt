@@ -31,7 +31,10 @@ object VoiceAgentTools {
             .put(
                 functionTool(
                     name = INVOKE_ACTION,
-                    description = "Выполнить действие из каталога. Только builtin (actionType) или open_main_screen.",
+                    description =
+                        "Выполнить действие из каталога: builtin, open_main_screen или can_command " +
+                            "(только если у действия есть write). Для volume/brightness/wifi/can_command " +
+                            "передавай value / intValue / boolValue / delta (±1).",
                     parameters = JSONObject()
                         .put("type", "object")
                         .put(
@@ -41,13 +44,75 @@ object VoiceAgentTools {
                                     "type",
                                     JSONObject()
                                         .put("type", "string")
-                                        .put("description", "builtin или open_main_screen"),
+                                        .put(
+                                            "description",
+                                            "builtin | open_main_screen | can_command",
+                                        ),
                                 )
                                 .put(
                                     "actionType",
                                     JSONObject()
                                         .put("type", "string")
-                                        .put("description", "Для builtin: media_next, media_play, …"),
+                                        .put(
+                                            "description",
+                                            "Для builtin: media_next, set_media_volume, …",
+                                        ),
+                                )
+                                .put(
+                                    "bus",
+                                    JSONObject()
+                                        .put("type", "string")
+                                        .put("description", "Для can_command: vehicle | audio"),
+                                )
+                                .put(
+                                    "propertyId",
+                                    JSONObject()
+                                        .put("type", "integer")
+                                        .put("description", "Для can_command: propertyId из каталога"),
+                                )
+                                .put(
+                                    "signalId",
+                                    JSONObject()
+                                        .put("type", "string")
+                                        .put(
+                                            "description",
+                                            "Опционально: signalId связанного can_command / builtin",
+                                        ),
+                                )
+                                .put(
+                                    "operation",
+                                    JSONObject()
+                                        .put("type", "string")
+                                        .put("description", "set | toggle | trunk_pulse"),
+                                )
+                                .put(
+                                    "value",
+                                    JSONObject()
+                                        .put(
+                                            "description",
+                                            "Абсолют для can_command: on/off или число/ключ из write.options",
+                                        ),
+                                )
+                                .put(
+                                    "intValue",
+                                    JSONObject()
+                                        .put("type", "integer")
+                                        .put("description", "Для builtin volume/brightness/cruise"),
+                                )
+                                .put(
+                                    "boolValue",
+                                    JSONObject()
+                                        .put("type", "boolean")
+                                        .put("description", "Для wifi_set_enabled"),
+                                )
+                                .put(
+                                    "delta",
+                                    JSONObject()
+                                        .put("type", "integer")
+                                        .put(
+                                            "description",
+                                            "Относительный шаг ±1 (потеплее/тише/ярче/круиз плюс)",
+                                        ),
                                 ),
                         )
                         .put("required", JSONArray().put("type")),
@@ -79,7 +144,8 @@ object VoiceAgentTools {
         Ты голосовой ассистент автомобиля Jetour (TBox / VAD Voice).
         Когда намерение ясно и это про машину/каталог — вызывай tool. Не выдумывай id сигналов, действий и правил — бери их из каталога.
         Если фраза неоднозначна (несколько подходящих id) — не вызывай tool, задай один короткий уточняющий вопрос по-русски (с «?»): какой сигнал / какое правило / какое действие.
-        Нельзя: can_command, http, adb, произвольный код. Tools только query_signal / invoke_action / run_automation.
+        Для can_command вызывай invoke_action только если у действия в каталоге есть write; передавай value или delta.
+        Нельзя: http, adb, произвольный код. Tools только query_signal / invoke_action / run_automation.
         """.trimIndent()
 
     private val freeformAppendix: String =

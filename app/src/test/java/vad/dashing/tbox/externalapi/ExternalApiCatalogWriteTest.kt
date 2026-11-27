@@ -168,9 +168,16 @@ class ExternalApiCatalogWriteTest {
         )
         assertEquals(200, response.status)
         val json = JSONObject(response.body)
-        assertEquals(10, json.getInt("catalogVersion"))
+        assertEquals(ExternalApiConstants.CATALOG_VERSION, json.getInt("catalogVersion"))
         val actions = json.getJSONArray("actionTypes")
         var drive: JSONObject? = null
+        val slottedBuiltins = setOf(
+            "set_media_volume",
+            "set_hu_screen_brightness",
+            "wifi_set_enabled",
+            "cruise_nudge",
+            "cruise_engage_to_target",
+        )
         for (i in 0 until actions.length()) {
             val item = actions.getJSONObject(i)
             if (item.optString("type") == "can_command" &&
@@ -178,14 +185,24 @@ class ExternalApiCatalogWriteTest {
             ) {
                 drive = item
             }
-            if (item.optString("type") == "builtin" && item.optString("actionType") != "set_media_volume") {
-                assertFalse(item.has("write"))
+            if (item.optString("type") == "builtin") {
+                val actionType = item.optString("actionType")
+                if (actionType in slottedBuiltins) {
+                    assertTrue(item.has("write"))
+                } else {
+                    assertFalse(item.has("write"))
+                }
             }
             if (item.optString("actionType") == "set_media_volume") {
                 val write = item.getJSONObject("write")
                 assertEquals("number", write.getString("kind"))
                 assertEquals(0, write.getInt("min"))
                 assertEquals(31, write.getInt("max"))
+                assertEquals("hu_media_volume", item.getString("signalId"))
+            }
+            if (item.optString("actionType") == "wifi_set_enabled") {
+                assertEquals("binary", item.getJSONObject("write").getString("kind"))
+                assertEquals("wifi_enabled", item.getString("signalId"))
             }
         }
         assertNotNull(drive)

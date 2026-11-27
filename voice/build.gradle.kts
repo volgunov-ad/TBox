@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.okhttp)
     // Piper / VITS offline TTS (JNI + onnxruntime inside AAR).
     implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5")
