@@ -65,13 +65,15 @@ class AliasNluMatcher(
         signals: List<CatalogSignal>,
     ): Pair<VoiceIntent, Int>? {
         var best: Pair<VoiceIntent.QuerySignal, Int>? = null
+        val questionBoost = if (hasQuestionCue(phrase)) 25 else 0
         for (signal in signals) {
             val aliases = (signal.voiceAliasesRu + signal.label).map { TextNormalizer.normalize(it) }
             for (alias in aliases) {
                 val score = scoreAlias(phrase, alias) ?: continue
-                val candidate = VoiceIntent.QuerySignal(signal, alias, score)
-                if (best == null || score > best.second) {
-                    best = candidate to score
+                val total = score + questionBoost
+                val candidate = VoiceIntent.QuerySignal(signal, alias, total)
+                if (best == null || total > best.second) {
+                    best = candidate to total
                 }
             }
         }
@@ -84,6 +86,7 @@ class AliasNluMatcher(
     ): Pair<VoiceIntent, Int>? {
         var best: Pair<VoiceIntent.InvokeAction, Int>? = null
         for (action in actions) {
+            if (!isVoiceInvokable(action)) continue
             val labelAliases = listOfNotNull(action.label, action.actionType?.replace('_', ' '))
             val aliases = (action.voiceAliasesRu + labelAliases).map { TextNormalizer.normalize(it) }
             for (alias in aliases) {
@@ -106,15 +109,7 @@ class AliasNluMatcher(
             val alias = TextNormalizer.normalize(automation.name)
             val score = scoreAlias(phrase, alias) ?: continue
             // Prefer phrases that look like a run command.
-            val boost = if (
-                phrase.contains("запусти") ||
-                phrase.contains("включи правило") ||
-                phrase.contains("выполни")
-            ) {
-                40
-            } else {
-                0
-            }
+            val boost = if (hasRunCue(phrase)) 40 else 0
             val total = score + boost
             val candidate = VoiceIntent.RunAutomation(automation, alias, total)
             if (best == null || total > best.second) {
@@ -142,5 +137,47 @@ class AliasNluMatcher(
         if (overlap.isEmpty()) return null
         if (overlap.size * 2 < aliasTokens.size) return null
         return overlap.sumOf { it.length } * 4
+    }
+
+    companion object {
+        /**
+         * Voice [vad.dashing.voice.api.InvokeActionPayloadBuilder] only builds these.
+         * Matching can_command / delay / etc. produced dead-end answers.
+         */
+        fun isVoiceInvokable(action: CatalogAction): Boolean =
+            when (action.type) {
+                "builtin", "open_main_screen" -> true
+                else -> false
+            }
+
+        fun hasQuestionCue(phrase: String): Boolean =
+            QUESTION_CUES.any { phrase.contains(it) }
+
+        fun hasRunCue(phrase: String): Boolean =
+            RUN_CUES.any { phrase.contains(it) }
+
+        private val QUESTION_CUES = listOf(
+            "сколько",
+            "какая",
+            "какой",
+            "какие",
+            "какое",
+            "есть ли",
+        )
+
+        private val RUN_CUES = listOf(
+            "запусти",
+            "запустить",
+            "включи правило",
+            "выполни",
+            "выполнить",
+            "запусти правило",
+            "запусти сценарий",
+            "включи сценарий",
+            "запусти автоматизацию",
+            // «включи <имя правила>» — частая форма; без правила матч уйдёт в signal/builtin.
+            "включи ",
+            "включить ",
+        )
     }
 }

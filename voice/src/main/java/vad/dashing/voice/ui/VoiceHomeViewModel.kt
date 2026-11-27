@@ -24,6 +24,12 @@ import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.llm.CloudAgentOutcome
+import vad.dashing.voice.llm.CloudBaseUrlNormalizer
+import vad.dashing.voice.llm.CloudLlmPreset
+import vad.dashing.voice.llm.CloudLlmSettings
+import vad.dashing.voice.llm.OpenAiCompatibleClient
+import vad.dashing.voice.llm.VoiceCloudAgent
 import vad.dashing.voice.settings.AccessTokenNormalizer
 import vad.dashing.voice.settings.VoiceConnectionSettings
 import vad.dashing.voice.settings.VoiceSettingsRepository
@@ -37,6 +43,16 @@ data class VoiceHomeUiState(
     val host: String = VoiceConnectionSettings.DEFAULT_HOST,
     val portText: String = VoiceConnectionSettings.DEFAULT_PORT.toString(),
     val token: String = "",
+    val cloudEnabled: Boolean = false,
+    val cloudPrefer: Boolean = true,
+    val cloudAllowPhrases: Boolean = false,
+    val cloudPreset: CloudLlmPreset = CloudLlmPreset.AITUNNEL,
+    val cloudBaseUrl: String = CloudLlmPreset.AITUNNEL.defaultBaseUrl,
+    val cloudApiKey: String = "",
+    val cloudModel: String = "",
+    val cloudModelIds: List<String> = emptyList(),
+    val cloudStatusMessage: String = "",
+    val cloudLastOk: Boolean? = null,
     val phrase: String = "сколько градусов на улице",
     val statusMessage: String = "",
     val answerMessage: String = "",
@@ -45,12 +61,25 @@ data class VoiceHomeUiState(
     val speaking: Boolean = false,
     val listening: Boolean = false,
     val lastHealthOk: Boolean? = null,
-)
+) {
+    fun cloudSettings(): CloudLlmSettings =
+        CloudLlmSettings(
+            enabled = cloudEnabled,
+            preferCloud = cloudPrefer,
+            allowSendPhrases = cloudAllowPhrases,
+            preset = cloudPreset,
+            baseUrl = cloudBaseUrl,
+            apiKey = cloudApiKey,
+            model = cloudModel,
+        )
+}
 
 class VoiceHomeViewModel(
     application: Application,
     private val settingsRepository: VoiceSettingsRepository = VoiceSettingsRepository(application),
     private val apiClient: ExternalApiClient = ExternalApiClient(),
+    private val cloudClient: OpenAiCompatibleClient = OpenAiCompatibleClient(),
+    private val cloudAgent: VoiceCloudAgent = VoiceCloudAgent(cloudClient),
     private val nlu: AliasNluMatcher = AliasNluMatcher(),
     private val tts: VoiceTts = PiperVoiceTts.createOrNoOp(application),
     private val stt: VoiceStt = VoskVoiceStt.createOrNoOp(application),
@@ -71,11 +100,19 @@ class VoiceHomeViewModel(
     init {
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
+                val cloud = settings.cloud
                 _uiState.update {
                     it.copy(
-                        host = settings.host,
-                        portText = settings.port.toString(),
-                        token = settings.accessToken,
+                        host = settings.connection.host,
+                        portText = settings.connection.port.toString(),
+                        token = settings.connection.accessToken,
+                        cloudEnabled = cloud.enabled,
+                        cloudPrefer = cloud.preferCloud,
+                        cloudAllowPhrases = cloud.allowSendPhrases,
+                        cloudPreset = cloud.preset,
+                        cloudBaseUrl = cloud.baseUrl,
+                        cloudApiKey = cloud.apiKey,
+                        cloudModel = cloud.model,
                     )
                 }
             }
@@ -86,7 +123,11 @@ class VoiceHomeViewModel(
         }
         viewModelScope.launch {
             val saved = settingsRepository.settings.first()
-            if (saved.accessToken.isBlank() && isLocalMonitor(saved.host)) requestMonitorAccess()
+            if (saved.connection.accessToken.isBlank() &&
+                isLocalMonitor(saved.connection.host)
+            ) {
+                requestMonitorAccess()
+            }
         }
     }
 
@@ -106,6 +147,49 @@ class VoiceHomeViewModel(
         _uiState.update { it.copy(phrase = value) }
     }
 
+    fun onCloudEnabledChange(value: Boolean) {
+        _uiState.update { it.copy(cloudEnabled = value) }
+    }
+
+    fun onCloudPreferChange(value: Boolean) {
+        _uiState.update { it.copy(cloudPrefer = value) }
+    }
+
+    fun onCloudAllowPhrasesChange(value: Boolean) {
+        _uiState.update { it.copy(cloudAllowPhrases = value) }
+    }
+
+    fun onCloudPresetChange(preset: CloudLlmPreset) {
+        _uiState.update {
+            val url = if (preset == CloudLlmPreset.CUSTOM) {
+                it.cloudBaseUrl
+            } else {
+                preset.defaultBaseUrl
+            }
+            it.copy(cloudPreset = preset, cloudBaseUrl = url)
+        }
+    }
+
+    fun onCloudBaseUrlChange(value: String) {
+        _uiState.update { it.copy(cloudBaseUrl = value, cloudPreset = CloudLlmPreset.CUSTOM) }
+    }
+
+    fun onCloudApiKeyChange(value: String) {
+        _uiState.update { it.copy(cloudApiKey = value) }
+    }
+
+    fun onCloudModelChange(value: String) {
+        _uiState.update { it.copy(cloudModel = value) }
+    }
+
+    fun selectNextCloudModel() {
+        val state = _uiState.value
+        val ids = state.cloudModelIds
+        if (ids.isEmpty()) return
+        val index = ids.indexOf(state.cloudModel).let { if (it < 0) 0 else (it + 1) % ids.size }
+        _uiState.update { it.copy(cloudModel = ids[index]) }
+    }
+
     fun onMicPermissionDenied() {
         _uiState.update {
             it.copy(
@@ -119,14 +203,66 @@ class VoiceHomeViewModel(
         val state = _uiState.value
         val port = state.portText.toIntOrNull() ?: VoiceConnectionSettings.DEFAULT_PORT
         val token = AccessTokenNormalizer.normalize(state.token)
+        val cloud = state.cloudSettings().copy(
+            apiKey = AccessTokenNormalizer.normalize(state.cloudApiKey),
+            baseUrl = CloudBaseUrlNormalizer.normalize(state.cloudBaseUrl),
+            model = state.cloudModel.trim(),
+        )
         viewModelScope.launch {
-            settingsRepository.save(state.host, port, token)
+            settingsRepository.save(state.host, port, token, cloud)
             _uiState.update {
                 it.copy(
                     token = token,
+                    cloudApiKey = cloud.apiKey,
+                    cloudBaseUrl = cloud.baseUrl,
+                    cloudModel = cloud.model,
                     statusMessage = "Сохранено",
                 )
             }
+        }
+    }
+
+    fun checkCloudModels() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(busy = true, cloudStatusMessage = "Загрузка моделей…", cloudLastOk = null)
+            }
+            val result = withContext(Dispatchers.IO) {
+                cloudClient.listModels(state.cloudBaseUrl, state.cloudApiKey)
+            }
+            result.fold(
+                onSuccess = { models ->
+                    val ids = models.modelIds
+                    val selected = when {
+                        state.cloudModel.isNotBlank() && state.cloudModel in ids -> state.cloudModel
+                        ids.isNotEmpty() -> ids.first()
+                        else -> state.cloudModel
+                    }
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            cloudModelIds = ids,
+                            cloudModel = selected,
+                            cloudLastOk = true,
+                            cloudStatusMessage = if (ids.isEmpty()) {
+                                "Связь OK, но список моделей пуст"
+                            } else {
+                                "Облако OK — моделей ${ids.size}"
+                            },
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            cloudLastOk = false,
+                            cloudStatusMessage = "Облако: ${error.message ?: error.javaClass.simpleName}",
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -315,154 +451,203 @@ class VoiceHomeViewModel(
                 loaded
             }
 
-            when (val intent = nlu.match(state.phrase, catalog, cachedAutomations)) {
-                is VoiceIntent.QuerySignal -> {
-                    val source = SignalAnswerFormatter.preferredSource(intent.signal)
-                    if (source == null) {
-                        val msg = "У сигнала ${intent.signal.id} нет источников"
-                        _uiState.update {
-                            it.copy(
-                                busy = false,
-                                answerMessage = msg,
-                                statusMessage = "intent=query alias=${intent.matchedAlias}",
-                            )
-                        }
-                        speakAnswer(msg)
-                        return@launch
-                    }
-                    val snapshot = withContext(Dispatchers.IO) {
-                        withFreshToken(state, port) { token ->
-                            apiClient.signals(
-                                host = state.host,
-                                port = port,
-                                token = token,
-                                ids = listOf(intent.signal.id),
-                                source = source,
-                            )
-                        }
-                    }.getOrElse { error ->
-                        _uiState.update {
-                            it.copy(
-                                busy = false,
-                                lastHealthOk = false,
-                                statusMessage = "Signals: ${error.message ?: error.javaClass.simpleName}",
-                            )
-                        }
-                        return@launch
-                    }
-                    val reading = snapshot.signals.firstOrNull { it.id == intent.signal.id }
-                    val answer = SignalAnswerFormatter.format(intent.signal, reading)
-                    _uiState.update {
-                        it.copy(
-                            busy = false,
-                            lastHealthOk = true,
-                            answerMessage = answer,
-                            statusMessage = "query ${intent.signal.id}@$source (alias «${intent.matchedAlias}»)",
-                            catalogSummary = it.catalogSummary.ifBlank {
-                                "Каталог v${catalog.catalogVersion}: сигналов ${catalog.signals.size}"
-                            },
-                        )
-                    }
-                    speakAnswer(answer)
+            val cloudSettings = state.cloudSettings()
+            if (cloudSettings.looksConfigured() && cloudSettings.preferCloud) {
+                _uiState.update { it.copy(statusMessage = "Облачный агент…") }
+                val outcome = withContext(Dispatchers.IO) {
+                    cloudAgent.resolve(
+                        phrase = state.phrase,
+                        settings = cloudSettings,
+                        catalog = catalog,
+                        automations = cachedAutomations,
+                    )
                 }
-
-                is VoiceIntent.InvokeAction -> {
-                    val name = intent.action.label
-                        ?: intent.action.actionType
-                        ?: intent.action.type
-                    val payload = InvokeActionPayloadBuilder.build(intent.action).getOrElse { error ->
-                        val msg = error.message ?: "Нельзя вызвать действие"
+                when (outcome) {
+                    is CloudAgentOutcome.Intent -> {
+                        handleIntent(outcome.intent, state, port, catalog, sourceTag = "cloud")
+                        return@launch
+                    }
+                    is CloudAgentOutcome.Speak -> {
                         _uiState.update {
                             it.copy(
                                 busy = false,
-                                answerMessage = msg,
-                                statusMessage = "intent=invoke alias=${intent.matchedAlias}",
+                                lastHealthOk = true,
+                                answerMessage = outcome.text,
+                                statusMessage = "intent=cloud-speak",
                             )
                         }
-                        speakAnswer(msg)
+                        speakAnswer(outcome.text)
                         return@launch
                     }
-                    val body = InvokeActionPayloadBuilder.wrapActions(payload)
-                    val result = withContext(Dispatchers.IO) {
-                        withFreshToken(state, port) { token -> apiClient.invokeActions(state.host, port, token, body) }
-                    }.getOrElse { error ->
-                        val msg = "Действие не выполнено: ${error.message ?: error.javaClass.simpleName}"
-                        _uiState.update {
-                            it.copy(
-                                busy = false,
-                                lastHealthOk = false,
-                                answerMessage = msg,
-                                statusMessage = "invoke failed",
-                            )
-                        }
-                        speakAnswer(msg)
-                        return@launch
+                    CloudAgentOutcome.Fallback -> {
+                        _uiState.update { it.copy(statusMessage = "Aliases…") }
                     }
-                    val first = result.results.firstOrNull()
-                    val ok = first?.success == true
-                    val detail = first?.message?.takeIf { it.isNotBlank() }
-                    val msg = when {
-                        ok && detail != null -> "Готово: $detail"
-                        ok -> "Сделано: $name"
-                        detail != null -> "Ошибка: $detail"
-                        else -> "Действие «$name» не выполнено"
-                    }
-                    _uiState.update {
-                        it.copy(
-                            busy = false,
-                            lastHealthOk = ok,
-                            answerMessage = msg,
-                            statusMessage = "intent=invoke alias=${intent.matchedAlias} ok=$ok",
-                        )
-                    }
-                    speakAnswer(msg)
                 }
+            }
 
-                is VoiceIntent.RunAutomation -> {
-                    val result = withContext(Dispatchers.IO) {
-                        withFreshToken(state, port) { token ->
-                            apiClient.runAutomation(state.host, port, token, intent.automation.id)
-                        }
-                    }.getOrElse { error ->
-                        val msg = "Правило не запущено: ${error.message ?: error.javaClass.simpleName}"
-                        _uiState.update {
-                            it.copy(
-                                busy = false,
-                                lastHealthOk = false,
-                                answerMessage = msg,
-                                statusMessage = "run failed",
-                            )
-                        }
-                        speakAnswer(msg)
-                        return@launch
-                    }
-                    val msg = if (result.accepted) {
-                        "Запускаю «${intent.automation.name}»"
-                    } else {
-                        result.message.ifBlank { "Правило «${intent.automation.name}» отклонено" }
-                    }
-                    _uiState.update {
-                        it.copy(
-                            busy = false,
-                            lastHealthOk = result.accepted,
-                            answerMessage = msg,
-                            statusMessage = "intent=run id=${intent.automation.id} accepted=${result.accepted}",
-                        )
-                    }
-                    speakAnswer(msg)
-                }
+            val intent = nlu.match(state.phrase, catalog, cachedAutomations)
+            handleIntent(intent, state, port, catalog, sourceTag = "alias")
+        }
+    }
 
-                VoiceIntent.Unknown -> {
-                    val msg = "Не понял фразу"
+    private suspend fun handleIntent(
+        intent: VoiceIntent,
+        state: VoiceHomeUiState,
+        port: Int,
+        catalog: ApiCatalog,
+        sourceTag: String,
+    ) {
+        when (intent) {
+            is VoiceIntent.QuerySignal -> {
+                val source = SignalAnswerFormatter.preferredSource(intent.signal)
+                if (source == null) {
+                    val msg = "У сигнала ${intent.signal.id} нет источников"
                     _uiState.update {
                         it.copy(
                             busy = false,
                             answerMessage = msg,
-                            statusMessage = "intent=unknown",
+                            statusMessage = "intent=query/$sourceTag alias=${intent.matchedAlias}",
                         )
                     }
                     speakAnswer(msg)
+                    return
                 }
+                val snapshot = withContext(Dispatchers.IO) {
+                    withFreshToken(state, port) { token ->
+                        apiClient.signals(
+                            host = state.host,
+                            port = port,
+                            token = token,
+                            ids = listOf(intent.signal.id),
+                            source = source,
+                        )
+                    }
+                }.getOrElse { error ->
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            lastHealthOk = false,
+                            statusMessage = "Signals: ${error.message ?: error.javaClass.simpleName}",
+                        )
+                    }
+                    return
+                }
+                val reading = snapshot.signals.firstOrNull { it.id == intent.signal.id }
+                val answer = SignalAnswerFormatter.format(intent.signal, reading)
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        lastHealthOk = true,
+                        answerMessage = answer,
+                        statusMessage = "query/$sourceTag ${intent.signal.id}@$source " +
+                            "(alias «${intent.matchedAlias}»)",
+                        catalogSummary = it.catalogSummary.ifBlank {
+                            "Каталог v${catalog.catalogVersion}: сигналов ${catalog.signals.size}"
+                        },
+                    )
+                }
+                speakAnswer(answer)
+            }
+
+            is VoiceIntent.InvokeAction -> {
+                val name = intent.action.label
+                    ?: intent.action.actionType
+                    ?: intent.action.type
+                val payload = InvokeActionPayloadBuilder.build(intent.action).getOrElse { error ->
+                    val msg = error.message ?: "Нельзя вызвать действие"
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            answerMessage = msg,
+                            statusMessage = "intent=invoke/$sourceTag alias=${intent.matchedAlias}",
+                        )
+                    }
+                    speakAnswer(msg)
+                    return
+                }
+                val body = InvokeActionPayloadBuilder.wrapActions(payload)
+                val result = withContext(Dispatchers.IO) {
+                    withFreshToken(state, port) { token ->
+                        apiClient.invokeActions(state.host, port, token, body)
+                    }
+                }.getOrElse { error ->
+                    val msg = "Действие не выполнено: ${error.message ?: error.javaClass.simpleName}"
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            lastHealthOk = false,
+                            answerMessage = msg,
+                            statusMessage = "invoke failed",
+                        )
+                    }
+                    speakAnswer(msg)
+                    return
+                }
+                val first = result.results.firstOrNull()
+                val ok = first?.success == true
+                val detail = first?.message?.takeIf { it.isNotBlank() }
+                val msg = when {
+                    ok && detail != null -> "Готово: $detail"
+                    ok -> "Сделано: $name"
+                    detail != null -> "Ошибка: $detail"
+                    else -> "Действие «$name» не выполнено"
+                }
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        lastHealthOk = ok,
+                        answerMessage = msg,
+                        statusMessage = "intent=invoke/$sourceTag alias=${intent.matchedAlias} ok=$ok",
+                    )
+                }
+                speakAnswer(msg)
+            }
+
+            is VoiceIntent.RunAutomation -> {
+                val result = withContext(Dispatchers.IO) {
+                    withFreshToken(state, port) { token ->
+                        apiClient.runAutomation(state.host, port, token, intent.automation.id)
+                    }
+                }.getOrElse { error ->
+                    val msg = "Правило не запущено: ${error.message ?: error.javaClass.simpleName}"
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            lastHealthOk = false,
+                            answerMessage = msg,
+                            statusMessage = "run failed",
+                        )
+                    }
+                    speakAnswer(msg)
+                    return
+                }
+                val msg = if (result.accepted) {
+                    "Запускаю «${intent.automation.name}»"
+                } else {
+                    result.message.ifBlank { "Правило «${intent.automation.name}» отклонено" }
+                }
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        lastHealthOk = result.accepted,
+                        answerMessage = msg,
+                        statusMessage = "intent=run/$sourceTag id=${intent.automation.id} " +
+                            "accepted=${result.accepted}",
+                    )
+                }
+                speakAnswer(msg)
+            }
+
+            VoiceIntent.Unknown -> {
+                val msg = "Не понял фразу"
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        answerMessage = msg,
+                        statusMessage = "intent=unknown/$sourceTag",
+                    )
+                }
+                speakAnswer(msg)
             }
         }
     }
@@ -566,7 +751,7 @@ class VoiceHomeViewModel(
         val token = result.accessToken.orEmpty()
         val port = result.port ?: fallbackPort
         _uiState.update { it.copy(token = token, portText = port.toString()) }
-        settingsRepository.save(state.host, port, token)
+        settingsRepository.saveConnection(state.host, port, token)
     }
 
     private fun isLocalMonitor(host: String): Boolean =

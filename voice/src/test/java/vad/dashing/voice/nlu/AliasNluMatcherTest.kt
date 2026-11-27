@@ -41,12 +41,43 @@ class AliasNluMatcherTest {
                 sources = listOf("head_unit"),
                 voiceAliasesRu = listOf("скорость", "какая скорость"),
             ),
+            CatalogSignal(
+                id = "hvac_power",
+                label = "Климат",
+                unit = "",
+                valueType = "state",
+                sources = listOf("head_unit"),
+                voiceAliasesRu = listOf(
+                    "кондиционер",
+                    "климат",
+                    "состояние климата",
+                ),
+            ),
         ),
         actionTypes = listOf(
             CatalogAction(
                 type = "builtin",
                 actionType = "media_next",
                 voiceAliasesRu = listOf("следующий трек", "следующий"),
+            ),
+            CatalogAction(
+                type = "can_command",
+                label = "Управление кондиционером",
+                voiceAliasesRu = listOf(
+                    "кондиционер",
+                    "включи климат",
+                    "выключи климат",
+                    "климат-контроль",
+                ),
+            ),
+            CatalogAction(
+                type = "delay",
+                voiceAliasesRu = listOf("задержка", "подожди секунд"),
+            ),
+            CatalogAction(
+                type = "builtin",
+                actionType = "media_play_pause",
+                voiceAliasesRu = listOf("пауза", "стоп", "плей пауза"),
             ),
         ),
     )
@@ -73,6 +104,30 @@ class AliasNluMatcherTest {
         assertTrue(intent is VoiceIntent.RunAutomation)
         intent as VoiceIntent.RunAutomation
         assertEquals("климат", intent.automation.name)
+    }
+
+    @Test
+    fun prefersAutomationForVkluchiRuleName() {
+        val intent = matcher.match("включи климат", catalog, automations)
+        assertTrue(intent is VoiceIntent.RunAutomation)
+        intent as VoiceIntent.RunAutomation
+        assertEquals("климат", intent.automation.name)
+    }
+
+    @Test
+    fun skipsCanCommand_fallsBackToClimateSignalWithoutAutomation() {
+        val intent = matcher.match("состояние климата", catalog, automations = emptyList())
+        assertTrue(intent is VoiceIntent.QuerySignal)
+        intent as VoiceIntent.QuerySignal
+        assertEquals("hvac_power", intent.signal.id)
+    }
+
+    @Test
+    fun doesNotMatchDelayOrCanCommandForPause() {
+        val intent = matcher.match("пауза", catalog, automations)
+        assertTrue(intent is VoiceIntent.InvokeAction)
+        intent as VoiceIntent.InvokeAction
+        assertEquals("media_play_pause", intent.action.actionType)
     }
 
     @Test

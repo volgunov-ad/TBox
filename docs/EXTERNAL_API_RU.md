@@ -278,7 +278,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 10,
+  "catalogVersion": 11,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -336,7 +336,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **10** — регистратор camd: действие `camd_recorder`,
+- `catalogVersion` (сейчас **11** — расширенные `voiceAliasesRu` для голоса; **10** — регистратор camd: действие `camd_recorder`,
   сигналы `camd_recorder_enabled` / `camd_recording_active`; **9** — DCL Smart ACC: сигналы `dcl_smart_acc_*` /
   `dcl_effective_speed_limit` и builtin `dcl_set_smart_acc` / `dcl_toggle_smart_acc`;
   **8** — сигнал `dcl_notification_shade_expanded`;
@@ -553,7 +553,7 @@ HFP phone — **6**; окна камер и удержание штатного 
 | Слой | Реализация |
 |------|------------|
 | STT | офлайн RU Vosk (`vosk-model-small-ru`) |
-| NLU | `voiceAliasesRu` + имена автоматизаций по `/v1/catalog` и `/v1/automations`; без LLM |
+| NLU | `voiceAliasesRu` + имена автоматизаций по `/v1/catalog` и `/v1/automations`; без LLM (дизайн агента: [VOICE_AI_AGENT_RU.md](VOICE_AI_AGENT_RU.md)) |
 | Транспорт | единичные HTTP-запросы к `127.0.0.1:<port>/v1` + автообновление токена через `LocalAccessClient` |
 | TTS | встроенный офлайн Piper (`irina-medium-int8` / Sherpa-ONNX); системный TTS ГУ не используется |
 

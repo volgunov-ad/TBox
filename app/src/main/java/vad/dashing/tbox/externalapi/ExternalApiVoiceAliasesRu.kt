@@ -121,20 +121,177 @@ object ExternalApiVoiceAliasesRu {
         AutomationSignalId.CURRENT_FUEL_CONSUMPTION to listOf(
             "расход",
             "текущий расход",
+            "какой расход",
+            "мгновенный расход",
         ),
         AutomationSignalId.ODOMETER_KM to listOf(
             "пробег",
             "одометр",
+            "общий пробег",
+        ),
+        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM to listOf(
+            "до то",
+            "до обслуживания",
+            "осталось до то",
+            "пробег до то",
         ),
         AutomationSignalId.VOLTAGE to listOf(
             "напряжение",
             "аккумулятор",
             "заряд акб",
+            "напряжение бортовой сети",
         ),
         AutomationSignalId.GEAR_MODE to listOf(
             "передача",
             "селектор",
             "prnd",
+            "какая передача",
+        ),
+        AutomationSignalId.CRUISE_SET_SPEED to listOf(
+            "уставка круиза",
+            "скорость круиза",
+            "круиз скорость",
+        ),
+        AutomationSignalId.ACC_STATUS to listOf(
+            "статус acc",
+            "состояние acc",
+            "адаптивный круиз",
+        ),
+        AutomationSignalId.ACC_CRUISE_STATE to listOf(
+            "состояние круиза acc",
+            "круиз acc",
+        ),
+        AutomationSignalId.CCS_CRUISE_STATE to listOf(
+            "состояние круиза ccs",
+            "обычный круиз",
+        ),
+        AutomationSignalId.DRIVE_MODE to listOf(
+            "режим езды",
+            "драйв мод",
+            "какой режим",
+        ),
+        AutomationSignalId.HIGH_BEAM to listOf(
+            "дальний свет",
+            "дальний",
+        ),
+        AutomationSignalId.HEADLIGHT_MODE to listOf(
+            "режим фар",
+            "свет фар",
+            "фары",
+        ),
+        AutomationSignalId.STEERING_WHEEL_HEAT to listOf(
+            "подогрев руля",
+            "обогрев руля",
+            "руль греется",
+        ),
+        AutomationSignalId.FRONT_LEFT_SEAT_MODE to listOf(
+            "сиденье водителя",
+            "подогрев водителя",
+            "вентиляция водителя",
+        ),
+        AutomationSignalId.FRONT_RIGHT_SEAT_MODE to listOf(
+            "сиденье пассажира",
+            "подогрев пассажира",
+            "вентиляция пассажира",
+        ),
+        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE to listOf(
+            "давление левое переднее",
+            "давление переднее левое",
+        ),
+        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE to listOf(
+            "давление правое переднее",
+            "давление переднее правое",
+        ),
+        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE to listOf(
+            "давление левое заднее",
+            "давление заднее левое",
+        ),
+        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE to listOf(
+            "давление правое заднее",
+            "давление заднее правое",
+        ),
+        AutomationSignalId.DOOR_FRONT_LEFT to listOf(
+            "дверь водителя",
+            "передняя левая дверь",
+        ),
+        AutomationSignalId.DOOR_FRONT_RIGHT to listOf(
+            "дверь пассажира",
+            "передняя правая дверь",
+        ),
+        AutomationSignalId.DOOR_REAR_LEFT to listOf(
+            "задняя левая дверь",
+        ),
+        AutomationSignalId.DOOR_REAR_RIGHT to listOf(
+            "задняя правая дверь",
+        ),
+        AutomationSignalId.TRUNK_DOOR to listOf(
+            "багажник открыт",
+            "дверь багажника",
+            "состояние багажника",
+        ),
+        AutomationSignalId.SUNROOF to listOf(
+            "люк",
+            "состояние люка",
+            "люк открыт",
+        ),
+        AutomationSignalId.WINDOW_FRONT_LEFT to listOf(
+            "окно водителя",
+            "стекло водителя",
+        ),
+        AutomationSignalId.WINDOW_FRONT_RIGHT to listOf(
+            "окно пассажира",
+            "стекло пассажира",
+        ),
+        AutomationSignalId.WINDOW_REAR_LEFT to listOf(
+            "заднее левое окно",
+        ),
+        AutomationSignalId.WINDOW_REAR_RIGHT to listOf(
+            "заднее правое окно",
+        ),
+        AutomationSignalId.FRONT_WINDSCREEN_HEAT to listOf(
+            "обогрев лобового",
+            "подогрев лобового",
+        ),
+        AutomationSignalId.HVAC_REAR_DEFROSTER to listOf(
+            "обогрев заднего стекла",
+            "обогрев зеркал",
+        ),
+        AutomationSignalId.HVAC_AUTO to listOf(
+            "авто климат",
+            "климат авто",
+            "режим авто климата",
+        ),
+        AutomationSignalId.HVAC_RECIRCULATION to listOf(
+            "рециркуляция",
+            "воздух из салона",
+        ),
+        AutomationSignalId.RAIN_DETECTED to listOf(
+            "дождь",
+            "идёт дождь",
+            "датчик дождя",
+        ),
+        AutomationSignalId.PARKING_RADAR to listOf(
+            "парктроник",
+            "радар парковки",
+        ),
+        AutomationSignalId.WIFI_ENABLED to listOf(
+            "вайфай",
+            "wifi включен",
+            "состояние wifi",
+        ),
+        AutomationSignalId.WIFI_SSID to listOf(
+            "имя wifi",
+            "ssid",
+            "к какой сети подключены",
+        ),
+        AutomationSignalId.HU_MEDIA_VOLUME to listOf(
+            "громкость медиа",
+            "громкость музыки",
+            "какая громкость",
+        ),
+        AutomationSignalId.HU_SCREEN_BRIGHTNESS to listOf(
+            "яркость экрана",
+            "какая яркость",
         ),
         AutomationSignalId.DCL_ADAS_PANEL_VISIBLE to listOf(
             "панель ADAS DCL",
@@ -308,10 +465,14 @@ object ExternalApiVoiceAliasesRu {
         AutomationSignalId.HVAC_POWER to listOf(
             "кондиционер",
             "климат",
+            "климат включен",
+            "работает ли климат",
+            "состояние климата",
         ),
         AutomationSignalId.HAZARD to listOf(
             "аварийная сигнализация",
             "аварийные огни",
+            "аварийка",
         ),
         AutomationSignalId.TURN_SIGNAL_LEFT to listOf(
             "левый поворотник",
@@ -413,16 +574,23 @@ object ExternalApiVoiceAliasesRu {
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(
-        AutomationBuiltinActionType.MEDIA_PLAY to listOf("играй", "плей", "продолжи"),
-        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE to listOf("пауза", "стоп", "плей пауза"),
+        AutomationBuiltinActionType.OPEN_MENU to listOf("открой меню", "меню тбокс"),
+        AutomationBuiltinActionType.MEDIA_PLAY to listOf("играй", "плей", "продолжи", "включи музыку"),
+        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE to listOf("пауза", "стоп", "плей пауза", "останови музыку"),
         AutomationBuiltinActionType.MEDIA_NEXT to listOf("следующий", "дальше", "некст", "следующий трек"),
         AutomationBuiltinActionType.MEDIA_PREVIOUS to listOf("предыдущий", "назад", "предыдущий трек"),
-        AutomationBuiltinActionType.SET_MEDIA_VOLUME to listOf("громкость", "тише", "громче"),
+        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE to listOf("лайк", "лайкни", "мне нравится"),
+        // set_*_volume / set_hu_screen_brightness / wifi_set_enabled / cruise_* / camd_* /
+        // place_call — нужны слоты; spoken extras не добавляем, пока Voice шлёт intValue=0.
         AutomationBuiltinActionType.SHOW_TOAST to listOf("тост", "уведомление"),
         AutomationBuiltinActionType.SHOW_ALERT to listOf("алерт", "сообщение на экран"),
         AutomationBuiltinActionType.RESTART_TBOX to listOf("рестарт тбокс", "перезагрузка тбокс"),
         AutomationBuiltinActionType.FINISH_AND_START_TRIP to listOf("новая поездка", "начать поездку"),
-        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS to listOf("яркость", "сделай ярче", "сделай темнее"),
+        AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME to listOf(
+            "переключить тему",
+            "смени тему",
+            "тема приложения",
+        ),
         AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf("вайфай", "wifi"),
         AutomationBuiltinActionType.DCL_SET_SMART_ACC to listOf(
             "умный acc",
@@ -439,12 +607,6 @@ object ExternalApiVoiceAliasesRu {
             "голосовой помощник",
             "включи голос",
         ),
-        AutomationBuiltinActionType.PLACE_CALL to listOf(
-            "позвони",
-            "набери",
-            "набрать номер",
-            "позвонить",
-        ),
         AutomationBuiltinActionType.ANSWER_CALL to listOf(
             "ответь",
             "принять звонок",
@@ -456,6 +618,7 @@ object ExternalApiVoiceAliasesRu {
             "завершить звонок",
             "сбросить",
         ),
+        // place_call нужен номер — без слотов не матчим разговорными фразами.
     )
 
     private val VEHICLE_CAN_EXTRAS: Map<Int, List<String>> = mapOf(
@@ -464,6 +627,8 @@ object ExternalApiVoiceAliasesRu {
             "включи климат",
             "выключи климат",
             "климат-контроль",
+            // Voice NLU пока не invoke'ит can_command; фразы остаются для MQTT/других клиентов
+            // и будущего слотового агента.
         ),
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to listOf("авто климат", "климат авто"),
         MbCanKnownVehiclePropertyId.HVAC_AC_MAX to listOf("макс охлаждение", "ac max"),
@@ -534,8 +699,9 @@ object ExternalApiVoiceAliasesRu {
 
     private val GENERIC_ACTION_ALIASES: Map<String, List<String>> = mapOf(
         "launch_application" to listOf("запустить приложение", "открой приложение"),
-        "open_main_screen" to listOf("открой экран", "главный экран", "открой вкладку"),
+        "open_main_screen" to listOf("открой экран", "главный экран", "открой вкладку", "открой монитор"),
         "http_request" to listOf("http запрос", "веб запрос"),
-        "delay" to listOf("пауза", "задержка", "подожди"),
+        // Без «пауза» — конфликтует с media_play_pause.
+        "delay" to listOf("задержка", "подожди секунд"),
     )
 }
