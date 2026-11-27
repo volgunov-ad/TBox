@@ -12,6 +12,7 @@ External HTTP API TBox Monitor. Целевая платформа MVP: **тол�
 | [EXTERNAL_API_RU.md](EXTERNAL_API_RU.md) | Контракт HTTP `/v1` |
 | [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) | Как включить API / токен |
 | [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md) | JSON действий и сигналов |
+| [VOICE_AI_AGENT_RU.md](VOICE_AI_AGENT_RU.md) | Следующий слой: облачный/локальный ИИ-агент (дизайн) |
 
 ---
 
@@ -51,10 +52,10 @@ External HTTP API TBox Monitor. Целевая платформа MVP: **тол�
 3. Полностью офлайн STT/TTS/NLU; HTTP только localhost к Monitor.
 4. Активация: UI / wake-word (opt-in) / руль (opt-in) / Intent из Monitor.
 
-Вне MVP:
+Вне MVP (см. [VOICE_AI_AGENT_RU.md](VOICE_AI_AGENT_RU.md)):
 
 - телефон как клиент;
-- LLM / облако;
+- LLM / облако / локальный классификатор;
 - диалог «потеплее ещё» с длинной памятью (короткий относительный adjust — по возможности);
 - RuStore / свой OTA для Voice;
 - замена Vosk на Sherpa (пока не упрёмся в качество).
@@ -176,9 +177,18 @@ Extra (opt): source = ui | wake | hard_key | automation
 
 1. Normalize: lowercase, ё→е, пробелы, без пунктуации.
 2. Кандидаты: `voiceAliasesRu` + имена automations.
-3. Score: longest alias / token overlap + порог.
+3. Score: longest alias / token overlap + порог; для вопросов
+   («сколько», «какая», …) — небольшой boost сигналам; для run
+   («запусти», «включи», «выполни», …) — boost автоматизациям.
 4. Приоритет: run automation → invoke → query signal.
-5. Relative «потеплее» — после MVP core, если останется время (GET → ± → invoke).
+5. **Invoke из матчера только для типов, которые Voice реально вызывает:**
+   `builtin`, `open_main_screen`. Типы `can_command`, `launch_application`,
+   `http_request`, `delay` в NLU **не выбираются** (иначе фраза вроде
+   «включи климат» матчилась бы на HVAC can_command и падала на
+   «пока без значения»). Климат/окна/люк пока — через правило (automation)
+   или вопрос по сигналу; полный can_command из голоса — этап агента/слотов.
+6. Relative «потеплее» / «тише» — после MVP / в агенте (GET → ± → invoke);
+   такие aliases у volume/brightness не держим, пока нет слотов.
 
 ---
 
@@ -221,7 +231,7 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 |---|------|-----|----------|
 | 0 | План + решения | docs | **сделано** |
 | 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | **сделано** |
-| 2 | Catalog cache + NLU + unit-тесты фраз | voice | **сделано** |
+| 2 | Catalog cache + NLU + unit-тесты фраз | voice | **сделано** (полировка aliases + skip can_command в матчере) |
 | 3 | Signals query → текст на экране | voice | **сделано** (кнопка «Выполнить фразу») |
 | 4 | Piper TTS bundle | voice | **сделано** (Irina int8 + sherpa-onnx; озвучка ответа) |
 | 5 | Vosk STT + кнопка «Слушать» | voice | **сделано** (PTT → NLU → TTS) |

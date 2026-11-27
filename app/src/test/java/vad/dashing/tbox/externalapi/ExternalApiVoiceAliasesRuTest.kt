@@ -57,6 +57,48 @@ class ExternalApiVoiceAliasesRuTest {
     }
 
     @Test
+    fun fuelAndRange_includeSpokenQuestions() {
+        val fuel = ExternalApiVoiceAliasesRu.forSignal(
+            AutomationSignalId.FUEL_LEVEL_PERCENT,
+            "Уровень топлива",
+        )
+        assertTrue(fuel.contains("сколько бензина"))
+        val range = ExternalApiVoiceAliasesRu.forSignal(
+            AutomationSignalId.DISTANCE_TO_EMPTY_KM,
+            "Запас хода",
+        )
+        assertTrue(range.contains("запас хода"))
+        assertTrue(range.contains("сколько ещё проеду"))
+    }
+
+    @Test
+    fun doorAndPressure_haveSpokenExtras() {
+        val door = ExternalApiVoiceAliasesRu.forSignal(
+            AutomationSignalId.DOOR_FRONT_LEFT,
+            "Дверь водителя",
+        )
+        assertTrue(door.contains("дверь водителя"))
+        val pressure = ExternalApiVoiceAliasesRu.forSignal(
+            AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
+            "Давление ЛП",
+        )
+        assertTrue(pressure.contains("давление левое переднее"))
+    }
+
+    @Test
+    fun delay_doesNotUsePauseAlias() {
+        val aliases = ExternalApiVoiceAliasesRu.forGenericAction("delay")
+        assertFalse(aliases.contains("пауза"))
+        assertTrue(aliases.contains("задержка"))
+    }
+
+    @Test
+    fun mediaPlayPause_keepsPauseAlias() {
+        val aliases = ExternalApiVoiceAliasesRu.forBuiltin(AutomationBuiltinActionType.MEDIA_PLAY_PAUSE)
+        assertTrue(aliases.contains("пауза"))
+    }
+
+    @Test
     fun aliases_areLowercaseNormalized() {
         val aliases = ExternalApiVoiceAliasesRu.forSignal(
             AutomationSignalId.CAR_SPEED,
