@@ -26,6 +26,7 @@ object BenchLogs {
     private val segmentRegex = Regex(
         """cam(\d+) (\S+): кадров (\d+), пропущено (\d+), ([\d.]+) с""",
     )
+    private val usbUnlockRegex = Regex("""^\S+ (\S+) ./CamdUsbUnlock\(\s*\d+\): (.*)$""")
     private val segmentNameRegex = Regex("""cam(\d+)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:_\d+)?\.mp4""")
 
     fun parseGrabCopy(text: String): List<GrabCopy> = text.lineSequence().mapNotNull { line ->
@@ -38,6 +39,13 @@ object BenchLogs {
             m.groupValues[5].toDouble(),
         )
     }.toList()
+
+    /**
+     * camd_grab 9 under rootsvc logs `copy` to logcat (`CamdQcar`). The streamed reader and the
+     * final `logcat -d` can both carry a line, so repeats are dropped by the full line text.
+     */
+    fun parseGrabCopyLogcat(logcat: String): List<GrabCopy> =
+        parseGrabCopy(logcat.lineSequence().distinct().joinToString("\n"))
 
     /** Per camera: frame-weighted average copy time and the worst single copy. */
     fun summarizeCopy(lines: List<GrabCopy>): List<CopySummary> =
@@ -62,6 +70,12 @@ object BenchLogs {
             m.groupValues[5].toDouble(),
         )
     }.distinctBy { it.inputId to it.file }.toList()
+
+    /** `I/CamdUsbUnlock( pid): text` lines of `logcat -v time` with the timestamp kept. */
+    fun parseUsbUnlock(text: String): List<String> = text.lineSequence().mapNotNull { line ->
+        val m = usbUnlockRegex.find(line) ?: return@mapNotNull null
+        "${m.groupValues[1]} ${m.groupValues[2]}"
+    }.distinct().toList()
 
     fun segmentInput(fileName: String): Int? =
         segmentNameRegex.matchEntire(fileName)?.groupValues?.get(1)?.toIntOrNull()

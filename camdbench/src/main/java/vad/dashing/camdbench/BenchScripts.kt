@@ -34,7 +34,7 @@ object BenchScripts {
     const val ARM_BODY = "/sdcard/camdbench_arm.sh"
     const val OWN_MARKER = "camdbench_arm"
 
-    private const val LOGCAT_FILTER = "-v time -s CamdRecorder:I CamdQcar:I"
+    private const val LOGCAT_FILTER = "-v time -s CamdRecorder:I CamdQcar:I CamdUsbUnlock:I"
 
     const val INTERVAL_MS = 2_000L
 
