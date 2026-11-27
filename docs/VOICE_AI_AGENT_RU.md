@@ -1,8 +1,8 @@
 # Voice AI Agent — дизайн (облако + локально + aliases)
 
-Статус: **дизайн + этап B** (настройки облака и ping `/models` в Voice).
-Вызов LLM / tool-calling — этап C. Текущий разбор фраз по-прежнему
-`voiceAliasesRu` + Vosk/Piper.
+Статус: **дизайн + этапы A–C**. В Voice: настройки облака, ping `/models`,
+one-shot tool-calling (`query_signal` / `invoke_action` / `run_automation`)
+с валидацией по каталогу и fallback на `voiceAliasesRu`.
 
 Связанные документы:
 
@@ -154,7 +154,7 @@ Aliases остаются обязательным этапом MVP и страх
 |---|------|----------|
 | A | Дизайн (этот документ) + полировка aliases | **сделано** |
 | B | Настройки Voice: пресеты, ключ, модель, opt-in, ping `/models` | **сделано** (`CloudLlmSettings`, UI, `OpenAiCompatibleClient.listModels`) |
-| C | Cloud tool-calling поверх каталога (без UI диалога) | Фраза → tool → тот же formatter/TTS |
+| C | Cloud tool-calling поверх каталога (без UI диалога) | **сделано** (`VoiceCloudAgent` → тот же `handleIntent` / TTS) |
 | D | Диалог уточнения (1 follow-up) | «какой сигнал?» / «какое правило?» |
 | E | Локальный классификатор (выбор runtime/модели под ГУ) | Офлайн intent без WAN |
 | F | Слоты: потеплее / тише / can_command | Invoke с value; тесты |

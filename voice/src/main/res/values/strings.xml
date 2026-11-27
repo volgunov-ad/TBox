@@ -8,7 +8,7 @@
     <string name="settings_token">Bearer-токен</string>
     <string name="settings_token_hint">Токен или «Bearer …» из Настройки → API</string>
     <string name="cloud_section_title">Облачная модель (ИИ)</string>
-    <string name="cloud_section_hint">OpenAI-compatible API. Пока только настройка и проверка /models; вызов агента — следующий этап.</string>
+    <string name="cloud_section_hint">OpenAI-compatible API. При включённом облаке и opt-in фраза сначала идёт в агент (tools), иначе — aliases.</string>
     <string name="cloud_enabled">Включить облако</string>
     <string name="cloud_prefer">Сначала пробовать облако</string>
     <string name="cloud_allow_phrases">Разрешить отправку фраз в облако</string>

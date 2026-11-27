@@ -76,4 +76,35 @@ class OpenAiCompatibleClientTest {
         )
         assertEquals(listOf("m1"), parsed.modelIds)
     }
+
+    @Test
+    fun chatCompletions_postsToolsAndParsesAssistant() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"role":"assistant","content":"Уточните сигнал"}
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val base = server.url("v1").toString().trimEnd('/')
+        val result = client.chatCompletions(
+            baseUrl = base,
+            apiKey = "k",
+            model = "gpt-test",
+            messages = listOf(CloudChatMessage(role = "user", content = "привет")),
+            tools = VoiceAgentTools.definitions(),
+        ).getOrThrow()
+        assertEquals("Уточните сигнал", result.message.content)
+
+        val request = server.takeRequest()
+        assertEquals("/v1/chat/completions", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"model\":\"gpt-test\""))
+        assertTrue(body.contains("query_signal"))
+    }
 }
