@@ -90,4 +90,23 @@ class BenchLogsTest {
         assertEquals("180", fields["rec_seg"])
         assertTrue(BenchLogs.statusFields("camd не отвечает").isEmpty())
     }
+
+    @Test
+    fun grabCopyFromLogcatDropsRepeatedLines() {
+        val line = "11-27 07:37:02.809 I/CamdQcar( 9644): copy 8: frames=375 fps=12.5 avg=1.29 ms max=4.21 ms cached=5/5 sync=0.47 ms every=2 skipped=375"
+        val rows = BenchLogs.parseGrabCopyLogcat("$line\n$line\n")
+        assertEquals(1, rows.size)
+        assertEquals(8, rows[0].inputId)
+        assertEquals(1.29, rows[0].avgMs, 1e-9)
+    }
+
+    @Test
+    fun usbUnlockLinesKeepTime() {
+        val logcat = "11-27 08:11:58.512 I/CamdUsbUnlock( 1867): не нужно: SystemUI скрыт=true, флешка смонтирована=true\n" +
+            "11-27 08:11:58.600 I/CamdRecorder( 1867): запись стартовала: cam8"
+        assertEquals(
+            listOf("08:11:58.512 не нужно: SystemUI скрыт=true, флешка смонтирована=true"),
+            BenchLogs.parseUsbUnlock(logcat),
+        )
+    }
 }

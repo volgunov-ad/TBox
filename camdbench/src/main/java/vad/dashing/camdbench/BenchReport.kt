@@ -15,6 +15,7 @@ class BenchRun(
     val segmentFps: List<BenchLogs.SegmentFps>,
     val recorderFolder: String?,
     val notes: List<String> = emptyList(),
+    val usbUnlock: List<String> = emptyList(),
 )
 
 /**
@@ -168,6 +169,12 @@ object BenchReport {
             if (run.recorderSegments.isEmpty()) appendLine("строк нет (старый camd или сегменты не закрывались)")
             run.recorderSegments.forEach {
                 appendLine("cam${it.inputId} ${it.file}: кадров ${it.frames}, пропущено ${it.skipped}, ${fmt(it.seconds)} с")
+            }
+
+            if (run.usbUnlock.isNotEmpty()) {
+                appendLine()
+                appendLine("== camd: запасная разблокировка флешек (camd 0.9.15+) ==")
+                run.usbUnlock.forEach { appendLine(it) }
             }
         }
 

@@ -96,10 +96,11 @@ class BenchSession(private val context: Context, private val plannedSec: Int) {
             grabVersion = grabVersion,
             statusStart = statusStart,
             statusEnd = statusEnd,
-            grabCopy = BenchLogs.parseGrabCopy(grabLog),
+            grabCopy = BenchLogs.parseGrabCopy(grabLog).ifEmpty { BenchLogs.parseGrabCopyLogcat(logcat) },
             recorderSegments = BenchLogs.parseRecorderSegments(logcat),
             segmentFps = CamdProbe.segmentFps(folder, startedWall, endedWall),
             recorderFolder = folder,
+            usbUnlock = BenchLogs.parseUsbUnlock(logcat),
         )
 
         val out = File(resultsRoot(), "${stamp(startedWall, "yyyy-MM-dd_HH-mm-ss")}_camd-$camdVersionName")
