@@ -157,6 +157,68 @@ class CardFilesDownloaderTest {
     }
 
     @Test
+    fun saveOneDownloadsOnlyRequestedFile() = runBlocking {
+        val payload = "only-me".toByteArray()
+        val published = mutableListOf<String>()
+        var downloads = 0
+        val downloader = CardFilesDownloader(
+            cacheDir = temp.newFolder("cache"),
+            download = { _, dest, _ ->
+                downloads++
+                dest.parentFile?.mkdirs()
+                dest.writeBytes(payload)
+            },
+            publish = { source, _, name ->
+                published += name
+                source
+            },
+            existing = { _, _ -> null },
+        )
+        val entry = StoreCatalogEntry(
+            id = "demo",
+            packageName = "p",
+            title = "Demo",
+            downloads = StoreDownloads(
+                folder = "F",
+                files = listOf(
+                    StoreDownloadFile("a.txt", sha(payload), payload.size.toLong()),
+                    StoreDownloadFile("b.txt", sha(payload), payload.size.toLong()),
+                ),
+            ),
+        )
+        val result = downloader.saveOne(UpdateChannel.RELEASE, entry, "b.txt") { _, _, _ -> }
+        assertEquals(1, downloads)
+        assertEquals(listOf("b.txt"), published)
+        assertEquals(listOf("b.txt"), result.saved)
+        assertTrue(result.failed.isEmpty())
+    }
+
+    @Test
+    fun saveOneUnknownNameFailsSoft() = runBlocking {
+        var downloads = 0
+        val downloader = CardFilesDownloader(
+            cacheDir = temp.newFolder("cache"),
+            download = { _, _, _ -> downloads++ },
+            publish = { source, _, _ -> source },
+            existing = { _, _ -> null },
+        )
+        val entry = StoreCatalogEntry(
+            id = "demo",
+            packageName = "p",
+            title = "Demo",
+            downloads = StoreDownloads(
+                folder = "F",
+                files = listOf(StoreDownloadFile("a.txt", "a".repeat(64), 1L)),
+            ),
+        )
+        val result = downloader.saveOne(UpdateChannel.RELEASE, entry, "missing.txt") { _, _, _ -> }
+        assertEquals(0, downloads)
+        assertEquals(1, result.failed.size)
+        assertEquals("missing.txt", result.failed[0].name)
+        assertEquals(StoreErrors.FILE_WRITE_FAILED, result.failed[0].error)
+    }
+
+    @Test
     fun cancellationPropagatesAndClearsCache() = runBlocking {
         val cache = temp.newFolder("cache")
         val downloader = CardFilesDownloader(

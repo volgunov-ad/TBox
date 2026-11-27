@@ -38,9 +38,8 @@
     <string name="store_page_next">Next</string>
     <string name="store_page_indicator">Page %1$d of %2$d</string>
     <string name="store_files_title">Files to Downloads</string>
-    <string name="store_files_hint">Saved to “Downloads/%1$s” when you download the app</string>
-    <string name="store_downloading_file">File %1$d of %2$d: %3$s — %4$d%%</string>
-    <string name="store_downloading_file_unknown">File %1$d of %2$d: %3$s…</string>
+    <string name="store_files_hint">Extra files go to “Downloads/%1$s”. They download only when you tap Download — not with the app</string>
+    <string name="store_file_download">Download</string>
     <string name="store_files_saved">Files saved to %1$s (%2$d)</string>
     <string name="store_files_failed">Could not save %1$s: %2$s</string>
     <string name="store_cancel">Cancel</string>

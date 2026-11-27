@@ -6,6 +6,9 @@
 Имя APK: `store-<versionName>-<debug|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`).
 Каталог: id `tbox-store`, самообновление с карточки магазина.
 
+0.2.2
+1. Файлы карточки (`downloads`: sidecar APK, карты и т.п.) больше не скачиваются автоматически при «Получить» / «Обновить» / «Скачать в Загрузки». На карточке — список файлов и кнопка «Скачать» у каждого; установка APK без изменений.
+
 0.2.1
 1. Open установленного приложения: через DCL Binder `launchApp(mode=app_area)` (`StoreDclAppLauncher`), если лаунчер установлен и жив; иначе обычный `startActivity` (в т.ч. crash / Unavailable / `forbidden` до allowlist Store в DCL).
 
