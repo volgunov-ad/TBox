@@ -4,6 +4,9 @@
 При публикации поднять **versionCode** на 1 и править **versionName** (semver); сюда — блок с тем же номером сверху.
 Имя APK: `tbox-monitor-<versionName>-<debug|release>.apk` (`versionName` уже с суффиксом `-ru` / `-en`).
 
+1.2.5
+1. Новые плитки в секции «Система»: «Температура SoC ГУ», «Температура CPU ГУ» и «Температура GPU ГУ» (`huSocTemperature`, `huCpuTemperature`, `huGpuTemperature`) — температуры головного устройства из thermal-зон (`/sys/class/thermal/thermal_zone*/temp`, миллиградусы пересчитываются в °C, обновление раз в секунду, недоступная зона — прочерк). Android 9 (SM6150): SoC — зона `aoss-usr` (штатная зона `soc` отдаёт ошибку), CPU — самая горячая из зон CPU-кластеров (`cpuss-*`, `cpu-1-*`), GPU — `gpu-usr`. На Android 10 (ac8x) из thermal-зон видна только `cls0` — её показывает плитка SoC, плитки CPU и GPU — прочерк.
+
 1.2.4
 1. Среда DCL: если TBox Monitor уже открыт в split/freeform (окно приложений), повторный `launchApp` не запрашивается — холодный редирект и `onNewIntent` больше не переоткрывают главный экран поверх раскладки DCL.
 
