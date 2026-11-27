@@ -117,8 +117,9 @@ DCLInstall (`tools/dcl_install/`) **не** становится магазино
    без DCLInstall (Intent + FileProvider, как у остальных приложений).
 2. **DCL Install** (`dclinstall`) — ставит сам установщик окружения; APK
    лаунчера прикреплён как **файл карточки** (`downloads` / `apps/dclinstall/files/`).
-   Store при скачивании карточки сохраняет эти файлы в **Загрузки/<папка>/**,
-   чтобы пользователь выбрал лаунчер внутри DCLInstall.
+   На карточке Store список файлов и кнопка «Скачать» у каждого; файлы
+   сохраняются в **Загрузки/<папка>/** только по запросу пользователя
+   (не вместе с установкой APK), чтобы выбрать лаунчер внутри DCLInstall.
 
 ---
 
@@ -205,7 +206,7 @@ Legacy OTA Monitor (`UPDATE_*_PUBLIC_KEY`, корневые `version.json` + APK
 | `sections` (per-app) | Id разделов, в которых показывается карточка (можно несколько) |
 | `signingCertSha256` | Белый список отпечатков (lowercase hex); несовпадение → отказ. Менеджер каталога заполняет из APK (`apksigner` / `keytool`); пустой = проверка cert на клиенте выключена |
 | `manifest` | Путь к per-app `version.json` (тот же формат, что `UpdateManifest`) |
-| `downloads` | Опционально: `{folder, files[]}` — файлы карточки из `apps/<id>/files/` сохраняются в `Download/<folder>/` при скачивании приложения |
+| `downloads` | Опционально: `{folder, files[]}` — файлы карточки из `apps/<id>/files/`; на карточке список + «Скачать» у каждого → `Download/<folder>/` (не авто при установке APK) |
 | `installMode` | `hu` (по умолчанию) — ставить на ГУ; `phone` — карточка на ГУ показывает QR (публичная страница APK) и кнопку «Скачать в Загрузки», без установки на ГУ. Для `:phone` / `vad.dashing.tbox.phone` |
 | changelog-файлы | `apps/<id>/changelog.ru.txt` и `changelog.en.txt` (UTF-8). Store грузит при открытии карточки (язык UI → fallback другой язык) |
 

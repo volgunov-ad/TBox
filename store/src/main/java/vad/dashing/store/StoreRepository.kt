@@ -37,7 +37,6 @@ import vad.dashing.store.install.ApkInstaller
 import vad.dashing.store.install.ApkSigner
 import vad.dashing.store.install.ApkUninstaller
 import vad.dashing.store.install.ApkVerifier
-import vad.dashing.store.install.CardFileProgress
 import vad.dashing.store.install.CardFilesDownloader
 import vad.dashing.store.install.CardFilesResult
 import vad.dashing.store.install.DownloadsSaver
@@ -107,7 +106,6 @@ sealed interface StoreActionState {
         val downloadedBytes: Long = 0L,
         val totalBytes: Long? = null,
         val target: DownloadTarget = DownloadTarget.INSTALL,
-        val file: CardFileProgress? = null,
     ) : StoreActionState {
         val percent: Int?
             get() = if (totalBytes != null && totalBytes > 0L) {
@@ -128,8 +126,6 @@ sealed interface StoreActionState {
         val entry: StoreCatalogEntry,
         /** Signer of [apkFile] read while verifying; null when it was not needed or unreadable. */
         val apkSigner: ApkSigner? = null,
-        /** Card files saved into Downloads (optional). */
-        val files: CardFilesResult? = null,
     ) : StoreActionState
 
     /** APK saved to public Downloads (phone apps, or any app to install elsewhere). */
@@ -138,7 +134,6 @@ sealed interface StoreActionState {
         val downloadsPath: String,
         val release: AppReleaseInfo,
         val entry: StoreCatalogEntry,
-        val files: CardFilesResult? = null,
     ) : StoreActionState
 
     data class Error(val appId: String?, val message: String) : StoreActionState
@@ -147,6 +142,42 @@ sealed interface StoreActionState {
         get() = when (this) {
             is Downloading -> appId
             is Verifying -> appId
+            else -> null
+        }
+}
+
+/** Manual card-file (`downloads`) download; separate from the APK install flow. */
+sealed interface CardFileActionState {
+    data object Idle : CardFileActionState
+    data class Downloading(
+        val appId: String,
+        val fileName: String,
+        val downloadedBytes: Long = 0L,
+        val totalBytes: Long? = null,
+    ) : CardFileActionState {
+        val percent: Int?
+            get() = if (totalBytes != null && totalBytes > 0L) {
+                ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+            } else {
+                null
+            }
+    }
+
+    data class Saved(
+        val appId: String,
+        val fileName: String,
+        val files: CardFilesResult,
+    ) : CardFileActionState
+
+    data class Error(
+        val appId: String,
+        val fileName: String?,
+        val message: String,
+    ) : CardFileActionState
+
+    val activeAppId: String?
+        get() = when (this) {
+            is Downloading -> appId
             else -> null
         }
 }
@@ -184,6 +215,9 @@ class StoreRepository(
     private val _actionState = MutableStateFlow<StoreActionState>(StoreActionState.Idle)
     val actionState: StateFlow<StoreActionState> = _actionState.asStateFlow()
 
+    private val _cardFileActionState = MutableStateFlow<CardFileActionState>(CardFileActionState.Idle)
+    val cardFileActionState: StateFlow<CardFileActionState> = _cardFileActionState.asStateFlow()
+
     private val _channel = MutableStateFlow(preferences.channel)
     val channel: StateFlow<UpdateChannel> = _channel.asStateFlow()
 
@@ -201,6 +235,7 @@ class StoreRepository(
 
     @Volatile private var lastRows: List<StoreAppRow> = emptyList()
     @Volatile private var downloadInProgress = false
+    @Volatile private var cardFileDownloadInProgress = false
 
     /** UI language of this Store APK (`ru` / `en` product flavor). */
     fun storeUiLang(): String =
@@ -210,6 +245,7 @@ class StoreRepository(
         preferences.channel = channel
         _channel.value = channel
         _actionState.value = StoreActionState.Idle
+        _cardFileActionState.value = CardFileActionState.Idle
         _appChangelogs.value = emptyMap()
     }
 
@@ -217,6 +253,7 @@ class StoreRepository(
         preferences.cloudSource = source
         _cloudSource.value = source
         _actionState.value = StoreActionState.Idle
+        _cardFileActionState.value = CardFileActionState.Idle
         _appChangelogs.value = emptyMap()
     }
 
@@ -331,9 +368,10 @@ class StoreRepository(
     /**
      * Downloads and verifies the selected release of [appId].
      * Phone-distribution apps always go to Downloads; others go to [target].
+     * Card extras (`downloads`) are not fetched here — use [downloadCardFile].
      */
     suspend fun downloadAndVerify(appId: String, target: DownloadTarget = DownloadTarget.INSTALL) {
-        if (downloadInProgress) return
+        if (downloadInProgress || cardFileDownloadInProgress) return
         val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
         val release = row.remote ?: return
         val effectiveTarget = if (row.entry.isPhoneDistribution) DownloadTarget.DOWNLOADS else target
@@ -342,13 +380,14 @@ class StoreRepository(
             _actionState.value = StoreActionState.Error(appId, StoreErrors.NETWORK_UNAVAILABLE)
             return
         }
-        if (effectiveTarget == DownloadTarget.DOWNLOADS || row.entry.hasDownloadFiles) {
+        if (effectiveTarget == DownloadTarget.DOWNLOADS) {
             if (!DownloadsSaver.hasWritePermission(context)) {
                 _actionState.value = StoreActionState.Error(appId, StoreErrors.DOWNLOADS_PERMISSION)
                 return
             }
         }
         downloadInProgress = true
+        _cardFileActionState.value = CardFileActionState.Idle
         _actionState.value = StoreActionState.Downloading(appId, target = effectiveTarget)
         val channel = _channel.value
         val destination = apkDestinationFile(row.entry.id, release)
@@ -393,35 +432,19 @@ class StoreRepository(
                         destination.delete()
                     }
                 }
-                val files = if (row.entry.hasDownloadFiles) {
-                    withContext(Dispatchers.IO) {
-                        downloadCardFiles(channel, row.entry, appId, effectiveTarget)
-                    }
-                } else {
-                    null
-                }
                 _actionState.value = StoreActionState.SavedToDownloads(
                     appId = appId,
                     downloadsPath = saved.absolutePath,
                     release = withSize,
                     entry = row.entry,
-                    files = files,
                 )
             } else {
-                val files = if (row.entry.hasDownloadFiles) {
-                    withContext(Dispatchers.IO) {
-                        downloadCardFiles(channel, row.entry, appId, effectiveTarget)
-                    }
-                } else {
-                    null
-                }
                 _actionState.value = StoreActionState.ReadyToInstall(
                     appId = appId,
                     apkFile = destination,
                     release = withSize,
                     entry = row.entry,
                     apkSigner = apkSigner,
-                    files = files,
                 )
             }
         } catch (error: CancellationException) {
@@ -440,13 +463,78 @@ class StoreRepository(
         }
     }
 
+    /**
+     * Downloads one catalog card file into public Downloads.
+     * Does not touch a prepared [StoreActionState.ReadyToInstall] APK.
+     */
+    suspend fun downloadCardFile(appId: String, fileName: String) {
+        if (downloadInProgress || cardFileDownloadInProgress) return
+        val row = lastRows.firstOrNull { it.entry.id == appId } ?: return
+        if (!row.entry.hasDownloadFiles) return
+        val known = row.entry.downloads?.files?.any { it.name == fileName } == true
+        if (!known) return
+        if (!isNetworkAvailable()) {
+            _cardFileActionState.value = CardFileActionState.Error(
+                appId = appId,
+                fileName = fileName,
+                message = StoreErrors.NETWORK_UNAVAILABLE,
+            )
+            return
+        }
+        if (!DownloadsSaver.hasWritePermission(context)) {
+            _cardFileActionState.value = CardFileActionState.Error(
+                appId = appId,
+                fileName = fileName,
+                message = StoreErrors.DOWNLOADS_PERMISSION,
+            )
+            return
+        }
+        cardFileDownloadInProgress = true
+        _cardFileActionState.value = CardFileActionState.Downloading(appId, fileName)
+        val channel = _channel.value
+        try {
+            val result = withContext(Dispatchers.IO) {
+                downloadOneCardFile(channel, row.entry, appId, fileName)
+            }
+            val failure = result.failed.firstOrNull()
+            _cardFileActionState.value = if (failure != null && result.readyCount == 0) {
+                CardFileActionState.Error(
+                    appId = appId,
+                    fileName = failure.name,
+                    message = failure.error,
+                )
+            } else {
+                CardFileActionState.Saved(appId = appId, fileName = fileName, files = result)
+            }
+        } catch (error: CancellationException) {
+            _cardFileActionState.value = CardFileActionState.Idle
+            throw error
+        } catch (error: Exception) {
+            _cardFileActionState.value = CardFileActionState.Error(
+                appId = appId,
+                fileName = fileName,
+                message = errorText(error),
+            )
+        } finally {
+            cardFileDownloadInProgress = false
+        }
+    }
+
     fun cancelDownload() {
-        if (_actionState.value !is StoreActionState.Downloading) return
-        _actionState.value = StoreActionState.Idle
+        if (_actionState.value is StoreActionState.Downloading) {
+            _actionState.value = StoreActionState.Idle
+        }
+        if (_cardFileActionState.value is CardFileActionState.Downloading) {
+            _cardFileActionState.value = CardFileActionState.Idle
+        }
     }
 
     fun reportActionError(appId: String?, message: String) {
         _actionState.value = StoreActionState.Error(appId, message)
+    }
+
+    fun reportCardFileError(appId: String, fileName: String?, message: String) {
+        _cardFileActionState.value = CardFileActionState.Error(appId, fileName, message)
     }
 
     /** Clears one-shot results (errors, "saved to Downloads"); keeps a prepared install. */
@@ -454,6 +542,10 @@ class StoreRepository(
         val state = _actionState.value
         if (state is StoreActionState.Error || state is StoreActionState.SavedToDownloads) {
             _actionState.value = StoreActionState.Idle
+        }
+        val card = _cardFileActionState.value
+        if (card is CardFileActionState.Error || card is CardFileActionState.Saved) {
+            _cardFileActionState.value = CardFileActionState.Idle
         }
     }
 
@@ -633,36 +725,30 @@ class StoreRepository(
         downloadsDisplayName(entry, release),
     )
 
-    private suspend fun downloadCardFiles(
+    private suspend fun downloadOneCardFile(
         channel: UpdateChannel,
         entry: StoreCatalogEntry,
         appId: String,
-        target: DownloadTarget,
+        fileName: String,
     ): CardFilesResult {
         val downloader = CardFilesDownloader(
             cacheDir = File(context.cacheDir, "store/files"),
             download = { diskPath, dest, onProgress ->
                 cloud.downloadToFile(diskPath, dest, onProgress)
             },
-            publish = { source, folder, fileName ->
-                DownloadsSaver.saveFile(context, source, folder, fileName)
+            publish = { source, folder, name ->
+                DownloadsSaver.saveFile(context, source, folder, name)
             },
-            existing = { folder, fileName -> DownloadsSaver.existingFile(folder, fileName) },
+            existing = { folder, name -> DownloadsSaver.existingFile(folder, name) },
         )
-        var throttle = ProgressThrottle()
-        var lastIndex = -1
-        return downloader.saveAll(channel, entry) { fileProgress, downloaded, total ->
-            if (fileProgress.index != lastIndex) {
-                throttle = ProgressThrottle()
-                lastIndex = fileProgress.index
-            }
+        val throttle = ProgressThrottle()
+        return downloader.saveOne(channel, entry, fileName) { fileProgress, downloaded, total ->
             if (downloaded == 0L || throttle.shouldEmit(downloaded, total)) {
-                _actionState.value = StoreActionState.Downloading(
+                _cardFileActionState.value = CardFileActionState.Downloading(
                     appId = appId,
+                    fileName = fileProgress.name,
                     downloadedBytes = downloaded,
                     totalBytes = total,
-                    target = target,
-                    file = fileProgress,
                 )
             }
         }

@@ -29,6 +29,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     val listState = repository.listState
     val actionState = repository.actionState
+    val cardFileActionState = repository.cardFileActionState
     val channel = repository.channel
     val cloudSource = repository.cloudSource
     val apkLanguage = repository.apkLanguage
@@ -53,6 +54,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     private var refreshJob: Job? = null
     private var downloadJob: Job? = null
+    private var cardFileJob: Job? = null
     private var iconsJob: Job? = null
     private val changelogJobs = mutableMapOf<String, Job>()
     private var compileJob: Job? = null
@@ -156,19 +158,36 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun download(appId: String, target: DownloadTarget = DownloadTarget.INSTALL) {
         val previous = downloadJob
+        val previousFile = cardFileJob
         downloadJob = viewModelScope.launch {
+            previousFile?.cancelAndJoin()
             previous?.cancelAndJoin()
             repository.downloadAndVerify(appId, target)
         }
     }
 
+    fun downloadCardFile(appId: String, fileName: String) {
+        val previous = cardFileJob
+        val previousApk = downloadJob
+        cardFileJob = viewModelScope.launch {
+            previousApk?.cancelAndJoin()
+            previous?.cancelAndJoin()
+            repository.downloadCardFile(appId, fileName)
+        }
+    }
+
     fun cancelDownload() {
         downloadJob?.cancel(CancellationException("Canceled by user"))
+        cardFileJob?.cancel(CancellationException("Canceled by user"))
         repository.cancelDownload()
     }
 
     fun reportError(appId: String?, message: String) {
         repository.reportActionError(appId, message)
+    }
+
+    fun reportCardFileError(appId: String, fileName: String?, message: String) {
+        repository.reportCardFileError(appId, fileName, message)
     }
 
     fun dismissActionResult() {

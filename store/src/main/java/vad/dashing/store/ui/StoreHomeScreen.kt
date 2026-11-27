@@ -91,6 +91,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.store.BuildConfig
+import vad.dashing.store.CardFileActionState
 import vad.dashing.store.DownloadTarget
 import vad.dashing.store.HuKind
 import vad.dashing.store.R
@@ -98,6 +99,7 @@ import vad.dashing.store.StoreActionState
 import vad.dashing.store.StoreAppRow
 import vad.dashing.store.StoreErrors
 import vad.dashing.store.StoreListState
+import vad.dashing.store.catalog.StoreDownloadFile
 import vad.dashing.store.catalog.StoreSection
 import vad.dashing.store.disk.ApkLanguage
 import vad.dashing.store.disk.AppChangelogState
@@ -113,7 +115,10 @@ import vad.dashing.store.ui.theme.StoreDimens
 import vad.dashing.store.ui.theme.tboxBody
 import vad.dashing.store.ui.theme.tboxButton
 
-private data class PendingDownload(val appId: String, val target: DownloadTarget)
+private sealed interface PendingWrite {
+    data class Apk(val appId: String, val target: DownloadTarget) : PendingWrite
+    data class CardFile(val appId: String, val fileName: String) : PendingWrite
+}
 
 @Composable
 fun StoreHomeScreen(
@@ -121,6 +126,7 @@ fun StoreHomeScreen(
 ) {
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val actionState by viewModel.actionState.collectAsStateWithLifecycle()
+    val cardFileActionState by viewModel.cardFileActionState.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val cloudSource by viewModel.cloudSource.collectAsStateWithLifecycle()
     val apkLanguage by viewModel.apkLanguage.collectAsStateWithLifecycle()
@@ -135,31 +141,51 @@ fun StoreHomeScreen(
     val isHeadUnit = viewModel.isHeadUnit
     var canInstall by remember { mutableStateOf(viewModel.canInstallPackages()) }
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
-    var pendingDownload by remember { mutableStateOf<PendingDownload?>(null) }
+    var pendingWrite by remember { mutableStateOf<PendingWrite?>(null) }
     var uninstallConfirmRow by remember { mutableStateOf<StoreAppRow?>(null) }
     var uninstallBlocked by remember { mutableStateOf(false) }
 
     val writePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        val pending = pendingDownload ?: return@rememberLauncherForActivityResult
-        pendingDownload = null
+        val pending = pendingWrite ?: return@rememberLauncherForActivityResult
+        pendingWrite = null
         if (granted) {
-            viewModel.download(pending.appId, pending.target)
+            when (pending) {
+                is PendingWrite.Apk -> viewModel.download(pending.appId, pending.target)
+                is PendingWrite.CardFile -> viewModel.downloadCardFile(pending.appId, pending.fileName)
+            }
         } else {
-            viewModel.reportError(pending.appId, StoreErrors.DOWNLOADS_PERMISSION)
+            when (pending) {
+                is PendingWrite.Apk ->
+                    viewModel.reportError(pending.appId, StoreErrors.DOWNLOADS_PERMISSION)
+                is PendingWrite.CardFile ->
+                    viewModel.reportCardFileError(
+                        pending.appId,
+                        pending.fileName,
+                        StoreErrors.DOWNLOADS_PERMISSION,
+                    )
+            }
         }
     }
 
     fun startDownload(row: StoreAppRow, target: DownloadTarget) {
         val toDownloads = target == DownloadTarget.DOWNLOADS || row.entry.isPhoneDistribution
-        val needsDownloadsWrite = toDownloads || row.entry.hasDownloadFiles
-        if (needsDownloadsWrite && !DownloadsSaver.hasWritePermission(context)) {
-            pendingDownload = PendingDownload(row.entry.id, target)
+        if (toDownloads && !DownloadsSaver.hasWritePermission(context)) {
+            pendingWrite = PendingWrite.Apk(row.entry.id, target)
             writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             return
         }
         viewModel.download(row.entry.id, target)
+    }
+
+    fun startCardFileDownload(row: StoreAppRow, fileName: String) {
+        if (!DownloadsSaver.hasWritePermission(context)) {
+            pendingWrite = PendingWrite.CardFile(row.entry.id, fileName)
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        viewModel.downloadCardFile(row.entry.id, fileName)
     }
 
     fun openInstallSettings() {
@@ -237,6 +263,7 @@ fun StoreHomeScreen(
                     row = selectedRow,
                     icon = icons[selectedRow.entry.id],
                     actionState = actionState,
+                    cardFileActionState = cardFileActionState,
                     canInstall = canInstall,
                     isHeadUnit = isHeadUnit,
                     isSelf = selectedRow.entry.packageName == context.packageName,
@@ -251,11 +278,13 @@ fun StoreHomeScreen(
                     onCompile = { compilePackage?.let { viewModel.compile(it) } },
                     onSelectFlavor = { viewModel.setAppApkFlavor(selectedRow.entry.id, it) },
                     onDownload = { target -> startDownload(selectedRow, target) },
+                    onDownloadCardFile = { fileName -> startCardFileDownload(selectedRow, fileName) },
                     onCancel = { viewModel.cancelDownload() },
                     onInstall = { viewModel.install() },
                     onOpen = { openApp(selectedRow) },
                     onUninstall = { uninstallConfirmRow = selectedRow },
                     onGrantInstall = { openInstallSettings() },
+                    onDismissCardFileResult = { viewModel.dismissActionResult() },
                 )
             } else {
                 val catalogView = remember(listState, selectedSectionId, page, uiLang) {
@@ -729,6 +758,93 @@ private fun FilesResultBanners(files: CardFilesResult?) {
     }
 }
 
+@Composable
+private fun CardFileActionBanners(
+    appId: String,
+    state: CardFileActionState,
+    onDismiss: () -> Unit,
+) {
+    when {
+        state is CardFileActionState.Saved && state.appId == appId -> {
+            FilesResultBanners(state.files)
+        }
+        state is CardFileActionState.Error && state.appId == appId -> {
+            MessageBanner(
+                kind = MessageKind.ERROR,
+                text = actionErrorText(state.message),
+                onDismiss = onDismiss,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardFileRow(
+    file: StoreDownloadFile,
+    appId: String,
+    actionState: StoreActionState,
+    cardFileActionState: CardFileActionState,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val downloading = cardFileActionState as? CardFileActionState.Downloading
+    val busyHere = downloading?.appId == appId && downloading.fileName == file.name
+    val busyElsewhere = actionState.activeAppId != null ||
+        (cardFileActionState.activeAppId != null && !busyHere)
+    val size = file.sizeBytes?.let { formatApkSizeMegabytes(it) }
+    val label = if (size != null) "${file.name} · $size MB" else file.name
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.tboxBody,
+                modifier = Modifier.weight(1f),
+            )
+            if (!busyHere) {
+                PrimaryButton(
+                    text = stringResource(R.string.store_file_download),
+                    onClick = onDownload,
+                    enabled = !busyElsewhere,
+                    compact = true,
+                )
+            }
+        }
+        if (busyHere) {
+            val percent = downloading.percent
+            Text(
+                text = if (percent != null) {
+                    stringResource(R.string.store_downloading, percent)
+                } else {
+                    stringResource(R.string.store_downloading_unknown)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (percent != null) {
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+            }
+            SecondaryButton(text = stringResource(R.string.store_cancel), onClick = onCancel)
+        }
+    }
+}
+
 /** Result of a quick action started from the list (no detail screen open to show it). */
 @Composable
 private fun ListActionResult(
@@ -752,9 +868,7 @@ private fun ListActionResult(
                 text = stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
                 onDismiss = onDismiss,
             )
-            FilesResultBanners(actionState.files)
         }
-        is StoreActionState.ReadyToInstall -> FilesResultBanners(actionState.files)
         else -> Unit
     }
 }
@@ -1244,6 +1358,7 @@ private fun AppDetail(
     row: StoreAppRow,
     icon: Bitmap?,
     actionState: StoreActionState,
+    cardFileActionState: CardFileActionState,
     canInstall: Boolean,
     isHeadUnit: Boolean,
     isSelf: Boolean,
@@ -1255,11 +1370,13 @@ private fun AppDetail(
     onCompile: () -> Unit,
     onSelectFlavor: (String) -> Unit,
     onDownload: (DownloadTarget) -> Unit,
+    onDownloadCardFile: (String) -> Unit,
     onCancel: () -> Unit,
     onInstall: () -> Unit,
     onOpen: () -> Unit,
     onUninstall: () -> Unit,
     onGrantInstall: () -> Unit,
+    onDismissCardFileResult: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
@@ -1313,6 +1430,7 @@ private fun AppDetail(
                 DetailActions(
                     row = row,
                     actionState = actionState,
+                    cardFileBusy = cardFileActionState.activeAppId != null,
                     canInstall = canInstall,
                     isHeadUnit = isHeadUnit,
                     isSelf = isSelf,
@@ -1334,11 +1452,19 @@ private fun AppDetail(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    CardFileActionBanners(
+                        appId = row.entry.id,
+                        state = cardFileActionState,
+                        onDismiss = onDismissCardFileResult,
+                    )
                     downloads.files.forEach { file ->
-                        val size = file.sizeBytes?.let { formatApkSizeMegabytes(it) }
-                        Text(
-                            text = if (size != null) "${file.name} · $size MB" else file.name,
-                            style = MaterialTheme.typography.tboxBody,
+                        CardFileRow(
+                            file = file,
+                            appId = row.entry.id,
+                            actionState = actionState,
+                            cardFileActionState = cardFileActionState,
+                            onDownload = { onDownloadCardFile(file.name) },
+                            onCancel = onCancel,
                         )
                     }
                 }
@@ -1542,6 +1668,7 @@ private fun PhoneQrSection(url: String) {
 private fun DetailActions(
     row: StoreAppRow,
     actionState: StoreActionState,
+    cardFileBusy: Boolean,
     canInstall: Boolean,
     isHeadUnit: Boolean,
     isSelf: Boolean,
@@ -1556,7 +1683,7 @@ private fun DetailActions(
     val id = row.entry.id
     val phoneOnly = row.entry.isPhoneDistribution
     val busyHere = actionState.activeAppId == id
-    val busyElsewhere = actionState.activeAppId != null && !busyHere
+    val busyElsewhere = (actionState.activeAppId != null && !busyHere) || cardFileBusy
     val ready = (actionState as? StoreActionState.ReadyToInstall)?.takeIf { it.appId == id }
 
     if (row.hasLanguageChoice) {
@@ -1570,31 +1697,18 @@ private fun DetailActions(
                 }
             },
             selected = row.selectedFlavor?.lowercase() ?: row.languageFlavors.first(),
-            onSelect = { if (!busyHere) onSelectFlavor(it) },
+            onSelect = { if (!busyHere && !cardFileBusy) onSelectFlavor(it) },
         )
     }
 
     when {
         actionState is StoreActionState.Downloading && actionState.appId == id -> {
             val percent = actionState.percent
-            val file = actionState.file
             Text(
-                text = when {
-                    file != null && percent != null -> stringResource(
-                        R.string.store_downloading_file,
-                        file.index,
-                        file.count,
-                        file.name,
-                        percent,
-                    )
-                    file != null -> stringResource(
-                        R.string.store_downloading_file_unknown,
-                        file.index,
-                        file.count,
-                        file.name,
-                    )
-                    percent != null -> stringResource(R.string.store_downloading, percent)
-                    else -> stringResource(R.string.store_downloading_unknown)
+                text = if (percent != null) {
+                    stringResource(R.string.store_downloading, percent)
+                } else {
+                    stringResource(R.string.store_downloading_unknown)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -1639,14 +1753,12 @@ private fun DetailActions(
         }
         ready != null -> {
             MessageBanner(kind = MessageKind.SUCCESS, text = stringResource(R.string.store_ready_to_install))
-            FilesResultBanners(ready.files)
         }
         actionState is StoreActionState.SavedToDownloads && actionState.appId == id -> {
             MessageBanner(
                 kind = MessageKind.SUCCESS,
                 text = stringResource(R.string.store_saved_to_downloads, actionState.downloadsPath),
             )
-            FilesResultBanners(actionState.files)
         }
         actionState is StoreActionState.Error &&
             (actionState.appId == id || actionState.appId == null) -> {
