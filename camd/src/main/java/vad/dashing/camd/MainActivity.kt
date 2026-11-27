@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -47,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -1853,42 +1851,6 @@ private fun SettingsTab(
             "Выключение опции закрывает сырые окна и сразу включает его.",
         onCheckedChange = onKeepAvm,
     )
-    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-    GpuProbeSection()
-}
-
-@Composable
-private fun GpuProbeSection() {
-    var running by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf("") }
-    Text(
-        "Проверка передачи кадра в видеокарту",
-        style = MaterialTheme.typography.titleLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    Text(
-        "Сравнивает нагрузку на процессор: как кадр передаётся сейчас и через общий буфер, который " +
-            "видеокарта читает сама. Занимает несколько секунд, окна камер можно не закрывать.",
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Button(
-        enabled = !running,
-        onClick = {
-            running = true
-            result = "Идёт проверка…"
-            Thread({
-                val text = GpuUploadProbe.run()
-                result = text
-                running = false
-            }, "camd-gpu-probe").apply { isDaemon = true; start() }
-        },
-    ) { Text("Проверить") }
-    if (result.isNotEmpty()) {
-        SelectionContainer {
-            Text(result, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
 }
 
 @Composable
