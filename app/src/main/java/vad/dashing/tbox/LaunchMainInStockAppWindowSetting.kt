@@ -287,8 +287,68 @@ internal object LaunchMainInStockAppWindowDecision {
     }
 
     /**
+     * True when this Main start was already placed by DCL into a freeform/split pane
+     * (or the launch intent opts out). Prefer these signals over clearing the DCL-env
+     * / Main mode setting: do **not** call [vad.dashing.tbox.dcl.DclAppLaunchHelper]
+     * again and overwrite DCL's layout.
+     *
+     * @param alreadyInMultiWindow Activity already in freeform / multi-window (DCL split).
+     * @param launchedByDclReferrer Referrer package is [DclLauncherApiContract.LAUNCHER_PACKAGE].
+     */
+    fun isDclInitiatedOrAlreadyEmbeddedLaunch(
+        intentSkipsRedirect: Boolean,
+        alreadyInMultiWindow: Boolean,
+        launchedByDclReferrer: Boolean,
+    ): Boolean =
+        intentSkipsRedirect || alreadyInMultiWindow || launchedByDclReferrer
+
+    /**
+     * Package from `android-app://<package>/…` Activity referrer, or null.
+     */
+    fun packageFromAndroidAppReferrer(referrerUri: String?): String? {
+        val raw = referrerUri?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        // android-app://ras.dashing.tbox.launcher[/…]
+        val prefix = "android-app://"
+        if (!raw.startsWith(prefix, ignoreCase = true)) return null
+        val rest = raw.substring(prefix.length)
+        val pkg = rest.substringBefore('/').substringBefore('?').trim()
+        return pkg.takeIf { it.isNotEmpty() }
+    }
+
+    fun isDclLauncherReferrerPackage(packageName: String?): Boolean {
+        val pkg = packageName?.trim().orEmpty()
+        return pkg == DclLauncherApiContract.LAUNCHER_PACKAGE
+    }
+
+    /**
+     * DCL uiState already hosts [selfPackageName] in a non-home layout (single /
+     * full_width / fullscreen / **split** left|right|focus).
+     */
+    fun isAlreadyHostedByDclLayout(
+        dclForegroundPackage: String?,
+        dclScreenMode: String?,
+        selfPackageName: String,
+        dclLeftPackage: String? = null,
+        dclRightPackage: String? = null,
+    ): Boolean {
+        if (selfPackageName.isBlank()) return false
+        val mode = dclScreenMode?.trim().orEmpty()
+        if (mode.isEmpty() || mode == DclLauncherApiContract.SCREEN_MODE_HOME) return false
+        fun matches(pkg: String?): Boolean = pkg?.trim() == selfPackageName
+        return if (mode == DclLauncherApiContract.SCREEN_MODE_SPLIT) {
+            matches(dclForegroundPackage) ||
+                matches(dclLeftPackage) ||
+                matches(dclRightPackage)
+        } else {
+            matches(dclForegroundPackage)
+        }
+    }
+
+    /**
      * Pure A9/single-display anti-loop for DCL hosting on display 0.
-     * Sticky process flag, intent skip, or DCL uiState already showing [selfPackage].
+     * Sticky process flag, intent skip, freeform/multi-window, DCL referrer,
+     * or DCL uiState already showing [selfPackage] (incl. split left/right).
      */
     fun shouldSkipDclRedirectAntiLoop(
         alreadyRedirectedViaDclThisProcess: Boolean,
@@ -296,13 +356,28 @@ internal object LaunchMainInStockAppWindowDecision {
         dclForegroundPackage: String?,
         dclScreenMode: String?,
         selfPackageName: String,
+        dclLeftPackage: String? = null,
+        dclRightPackage: String? = null,
+        alreadyInMultiWindow: Boolean = false,
+        launchedByDclReferrer: Boolean = false,
     ): Boolean {
-        if (intentSkipsRedirect || alreadyRedirectedViaDclThisProcess) return true
-        if (selfPackageName.isBlank()) return false
-        val fg = dclForegroundPackage?.trim().orEmpty()
-        if (fg != selfPackageName) return false
-        val mode = dclScreenMode?.trim().orEmpty()
-        return mode.isNotEmpty() && mode != "home"
+        if (alreadyRedirectedViaDclThisProcess) return true
+        if (
+            isDclInitiatedOrAlreadyEmbeddedLaunch(
+                intentSkipsRedirect = intentSkipsRedirect,
+                alreadyInMultiWindow = alreadyInMultiWindow,
+                launchedByDclReferrer = launchedByDclReferrer,
+            )
+        ) {
+            return true
+        }
+        return isAlreadyHostedByDclLayout(
+            dclForegroundPackage = dclForegroundPackage,
+            dclScreenMode = dclScreenMode,
+            selfPackageName = selfPackageName,
+            dclLeftPackage = dclLeftPackage,
+            dclRightPackage = dclRightPackage,
+        )
     }
 
     /**
@@ -311,7 +386,8 @@ internal object LaunchMainInStockAppWindowDecision {
      *
      * Used after the post-update first-open skip left Main in raw fullscreen (`singleTask`):
      * the second open must land in the chosen DCL mode without [android.app.Activity.finish].
-     * Skip when already hosted in a matching DCL screen mode, or when the intent opts out.
+     * Skip when already hosted in a matching DCL screen mode, when DCL already opened Main
+     * into freeform/split, or when the intent opts out.
      */
     fun shouldReapplyDclLaunchModeOnAliveMain(
         backend: MainAppWindowBackend,
@@ -321,15 +397,44 @@ internal object LaunchMainInStockAppWindowDecision {
         selfPackageName: String,
         nowMs: Long,
         lastReapplyAtMs: Long,
+        dclLeftPackage: String? = null,
+        dclRightPackage: String? = null,
+        alreadyInMultiWindow: Boolean = false,
+        launchedByDclReferrer: Boolean = false,
     ): Boolean {
-        if (intentSkipsRedirect) return false
+        if (
+            isDclInitiatedOrAlreadyEmbeddedLaunch(
+                intentSkipsRedirect = intentSkipsRedirect,
+                alreadyInMultiWindow = alreadyInMultiWindow,
+                launchedByDclReferrer = launchedByDclReferrer,
+            )
+        ) {
+            return false
+        }
         val dclMode = dclModeForBackend(backend) ?: return false
         if (lastReapplyAtMs > 0L && nowMs - lastReapplyAtMs < EXTERNAL_REDIRECT_COOLDOWN_MS) {
             return false
         }
         if (selfPackageName.isBlank()) return true
-        val fg = dclForegroundPackage?.trim().orEmpty()
         val screen = dclScreenMode?.trim().orEmpty()
+        // DCL split/freeform layout is intentional — do not expand to Main's saved mode.
+        if (
+            isAlreadyHostedByDclLayout(
+                dclForegroundPackage = dclForegroundPackage,
+                dclScreenMode = dclScreenMode,
+                selfPackageName = selfPackageName,
+                dclLeftPackage = dclLeftPackage,
+                dclRightPackage = dclRightPackage,
+            ) &&
+            (
+                screen == DclLauncherApiContract.SCREEN_MODE_SPLIT ||
+                    screenModesMatchDesired(screen, dclMode)
+            )
+        ) {
+            return false
+        }
+        // Matching single/full_width/fullscreen without relying on left/right.
+        val fg = dclForegroundPackage?.trim().orEmpty()
         if (fg == selfPackageName && screenModesMatchDesired(screen, dclMode)) {
             return false
         }

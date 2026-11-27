@@ -314,12 +314,22 @@ class MainActivity : ComponentActivity() {
             MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
             false,
         ) == true
+        val launchedByDclReferrer = LaunchMainInStockAppWindowDecision.isDclLauncherReferrerPackage(
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer(
+                referrer?.toString(),
+            ),
+        )
+        // DCL freeform/split already placed this task — do not launchApp again.
         val dclAlreadyHosting = LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
             alreadyRedirectedViaDclThisProcess = false,
-            intentSkipsRedirect = false,
+            intentSkipsRedirect = intentSkips,
             dclForegroundPackage = dclUi?.foregroundPackage,
             dclScreenMode = dclUi?.screenMode,
             selfPackageName = packageName,
+            dclLeftPackage = dclUi?.leftPackage,
+            dclRightPackage = dclUi?.rightPackage,
+            alreadyInMultiWindow = isInMultiWindowMode,
+            launchedByDclReferrer = launchedByDclReferrer,
         )
         val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
         // Application-level caches may still hold defaults on a cold start, so read DataStore, but
@@ -472,6 +482,11 @@ class MainActivity : ComponentActivity() {
             MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
             false,
         ) == true
+        val launchedByDclReferrer = LaunchMainInStockAppWindowDecision.isDclLauncherReferrerPackage(
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer(
+                referrer?.toString(),
+            ),
+        )
         val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
         val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
         val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -495,6 +510,10 @@ class MainActivity : ComponentActivity() {
             selfPackageName = packageName,
             nowMs = now,
             lastReapplyAtMs = lastDclModeReapplyAtMs,
+            dclLeftPackage = dclUi?.leftPackage,
+            dclRightPackage = dclUi?.rightPackage,
+            alreadyInMultiWindow = isInMultiWindowMode,
+            launchedByDclReferrer = launchedByDclReferrer,
         )
         if (!should) return
         lastDclModeReapplyAtMs = now

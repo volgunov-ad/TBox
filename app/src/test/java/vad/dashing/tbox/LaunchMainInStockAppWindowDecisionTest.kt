@@ -555,6 +555,99 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
+    fun shouldSkipDclRedirectAntiLoop_splitAndEmbeddedSignals() {
+        // Split: TBM on the non-focused side — still hosted, must not re-request layout.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "other.app",
+                dclScreenMode = DclLauncherApiContract.SCREEN_MODE_SPLIT,
+                selfPackageName = "vad.dashing.tbox",
+                dclLeftPackage = "vad.dashing.tbox",
+                dclRightPackage = "other.app",
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "other.app",
+                dclScreenMode = DclLauncherApiContract.SCREEN_MODE_SPLIT,
+                selfPackageName = "vad.dashing.tbox",
+                dclLeftPackage = "other.app",
+                dclRightPackage = "vad.dashing.tbox",
+            ),
+        )
+        // Already in freeform / multi-window (DCL split pane) even if uiState is stale.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+                alreadyInMultiWindow = true,
+            ),
+        )
+        // DCL launcher referrer.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+                launchedByDclReferrer = true,
+            ),
+        )
+        // Split without self on either side — still redirect.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "a",
+                dclScreenMode = DclLauncherApiContract.SCREEN_MODE_SPLIT,
+                selfPackageName = "vad.dashing.tbox",
+                dclLeftPackage = "a",
+                dclRightPackage = "b",
+            ),
+        )
+    }
+
+    @Test
+    fun packageFromAndroidAppReferrer_andDclLauncherCheck() {
+        assertEquals(
+            DclLauncherApiContract.LAUNCHER_PACKAGE,
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer(
+                "android-app://ras.dashing.tbox.launcher",
+            ),
+        )
+        assertEquals(
+            DclLauncherApiContract.LAUNCHER_PACKAGE,
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer(
+                "android-app://ras.dashing.tbox.launcher/ignored",
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.isDclLauncherReferrerPackage(
+                DclLauncherApiContract.LAUNCHER_PACKAGE,
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.isDclLauncherReferrerPackage("vad.dashing.tbox"),
+        )
+        assertEquals(
+            null,
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer("https://example.com"),
+        )
+        assertEquals(
+            null,
+            LaunchMainInStockAppWindowDecision.packageFromAndroidAppReferrer(null),
+        )
+    }
+
+    @Test
     fun shouldReapplyDclLaunchModeOnAliveMain_afterStickyFullscreen() {
         // Post-update first open left Main raw fullscreen; second open must re-host.
         assertTrue(
@@ -614,6 +707,50 @@ class LaunchMainInStockAppWindowDecisionTest {
                 selfPackageName = "vad.dashing.tbox",
                 nowMs = 101_000L,
                 lastReapplyAtMs = 100_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldReapplyDclLaunchModeOnAliveMain_skipsSplitAndFreeform() {
+        // DCL split already hosts TBM — must not expand to Main's saved app_area.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_APP_AREA,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "other.app",
+                dclScreenMode = DclLauncherApiContract.SCREEN_MODE_SPLIT,
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+                dclLeftPackage = "vad.dashing.tbox",
+                dclRightPackage = "other.app",
+            ),
+        )
+        // Freeform / multi-window pane (uiState may lag) — no re-apply.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_APP_AREA,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = "home",
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+                alreadyInMultiWindow = true,
+            ),
+        )
+        // DCL referrer — DCL chose the layout.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_FULLSCREEN,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+                launchedByDclReferrer = true,
             ),
         )
     }
