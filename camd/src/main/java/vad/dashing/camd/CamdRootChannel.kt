@@ -108,7 +108,16 @@ object CamdRootChannel {
             usedRootsvc
         }
 
-    /** rootsvc only: a legacy mb_daemon arm here would race DCL's own USB unlock script. */
+    /**
+     * Only for head units without rootsvc: the service arms itself through the same
+     * mb_daemon channel, so a fallback while it is merely slow would collide with it.
+     */
+    fun usbUnlockLegacy(apkPath: String): String = synchronized(armLock) {
+        val nonce = "u${System.currentTimeMillis()}"
+        legacyArmUnlocked(GrabberScripts.usbUnlock(nonce, apkPath), nonce)
+        runCatching { File(GrabberScripts.USB_UNLOCK_OUT).readText().trim() }.getOrDefault("")
+    }
+
     fun usbUnlock(): RootSvcResult {
         var result = RootSvcResult.unavailable("no attempt")
         repeat(CamdRootBridge.BUSY_RETRIES) {

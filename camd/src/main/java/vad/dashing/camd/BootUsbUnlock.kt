@@ -6,11 +6,13 @@ import android.os.Environment
 import android.os.SystemClock
 import android.os.storage.StorageManager
 import android.util.Log
+import vad.dashing.rootsvc.client.Allowlist
 import vad.dashing.rootsvc.client.RootSvcProtocol
 
 /**
  * Backup for DCL builds that do not unlock USB sticks at boot. With SystemUI hidden, vold
  * stays in secure-keyguard and does not scan USB disks until someone calls `usb.unlock`.
+ * rootsvc when it is installed; mb_daemon ([UsbUnlockMain]) only on head units without it.
  */
 object BootUsbUnlock {
     private const val TAG = "CamdUsbUnlock"
@@ -32,12 +34,32 @@ object BootUsbUnlock {
             Log.i(TAG, "не нужно: SystemUI скрыт=$hidden, флешка смонтирована=$mounted")
             return
         }
+        if (!rootsvcInstalled(context)) {
+            unlockViaMbDaemon(context)
+            return
+        }
         val result = CamdRootChannel.usbUnlock()
         if (result.isOk()) {
             Log.i(TAG, "usb.unlock через rootsvc выполнен")
         } else {
             Log.w(TAG, "usb.unlock: ${CamdRootBridge.failMessage(result, RootSvcProtocol.CMD_USB_UNLOCK)}")
         }
+    }
+
+    private fun unlockViaMbDaemon(context: Context) {
+        try {
+            val out = CamdRootChannel.usbUnlockLegacy(context.applicationInfo.sourceDir)
+            Log.i(TAG, "rootsvc не установлен, usb.unlock через mb_daemon: ${out.replace('\n', ' ')}")
+        } catch (error: Exception) {
+            Log.w(TAG, "usb.unlock через mb_daemon: ${error.message}")
+        }
+    }
+
+    private fun rootsvcInstalled(context: Context): Boolean = try {
+        context.packageManager.getPackageInfo(Allowlist.PKG_ROOTSVC, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
     }
 
     private fun systemUiHidden(context: Context): Boolean = try {

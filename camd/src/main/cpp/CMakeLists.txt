@@ -10,8 +10,5 @@ add_custom_command(TARGET camd_grab POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:camd_grab> ${CMAKE_SOURCE_DIR}/../assets/camd_grab
 )
 
-add_library(camd_gpu_probe SHARED camd_gpu_probe.cpp)
-target_link_libraries(camd_gpu_probe EGL GLESv2 nativewindow ${log-lib})
-
 add_library(camd_ahb SHARED camd_ahb.cpp)
 target_link_libraries(camd_ahb EGL GLESv2 nativewindow ${log-lib})
