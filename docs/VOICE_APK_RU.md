@@ -243,6 +243,7 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 | B | Облачные настройки ИИ (пресет/ключ/модель/`/models`) | voice | **сделано** |
 | C | Cloud tool-calling поверх каталога | voice | **сделано** ([VOICE_AI_AGENT_RU.md](VOICE_AI_AGENT_RU.md)) |
 | D | Уточняющий follow-up (1 раунд) | voice | **сделано** |
+| G | Длинные свободные ответы + chunked Piper | voice | **сделано** |
 
 Этапы 7–9 не откладывать «на потом после MVP»: они в scope; порядок после
 рабочего PTT-цикла (1–6).

@@ -1,8 +1,8 @@
 # Voice AI Agent — дизайн (облако + локально + aliases)
 
-Статус: **дизайн + этапы A–D**. В Voice: настройки облака, ping `/models`,
-tool-calling (`query_signal` / `invoke_action` / `run_automation`) с валидацией
-по каталогу, один уточняющий follow-up и fallback на `voiceAliasesRu`.
+Статус: **дизайн + этапы A–D + freeform speak**. В Voice: настройки облака,
+ping `/models`, tool-calling, один уточняющий follow-up, опциональные длинные
+свободные ответы (озвучка Piper по предложениям), fallback на `voiceAliasesRu`.
 
 Связанные документы:
 
@@ -82,6 +82,7 @@ Vosk (текст)
 | Tools агента | Только обёртки над External API: signals / invoke / run (+ позже clarify) |
 | Fallback | cloud → local classifier (позже) → **aliases** |
 | Отправка речи в облако | Явный opt-in в настройках Voice |
+| Длинные свободные ответы | Отдельный opt-in «Длинные свободные ответы»; без него Speak ≤240 знаков |
 | Dangerous | Как сейчас: токен + тумблер Monitor; Voice не дублирует запреты |
 
 Вне этого дизайна (позже): телефон как клиент; стриминг TTS по предложениям;
@@ -107,6 +108,7 @@ Vosk (текст)
 - `apiKey`;
 - `model` (из загруженного списка или ручной ввод);
 - тумблер «Разрешить отправку фраз в облако»;
+- тумблер «Длинные свободные ответы (озвучка)» — рассказы/факты без tools, Piper chunking;
 - таймаут / «сначала пробовать облако».
 
 Проверка связи: `GET /models` или короткий `chat/completions` smoke.
@@ -160,6 +162,7 @@ Aliases остаются обязательным этапом MVP и страх
 | D | Диалог уточнения (1 follow-up) | **сделано** (`CloudAgentOutcome.Clarify` + один `continueClarify`) |
 | E | Локальный классификатор (выбор runtime/модели под ГУ) | Офлайн intent без WAN |
 | F | Слоты: потеплее / тише / can_command | Invoke с value; тесты |
+| G | Длинные свободные ответы + chunked TTS | **сделано** (`allowFreeformSpeak`, `TtsTextChunker`) |
 
 Порядок B→C обязателен; E не блокирует облако.
 

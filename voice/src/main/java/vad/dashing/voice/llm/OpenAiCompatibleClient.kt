@@ -83,8 +83,9 @@ class OpenAiCompatibleClient(
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
-                .readTimeout(45, TimeUnit.SECONDS)
-                .callTimeout(55, TimeUnit.SECONDS)
+                // Freeform stories can take longer than short tool calls.
+                .readTimeout(90, TimeUnit.SECONDS)
+                .callTimeout(100, TimeUnit.SECONDS)
                 .build()
 
         fun parseModels(raw: String): CloudModelsResult {
