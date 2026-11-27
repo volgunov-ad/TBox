@@ -2563,6 +2563,9 @@
     <string name="data_title_time_widget">Time</string>
     <string name="data_title_cpu_usage">CPU load</string>
     <string name="data_title_free_ram_percent">Free memory</string>
+    <string name="data_title_hu_soc_temperature">HU SoC temperature</string>
+    <string name="data_title_hu_cpu_temperature">HU CPU temperature</string>
+    <string name="data_title_hu_gpu_temperature">HU GPU temperature</string>
     <string name="data_title_date_widget">Date</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_app_list_widget">App list</string>
@@ -2743,6 +2746,9 @@
     <string name="widget_desc_date">Current system date.</string>
     <string name="widget_desc_cpu_usage">Current head-unit CPU load as a percentage.</string>
     <string name="widget_desc_free_ram_percent">Free head-unit RAM as a percentage of total memory.</string>
+    <string name="widget_desc_hu_soc_temperature">Head-unit chip (SoC) temperature: aoss-usr on Android 9, cls0 on Android 10.</string>
+    <string name="widget_desc_hu_cpu_temperature">Hottest CPU-cluster temperature of the head unit (Android 9 only).</string>
+    <string name="widget_desc_hu_gpu_temperature">Head-unit GPU temperature (Android 9 only).</string>
     <string name="widget_desc_active_trip">Detailed trip metrics.</string>
     <string name="widget_desc_active_trip_simple">Main trip metrics in a simplified layout.</string>
     <string name="widget_desc_active_trip_mini">Brief trip metrics for a small tile.</string>

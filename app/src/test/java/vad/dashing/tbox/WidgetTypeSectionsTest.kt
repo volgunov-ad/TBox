@@ -49,6 +49,18 @@ class WidgetTypeSectionsTest {
         assertEquals(WidgetTypeSectionId.System, WidgetTypeSections.sectionFor(APP_LIST_WIDGET_DATA_KEY))
         assertEquals(
             WidgetTypeSectionId.System,
+            WidgetTypeSections.sectionFor(HU_SOC_TEMPERATURE_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            WidgetTypeSectionId.System,
+            WidgetTypeSections.sectionFor(HU_CPU_TEMPERATURE_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            WidgetTypeSectionId.System,
+            WidgetTypeSections.sectionFor(HU_GPU_TEMPERATURE_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            WidgetTypeSectionId.System,
             WidgetTypeSections.sectionFor(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY),
         )
         assertEquals(

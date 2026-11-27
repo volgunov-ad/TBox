@@ -19,6 +19,9 @@ import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
+import vad.dashing.tbox.HU_CPU_TEMPERATURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HU_GPU_TEMPERATURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HU_SOC_TEMPERATURE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
@@ -463,6 +466,18 @@ class TboxDataProvider(
             }
             CPU_USAGE_WIDGET_DATA_KEY -> createCpuUsageFlow(eff(0))
             FREE_RAM_PERCENT_WIDGET_DATA_KEY -> createFreeRamPercentFlow(eff(0))
+            HU_SOC_TEMPERATURE_WIDGET_DATA_KEY -> createThermalTemperatureFlow(
+                eff(1),
+                SystemMetricsReader::readSocTemperature,
+            )
+            HU_CPU_TEMPERATURE_WIDGET_DATA_KEY -> createThermalTemperatureFlow(
+                eff(1),
+                SystemMetricsReader::readCpuTemperature,
+            )
+            HU_GPU_TEMPERATURE_WIDGET_DATA_KEY -> createThermalTemperatureFlow(
+                eff(1),
+                SystemMetricsReader::readGpuTemperature,
+            )
             "restartTbox" -> restartFlow
             "espConnected" -> vad.dashing.tbox.esp.EspCompanionRepository.connected.mapState {
                 valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
@@ -535,6 +550,22 @@ class TboxDataProvider(
             while (true) {
                 val percent = activityManager?.let { SystemMetricsReader.freeRamPercent(it) }
                 emit(valueToString(percent, decimalPlaces))
+                delay(SYSTEM_METRICS_SAMPLE_PERIOD_MS)
+            }
+        }.distinctUntilChanged().stateIn(
+            scope = viewModel.viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "",
+        )
+    }
+
+    private fun createThermalTemperatureFlow(
+        decimalPlaces: Int,
+        readTemperature: () -> Float?,
+    ): StateFlow<String> {
+        return flow {
+            while (true) {
+                emit(valueToString(readTemperature(), decimalPlaces))
                 delay(SYSTEM_METRICS_SAMPLE_PERIOD_MS)
             }
         }.distinctUntilChanged().stateIn(

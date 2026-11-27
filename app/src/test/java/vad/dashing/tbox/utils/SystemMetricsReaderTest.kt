@@ -165,4 +165,120 @@ class SystemMetricsReaderTest {
             assertTrue(file.delete() || !file.exists())
         }
     }
+
+    @Test
+    fun parseThermalZoneTemperature_millidegreesToCelsius() {
+        assertEquals(47.9f, SystemMetricsReader.parseThermalZoneTemperature("47900")!!, 0.001f)
+        assertEquals(25f, SystemMetricsReader.parseThermalZoneTemperature("25000\n")!!, 0.001f)
+        assertEquals(-40f, SystemMetricsReader.parseThermalZoneTemperature(" -40000 ")!!, 0.001f)
+    }
+
+    @Test
+    fun parseThermalZoneTemperature_rejectsInvalidValues() {
+        assertNull(SystemMetricsReader.parseThermalZoneTemperature(""))
+        assertNull(SystemMetricsReader.parseThermalZoneTemperature("n/a"))
+        // -40000 stays valid (disconnected PA sensor), but -67 °C and below is dropped.
+        assertNull(SystemMetricsReader.parseThermalZoneTemperature("-67000"))
+        assertNull(SystemMetricsReader.parseThermalZoneTemperature("150000"))
+    }
+
+    @Test
+    fun readThermalZoneTemperature_fromTempFileAndMissingPath() {
+        val dir = File.createTempFile("thermal_zone_probe_", "").let {
+            it.delete()
+            it.mkdirs()
+            it
+        }
+        try {
+            File(dir, "temp").writeText("48200\n")
+            assertEquals(48.2f, SystemMetricsReader.readThermalZoneTemperature(dir.absolutePath)!!, 0.001f)
+            assertNull(SystemMetricsReader.readThermalZoneTemperature(dir.absolutePath + "/nope"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun thermalReaders_pickA9Zones() {
+        val dir = File.createTempFile("thermal_cls_", "").let {
+            it.delete()
+            it.mkdirs()
+            it
+        }
+        try {
+            // zone0 = soc (unreadable temp), zone1 = aoss-usr, zone6 = cpu-1-0-usr,
+            // zone10 = gpu-usr; matching the A9 layout.
+            writeZone(dir, "thermal_zone0", "soc", null)
+            writeZone(dir, "thermal_zone1", "aoss-usr", 48200)
+            writeZone(dir, "thermal_zone6", "cpu-1-0-usr", 48500)
+            writeZone(dir, "thermal_zone7", "cpuss-1-usr", 47900)
+            writeZone(dir, "thermal_zone10", "gpu-usr", 47600)
+            writeZone(dir, "thermal_zone11", "wlan-usr", 47300)
+
+            assertEquals(48.2f, SystemMetricsReader.readSocTemperature(dir.absolutePath)!!, 0.001f)
+            assertEquals(48.5f, SystemMetricsReader.readCpuTemperature(dir.absolutePath)!!, 0.001f)
+            assertEquals(47.6f, SystemMetricsReader.readGpuTemperature(dir.absolutePath)!!, 0.001f)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun thermalReaders_pickA10Zones() {
+        val dir = File.createTempFile("thermal_cls_a10_", "").let {
+            it.delete()
+            it.mkdirs()
+            it
+        }
+        try {
+            // A10 has a single cls0 zone; no CPU/GPU zones.
+            writeZone(dir, "thermal_zone0", "cls0", 36000)
+
+            assertEquals(36f, SystemMetricsReader.readSocTemperature(dir.absolutePath)!!, 0.001f)
+            assertNull(SystemMetricsReader.readCpuTemperature(dir.absolutePath))
+            assertNull(SystemMetricsReader.readGpuTemperature(dir.absolutePath))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun thermalReaders_missingDirectory() {
+        assertNull(SystemMetricsReader.readSocTemperature("no/such/dir"))
+        assertNull(SystemMetricsReader.readCpuTemperature("no/such/dir"))
+        assertNull(SystemMetricsReader.readGpuTemperature("no/such/dir"))
+        assertEquals(emptyList<SystemMetricsReader.ThermalZone>(), SystemMetricsReader.scanThermalZones("no/such/dir"))
+    }
+
+    @Test
+    fun scanThermalZones_skipsUnreadableTemp() {
+        val dir = File.createTempFile("thermal_scan_", "").let {
+            it.delete()
+            it.mkdirs()
+            it
+        }
+        try {
+            writeZone(dir, "thermal_zone0", "soc", null)
+            writeZone(dir, "thermal_zone1", "aoss-usr", 48200)
+            val zones = SystemMetricsReader.scanThermalZones(dir.absolutePath)
+            assertEquals(2, zones.size)
+            assertEquals("aoss-usr", zones[1].type)
+            assertEquals(48.2f, zones[1].temperatureCelsius!!, 0.001f)
+            assertNull(zones[0].temperatureCelsius)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    private fun writeZone(dir: File, name: String, type: String, milliTemp: Long?) {
+        val zone = File(dir, name)
+        zone.mkdirs()
+        File(zone, "type").writeText(type + "\n")
+        if (milliTemp == null) {
+            // Mimics EINVAL on read: create a file that yields no valid content.
+            File(zone, "temp").writeText("")
+        } else {
+            File(zone, "temp").writeText(milliTemp.toString() + "\n")
+        }
+    }
 }

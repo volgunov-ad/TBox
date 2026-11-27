@@ -12,6 +12,8 @@ import java.io.FileReader
  */
 object SystemMetricsReader {
 
+    private const val THERMAL_CLASS_DIR = "/sys/class/thermal"
+
     data class CpuSnapshot(
         val totalTicks: Long,
         val idleTicks: Long,
@@ -149,6 +151,97 @@ object SystemMetricsReader {
         val info = ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(info)
         return freeRamPercent(info.availMem, info.totalMem)
+    }
+
+    /**
+     * Temperature in °C from a thermal zone `temp` sysfs file.
+     * Values are millidegrees (47900 → 47.9) and may be negative (-40000 → -40).
+     * `null` on unreadable files (`EINVAL` on Qualcomm zones without a sensor),
+     * empty content, or absurd readings; values outside -67…+150 °C are dropped.
+     */
+    fun readThermalZoneTemperature(zoneDir: String): Float? {
+        return try {
+            val text = BufferedReader(FileReader("$zoneDir/temp")).use { it.readText() }
+            parseThermalZoneTemperature(text)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Visible for tests — parse the millidegree content of a thermal zone `temp` file. */
+    fun parseThermalZoneTemperature(text: String): Float? {
+        val milli = text.trim().toLongOrNull() ?: return null
+        if (milli <= -67000L || milli >= 150000L) return null
+        return (milli / 1000.0f)
+    }
+
+    /** Best SoC temperature across zone types: A9 `aoss-usr`, A10 `cls0`, plain `soc`. */
+    fun readSocTemperature(thermalClassDir: String = THERMAL_CLASS_DIR): Float? {
+        for (type in listOf("aoss-usr", "cls0", "soc")) {
+            val zones = thermalZoneDirsByType(thermalClassDir) { it == type }
+            val temp = hottestZoneTemperature(zones)
+            if (temp != null) return temp
+        }
+        return null
+    }
+
+    /** Hottest CPU-cluster zone by `cpuss-*-usr` / `cpu-1-*-usr` types; A9 only. */
+    fun readCpuTemperature(thermalClassDir: String = THERMAL_CLASS_DIR): Float? {
+        val zones = thermalZoneDirsByType(thermalClassDir) { type ->
+            type.startsWith("cpuss-") || type.startsWith("cpu-")
+        }.ifEmpty {
+            thermalZoneDirsByType(thermalClassDir) { it == "cpu" || it == "soc" }
+        }
+        return hottestZoneTemperature(zones)
+    }
+
+    /** Hottest `gpu*` zone; A9 only. */
+    fun readGpuTemperature(thermalClassDir: String = THERMAL_CLASS_DIR): Float? {
+        return hottestZoneTemperature(
+            thermalZoneDirsByType(thermalClassDir) { it.startsWith("gpu") },
+        )
+    }
+
+    /**
+     * One scan of the thermal class dir. Unreadable dirs and files are skipped;
+     * a missing directory yields an empty list (flows fall back through A9/A10 variants).
+     */
+    fun scanThermalZones(thermalClassDir: String = THERMAL_CLASS_DIR): List<ThermalZone> {
+        val dir = java.io.File(thermalClassDir)
+        if (!dir.isDirectory) return emptyList()
+        val zones = ArrayList<ThermalZone>()
+        val entries = dir.listFiles() ?: return emptyList()
+        for (entry in entries) {
+            val zoneDir = entry.absolutePath
+            val type = try {
+                BufferedReader(FileReader("$zoneDir/type")).use { it.readText().trim() }
+            } catch (_: Exception) {
+                continue
+            }
+            val temp = readThermalZoneTemperature(zoneDir)
+            zones.add(ThermalZone(dirName = entry.name, type = type, temperatureCelsius = temp))
+        }
+        return zones
+    }
+
+    data class ThermalZone(
+        val dirName: String,
+        val type: String,
+        val temperatureCelsius: Float?,
+    )
+
+    private fun thermalZoneDirsByType(
+        thermalClassDir: String,
+        predicate: (String) -> Boolean,
+    ): List<String> {
+        return scanThermalZones(thermalClassDir)
+            .filter { predicate(it.type) && it.temperatureCelsius != null }
+            .map { "${thermalClassDir.trimEnd('/')}/${it.dirName}" }
+    }
+
+    private fun hottestZoneTemperature(zoneDirs: List<String>): Float? {
+        return zoneDirs.maxOfOrNull { readThermalZoneTemperature(it) ?: Float.NEGATIVE_INFINITY }
+            ?.takeIf { it != Float.NEGATIVE_INFINITY }
     }
 
     /** Occupied RAM: total minus [ActivityManager.MemoryInfo.availMem]. */
