@@ -240,6 +240,56 @@ class VoiceCloudAgentTest {
     }
 
     @Test
+    fun freeformSpeak_allowsLongAnswer() {
+        val story = "А. ".repeat(200).trim() // well over SHORT_MAX_CHARS
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"role":"assistant","content":${org.json.JSONObject.quote(story)}}
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val withFreeform = configuredSettings().copy(allowFreeformSpeak = true)
+        val outcome = agent.resolve(
+            "расскажи историю Нижнего Новгорода",
+            withFreeform,
+            catalog,
+            automations,
+        )
+        assertTrue(outcome is CloudAgentOutcome.Speak)
+        assertTrue((outcome as CloudAgentOutcome.Speak).text.length > FreeformSpeakLimits.SHORT_MAX_CHARS)
+    }
+
+    @Test
+    fun withoutFreeform_longAnswerFallsBack() {
+        val story = "А. ".repeat(200).trim()
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"role":"assistant","content":${org.json.JSONObject.quote(story)}}
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val outcome = agent.resolve(
+            "расскажи историю",
+            configuredSettings().copy(allowFreeformSpeak = false),
+            catalog,
+            automations,
+        )
+        assertEquals(CloudAgentOutcome.Fallback, outcome)
+    }
+
+    @Test
     fun catalogPrompt_includesSignalAndSkipsCanCommand() {
         val text = CatalogPromptBuilder.build(catalog, automations)
         assertTrue(text.contains("outside_temperature"))

@@ -41,7 +41,8 @@ class VoiceCloudAgent(
         val messages = listOf(
             CloudChatMessage(
                 role = "system",
-                content = VoiceAgentTools.systemPrompt + "\n\nКаталог:\n" + catalogBlock,
+                content = VoiceAgentTools.systemPrompt(settings.allowFreeformSpeak) +
+                    "\n\nКаталог:\n" + catalogBlock,
             ),
             CloudChatMessage(role = "user", content = trimmed),
         )
@@ -103,17 +104,40 @@ class VoiceCloudAgent(
         }
         val content = chat.message.content?.trim().orEmpty()
         if (content.isEmpty()) return CloudAgentOutcome.Fallback
-        if (allowClarify && ClarifyQuestionDetector.isClarifyQuestion(content)) {
+        if (allowClarify &&
+            content.length <= FreeformSpeakLimits.SHORT_MAX_CHARS &&
+            ClarifyQuestionDetector.isClarifyQuestion(content)
+        ) {
             val history = messages + CloudChatMessage(role = "assistant", content = content)
             return CloudAgentOutcome.Clarify(
                 question = content,
                 session = ClarifySession(history = history, originalPhrase = originalPhrase),
             )
         }
-        if (content.length <= 240) {
+        if (settings.allowFreeformSpeak) {
+            return CloudAgentOutcome.Speak(truncateFreeform(content))
+        }
+        if (content.length <= FreeformSpeakLimits.SHORT_MAX_CHARS) {
             return CloudAgentOutcome.Speak(content)
         }
         return CloudAgentOutcome.Fallback
+    }
+
+    private fun truncateFreeform(text: String): String {
+        if (text.length <= FreeformSpeakLimits.FREEFORM_MAX_CHARS) return text
+        val cut = text.take(FreeformSpeakLimits.FREEFORM_MAX_CHARS)
+        val lastStop = maxOf(
+            cut.lastIndexOf('.'),
+            cut.lastIndexOf('!'),
+            cut.lastIndexOf('?'),
+            cut.lastIndexOf('…'),
+        )
+        val body = if (lastStop > FreeformSpeakLimits.FREEFORM_MAX_CHARS / 2) {
+            cut.take(lastStop + 1)
+        } else {
+            cut.trimEnd()
+        }
+        return "$body…"
     }
 
     fun mapToolCall(

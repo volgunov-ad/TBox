@@ -84,14 +84,19 @@ class PiperVoiceTts(
         val engine = synchronized(lock) { tts } ?: return
         stop()
         stopRequested.set(false)
-        try {
-            val audio = engine.generate(trimmed, sid = 0, speed = 1.0f)
-            val samples = audio.samples
-            if (samples.isEmpty() || stopRequested.get()) return
-            playFloatPcm(samples, audio.sampleRate)
-        } catch (t: Throwable) {
-            readyError = t.message ?: t.javaClass.simpleName
-            Log.e(TAG, "speak failed", t)
+        val chunks = TtsTextChunker.chunk(trimmed)
+        for (chunk in chunks) {
+            if (stopRequested.get()) return
+            try {
+                val audio = engine.generate(chunk, sid = 0, speed = 1.0f)
+                val samples = audio.samples
+                if (samples.isEmpty() || stopRequested.get()) return
+                playFloatPcm(samples, audio.sampleRate)
+            } catch (t: Throwable) {
+                readyError = t.message ?: t.javaClass.simpleName
+                Log.e(TAG, "speak failed", t)
+                return
+            }
         }
     }
 

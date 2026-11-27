@@ -47,6 +47,7 @@ data class VoiceHomeUiState(
     val cloudEnabled: Boolean = false,
     val cloudPrefer: Boolean = true,
     val cloudAllowPhrases: Boolean = false,
+    val cloudAllowFreeform: Boolean = false,
     val cloudPreset: CloudLlmPreset = CloudLlmPreset.AITUNNEL,
     val cloudBaseUrl: String = CloudLlmPreset.AITUNNEL.defaultBaseUrl,
     val cloudApiKey: String = "",
@@ -70,6 +71,7 @@ data class VoiceHomeUiState(
             enabled = cloudEnabled,
             preferCloud = cloudPrefer,
             allowSendPhrases = cloudAllowPhrases,
+            allowFreeformSpeak = cloudAllowFreeform,
             preset = cloudPreset,
             baseUrl = cloudBaseUrl,
             apiKey = cloudApiKey,
@@ -115,6 +117,7 @@ class VoiceHomeViewModel(
                         cloudEnabled = cloud.enabled,
                         cloudPrefer = cloud.preferCloud,
                         cloudAllowPhrases = cloud.allowSendPhrases,
+                        cloudAllowFreeform = cloud.allowFreeformSpeak,
                         cloudPreset = cloud.preset,
                         cloudBaseUrl = cloud.baseUrl,
                         cloudApiKey = cloud.apiKey,
@@ -173,6 +176,10 @@ class VoiceHomeViewModel(
 
     fun onCloudAllowPhrasesChange(value: Boolean) {
         _uiState.update { it.copy(cloudAllowPhrases = value) }
+    }
+
+    fun onCloudAllowFreeformChange(value: Boolean) {
+        _uiState.update { it.copy(cloudAllowFreeform = value) }
     }
 
     fun onCloudPresetChange(preset: CloudLlmPreset) {

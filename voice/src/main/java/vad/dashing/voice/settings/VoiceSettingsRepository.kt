@@ -38,6 +38,7 @@ class VoiceSettingsRepository(private val context: Context) {
     private val cloudEnabledKey = booleanPreferencesKey("cloud_enabled")
     private val cloudPreferKey = booleanPreferencesKey("cloud_prefer")
     private val cloudAllowPhrasesKey = booleanPreferencesKey("cloud_allow_phrases")
+    private val cloudAllowFreeformKey = booleanPreferencesKey("cloud_allow_freeform")
     private val cloudPresetKey = stringPreferencesKey("cloud_preset")
     private val cloudBaseUrlKey = stringPreferencesKey("cloud_base_url")
     private val cloudApiKeyKey = stringPreferencesKey("cloud_api_key")
@@ -61,6 +62,7 @@ class VoiceSettingsRepository(private val context: Context) {
                 enabled = prefs[cloudEnabledKey] ?: false,
                 preferCloud = prefs[cloudPreferKey] ?: true,
                 allowSendPhrases = prefs[cloudAllowPhrasesKey] ?: false,
+                allowFreeformSpeak = prefs[cloudAllowFreeformKey] ?: false,
                 preset = preset,
                 baseUrl = baseUrl,
                 apiKey = AccessTokenNormalizer.normalize(prefs[cloudApiKeyKey].orEmpty()),
@@ -83,6 +85,7 @@ class VoiceSettingsRepository(private val context: Context) {
             prefs[cloudEnabledKey] = cloud.enabled
             prefs[cloudPreferKey] = cloud.preferCloud
             prefs[cloudAllowPhrasesKey] = cloud.allowSendPhrases
+            prefs[cloudAllowFreeformKey] = cloud.allowFreeformSpeak
             prefs[cloudPresetKey] = cloud.preset.storageKey
             prefs[cloudBaseUrlKey] = CloudBaseUrlNormalizer.normalize(cloud.baseUrl)
             prefs[cloudApiKeyKey] = AccessTokenNormalizer.normalize(cloud.apiKey)

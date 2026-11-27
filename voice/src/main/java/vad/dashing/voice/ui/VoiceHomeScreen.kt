@@ -142,6 +142,12 @@ fun VoiceHomeScreen(
             onCheckedChange = viewModel::onCloudAllowPhrasesChange,
             enabled = !state.busy && !state.listening && state.cloudEnabled,
         )
+        SettingSwitchRow(
+            label = stringResource(R.string.cloud_allow_freeform),
+            checked = state.cloudAllowFreeform,
+            onCheckedChange = viewModel::onCloudAllowFreeformChange,
+            enabled = !state.busy && !state.listening && state.cloudEnabled && state.cloudAllowPhrases,
+        )
         Text(
             text = stringResource(R.string.cloud_preset),
             style = MaterialTheme.typography.labelLarge,

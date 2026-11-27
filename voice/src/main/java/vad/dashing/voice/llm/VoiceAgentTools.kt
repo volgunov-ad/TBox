@@ -74,14 +74,29 @@ object VoiceAgentTools {
                 ),
             )
 
-    val systemPrompt: String =
+    private val baseSystemPrompt: String =
         """
         Ты голосовой ассистент автомобиля Jetour (TBox / VAD Voice).
-        Когда намерение ясно — вызывай tool. Не выдумывай id сигналов, действий и правил — бери их из каталога.
+        Когда намерение ясно и это про машину/каталог — вызывай tool. Не выдумывай id сигналов, действий и правил — бери их из каталога.
         Если фраза неоднозначна (несколько подходящих id) — не вызывай tool, задай один короткий уточняющий вопрос по-русски (с «?»): какой сигнал / какое правило / какое действие.
-        Если нельзя помочь — одна короткая фраза отказа без вопроса.
-        Нельзя: can_command, http, adb, произвольный код. Только query_signal / invoke_action / run_automation.
+        Нельзя: can_command, http, adb, произвольный код. Tools только query_signal / invoke_action / run_automation.
         """.trimIndent()
+
+    private val freeformAppendix: String =
+        """
+        
+        Режим свободных ответов включён: если вопрос не про автомобиль и каталог (история, факты, объяснения) — ответь обычным текстом по-русски без tools.
+        Ответ должен быть удобен для озвучки: связный рассказ, без markdown/списков со звёздочками, примерно до 1500–2500 знаков (можно чуть длиннее, если явно просят «подробно» / «расскажи»).
+        """.trimIndent()
+
+    private val refuseAppendix: String =
+        """
+        
+        Если нельзя помочь через tools — одна короткая фраза отказа без вопроса (свободные длинные ответы выключены).
+        """.trimIndent()
+
+    fun systemPrompt(allowFreeformSpeak: Boolean): String =
+        baseSystemPrompt + if (allowFreeformSpeak) freeformAppendix else refuseAppendix
 
     private fun functionTool(name: String, description: String, parameters: JSONObject): JSONObject =
         JSONObject()
