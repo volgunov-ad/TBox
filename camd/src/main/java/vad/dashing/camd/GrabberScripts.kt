@@ -92,6 +92,17 @@ object GrabberScripts {
         return lines.joinToString("\n") + "\n"
     }
 
+    const val USB_UNLOCK_OUT = "/data/local/tmp/camd-usb-unlock.txt"
+
+    fun usbUnlock(nonce: String, apkPath: String): String = listOf(
+        "#!/system/bin/sh",
+        "CLASSPATH='$apkPath' /system/bin/app_process /system/bin vad.dashing.camd.UsbUnlockMain > $USB_UNLOCK_OUT 2>&1",
+        "chmod 644 $USB_UNLOCK_OUT",
+        "echo $nonce > $ARM",
+        "chmod 666 $ARM",
+        "exit 0",
+    ).joinToString("\n") + "\n"
+
     fun startAvm(nonce: String): String = listOf(
         "#!/system/bin/sh",
         "setprop ctl.start AVMapp",
