@@ -8,15 +8,21 @@ import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.TextNormalizer
 import vad.dashing.voice.nlu.VoiceIntent
 
+data class ClarifySession(
+    val history: List<CloudChatMessage>,
+    val originalPhrase: String,
+)
+
 sealed class CloudAgentOutcome {
     data class Intent(val intent: VoiceIntent) : CloudAgentOutcome()
     data class Speak(val text: String) : CloudAgentOutcome()
+    data class Clarify(val question: String, val session: ClarifySession) : CloudAgentOutcome()
     data object Fallback : CloudAgentOutcome()
 }
 
 /**
- * One-shot OpenAI-compatible tool-calling agent over the External API catalog (stage C).
- * Does not call Monitor itself — returns a [VoiceIntent] (or short speak / fallback).
+ * OpenAI-compatible tool-calling agent over the External API catalog.
+ * Stage C: one-shot tools. Stage D: at most one clarifying follow-up.
  */
 class VoiceCloudAgent(
     private val client: OpenAiCompatibleClient = OpenAiCompatibleClient(),
@@ -39,6 +45,49 @@ class VoiceCloudAgent(
             ),
             CloudChatMessage(role = "user", content = trimmed),
         )
+        return completeRound(
+            messages = messages,
+            settings = settings,
+            catalog = catalog,
+            automations = automations,
+            originalPhrase = trimmed,
+            allowClarify = true,
+        )
+    }
+
+    /**
+     * Second (and last) cloud round after [CloudAgentOutcome.Clarify].
+     * Never opens another clarify — Intent, Speak, or Fallback only.
+     */
+    fun continueClarify(
+        reply: String,
+        session: ClarifySession,
+        settings: CloudLlmSettings,
+        catalog: ApiCatalog,
+        automations: List<AutomationSummary>,
+    ): CloudAgentOutcome {
+        if (!settings.looksConfigured()) return CloudAgentOutcome.Fallback
+        val trimmed = reply.trim()
+        if (trimmed.isEmpty()) return CloudAgentOutcome.Fallback
+        val messages = session.history + CloudChatMessage(role = "user", content = trimmed)
+        return completeRound(
+            messages = messages,
+            settings = settings,
+            catalog = catalog,
+            automations = automations,
+            originalPhrase = session.originalPhrase,
+            allowClarify = false,
+        )
+    }
+
+    private fun completeRound(
+        messages: List<CloudChatMessage>,
+        settings: CloudLlmSettings,
+        catalog: ApiCatalog,
+        automations: List<AutomationSummary>,
+        originalPhrase: String,
+        allowClarify: Boolean,
+    ): CloudAgentOutcome {
         val chat = client.chatCompletions(
             baseUrl = settings.baseUrl,
             apiKey = settings.apiKey,
@@ -53,7 +102,15 @@ class VoiceCloudAgent(
                 ?: CloudAgentOutcome.Fallback
         }
         val content = chat.message.content?.trim().orEmpty()
-        if (content.isNotEmpty() && content.length <= 240) {
+        if (content.isEmpty()) return CloudAgentOutcome.Fallback
+        if (allowClarify && ClarifyQuestionDetector.isClarifyQuestion(content)) {
+            val history = messages + CloudChatMessage(role = "assistant", content = content)
+            return CloudAgentOutcome.Clarify(
+                question = content,
+                session = ClarifySession(history = history, originalPhrase = originalPhrase),
+            )
+        }
+        if (content.length <= 240) {
             return CloudAgentOutcome.Speak(content)
         }
         return CloudAgentOutcome.Fallback

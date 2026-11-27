@@ -20,6 +20,10 @@
     <string name="action_check_cloud">Проверить облако /models</string>
     <string name="action_next_cloud_model">Следующая модель из списка</string>
     <string name="phrase_label">Фраза</string>
+    <string name="phrase_label_clarify">Ответ на уточнение</string>
+    <string name="clarify_banner">Агент ждёт уточнение (один ответ). Затем снова aliases/облако.</string>
+    <string name="action_answer_clarify">Ответить на уточнение</string>
+    <string name="action_cancel_clarify">Отменить уточнение</string>
     <string name="action_save">Сохранить</string>
     <string name="action_request_access">Получить доступ у TBox Monitor</string>
     <string name="action_check_health">Проверить связь Monitor</string>
