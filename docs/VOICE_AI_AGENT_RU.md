@@ -1,8 +1,8 @@
 # Voice AI Agent — дизайн (облако + локально + aliases)
 
-Статус: **дизайн + этапы A–C**. В Voice: настройки облака, ping `/models`,
-one-shot tool-calling (`query_signal` / `invoke_action` / `run_automation`)
-с валидацией по каталогу и fallback на `voiceAliasesRu`.
+Статус: **дизайн + этапы A–D**. В Voice: настройки облака, ping `/models`,
+tool-calling (`query_signal` / `invoke_action` / `run_automation`) с валидацией
+по каталогу, один уточняющий follow-up и fallback на `voiceAliasesRu`.
 
 Связанные документы:
 
@@ -129,7 +129,9 @@ Tools (имена условные):
 | `run_automation` | `POST /v1/automations/{id}/run` |
 
 Валидация: id действия/сигнала/автоматизации сверяются с кэшем каталога **до** HTTP.
-Ответ модели без tool call → короткая TTS-фраза (уточнение / «не понял»), без side effects.
+Ответ модели без tool call:
+- уточняющий вопрос (`?` / «какой…») → `Clarify`, ровно **один** follow-up (`continueClarify`);
+- иначе короткая TTS-фраза («не понял») без side effects.
 
 ---
 
@@ -155,7 +157,7 @@ Aliases остаются обязательным этапом MVP и страх
 | A | Дизайн (этот документ) + полировка aliases | **сделано** |
 | B | Настройки Voice: пресеты, ключ, модель, opt-in, ping `/models` | **сделано** (`CloudLlmSettings`, UI, `OpenAiCompatibleClient.listModels`) |
 | C | Cloud tool-calling поверх каталога (без UI диалога) | **сделано** (`VoiceCloudAgent` → тот же `handleIntent` / TTS) |
-| D | Диалог уточнения (1 follow-up) | «какой сигнал?» / «какое правило?» |
+| D | Диалог уточнения (1 follow-up) | **сделано** (`CloudAgentOutcome.Clarify` + один `continueClarify`) |
 | E | Локальный классификатор (выбор runtime/модели под ГУ) | Офлайн intent без WAN |
 | F | Слоты: потеплее / тише / can_command | Invoke с value; тесты |
 

@@ -244,10 +244,32 @@ fun VoiceHomeScreen(
             Text(stringResource(R.string.action_refresh_catalog))
         }
 
+        if (state.awaitingClarify) {
+            Text(
+                text = stringResource(R.string.clarify_banner),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            OutlinedButton(
+                onClick = viewModel::cancelClarify,
+                enabled = !state.busy && !state.listening,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.action_cancel_clarify))
+            }
+        }
         OutlinedTextField(
             value = state.phrase,
             onValueChange = viewModel::onPhraseChange,
-            label = { Text(stringResource(R.string.phrase_label)) },
+            label = {
+                Text(
+                    if (state.awaitingClarify) {
+                        stringResource(R.string.phrase_label_clarify)
+                    } else {
+                        stringResource(R.string.phrase_label)
+                    },
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
             enabled = !state.listening,
@@ -257,7 +279,13 @@ fun VoiceHomeScreen(
             enabled = !state.busy && !state.listening && state.phrase.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.action_run_phrase))
+            Text(
+                if (state.awaitingClarify) {
+                    stringResource(R.string.action_answer_clarify)
+                } else {
+                    stringResource(R.string.action_run_phrase)
+                },
+            )
         }
         if (state.speaking) {
             OutlinedButton(

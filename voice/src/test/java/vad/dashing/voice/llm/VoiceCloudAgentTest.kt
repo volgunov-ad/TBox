@@ -1,7 +1,12 @@
 package vad.dashing.voice.llm
 
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -15,7 +20,20 @@ import vad.dashing.voice.nlu.VoiceIntent
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class VoiceCloudAgentTest {
-    private val agent = VoiceCloudAgent()
+    private lateinit var server: MockWebServer
+    private lateinit var agent: VoiceCloudAgent
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+        agent = VoiceCloudAgent(OpenAiCompatibleClient())
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
 
     private val catalog = ApiCatalog(
         catalogVersion = 11,
@@ -130,6 +148,98 @@ class VoiceCloudAgentTest {
     }
 
     @Test
+    fun clarifyThenContinue_resolvesTool() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "stop",
+                    "message": {
+                      "role": "assistant",
+                      "content": "Какая температура: на улице или в салоне?"
+                    }
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "tool_calls",
+                    "message": {
+                      "role": "assistant",
+                      "content": null,
+                      "tool_calls": [{
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                          "name": "query_signal",
+                          "arguments": "{\"signalId\":\"outside_temperature\"}"
+                        }
+                      }]
+                    }
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val settings = configuredSettings()
+        val first = agent.resolve("температура", settings, catalog, automations)
+        assertTrue(first is CloudAgentOutcome.Clarify)
+        first as CloudAgentOutcome.Clarify
+        assertTrue(first.question.contains("улице"))
+
+        val second = agent.continueClarify("на улице", first.session, settings, catalog, automations)
+        assertTrue(second is CloudAgentOutcome.Intent)
+        val intent = (second as CloudAgentOutcome.Intent).intent as VoiceIntent.QuerySignal
+        assertEquals("outside_temperature", intent.signal.id)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun continueClarify_doesNotOpenSecondClarify() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "choices": [{
+                    "finish_reason": "stop",
+                    "message": {
+                      "role": "assistant",
+                      "content": "Какой именно сигнал?"
+                    }
+                  }]
+                }
+                """.trimIndent(),
+            ),
+        )
+        val settings = configuredSettings()
+        val session = ClarifySession(
+            history = listOf(
+                CloudChatMessage(role = "system", content = "sys"),
+                CloudChatMessage(role = "user", content = "температура"),
+                CloudChatMessage(role = "assistant", content = "Какая температура?"),
+            ),
+            originalPhrase = "температура",
+        )
+        val outcome = agent.continueClarify("ещё раз", session, settings, catalog, automations)
+        // Second round may Speak the question text, but must not return Clarify.
+        assertFalse(outcome is CloudAgentOutcome.Clarify)
+        assertTrue(outcome is CloudAgentOutcome.Speak)
+    }
+
+    @Test
+    fun clarifyDetector_recognizesQuestions() {
+        assertTrue(ClarifyQuestionDetector.isClarifyQuestion("Какой сигнал?"))
+        assertTrue(ClarifyQuestionDetector.isClarifyQuestion("Уточните правило"))
+        assertFalse(ClarifyQuestionDetector.isClarifyQuestion("Не понял запрос"))
+    }
+
+    @Test
     fun catalogPrompt_includesSignalAndSkipsCanCommand() {
         val text = CatalogPromptBuilder.build(catalog, automations)
         assertTrue(text.contains("outside_temperature"))
@@ -163,5 +273,17 @@ class VoiceCloudAgentTest {
         assertEquals(1, parsed.message.toolCalls.size)
         assertEquals(VoiceAgentTools.QUERY_SIGNAL, parsed.message.toolCalls[0].name)
         assertTrue(parsed.message.toolCalls[0].argumentsJson.contains("outside_temperature"))
+    }
+
+    private fun configuredSettings(): CloudLlmSettings {
+        val base = server.url("v1").toString().trimEnd('/')
+        return CloudLlmSettings(
+            enabled = true,
+            preferCloud = true,
+            allowSendPhrases = true,
+            baseUrl = base,
+            apiKey = "test-key",
+            model = "gpt-test",
+        )
     }
 }

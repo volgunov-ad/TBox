@@ -24,6 +24,7 @@ import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.llm.ClarifySession
 import vad.dashing.voice.llm.CloudAgentOutcome
 import vad.dashing.voice.llm.CloudBaseUrlNormalizer
 import vad.dashing.voice.llm.CloudLlmPreset
@@ -61,6 +62,8 @@ data class VoiceHomeUiState(
     val speaking: Boolean = false,
     val listening: Boolean = false,
     val lastHealthOk: Boolean? = null,
+    /** Waiting for one clarifying reply after a cloud clarify question. */
+    val awaitingClarify: Boolean = false,
 ) {
     fun cloudSettings(): CloudLlmSettings =
         CloudLlmSettings(
@@ -96,6 +99,9 @@ class VoiceHomeViewModel(
     /** Old → new token, so later calls of one phrase skip the token Monitor already replaced. */
     @Volatile
     private var renewal: Pair<String, String>? = null
+
+    @Volatile
+    private var pendingClarify: ClarifySession? = null
 
     init {
         viewModelScope.launch {
@@ -145,6 +151,16 @@ class VoiceHomeViewModel(
 
     fun onPhraseChange(value: String) {
         _uiState.update { it.copy(phrase = value) }
+    }
+
+    fun cancelClarify() {
+        pendingClarify = null
+        _uiState.update {
+            it.copy(
+                awaitingClarify = false,
+                statusMessage = "Уточнение отменено",
+            )
+        }
     }
 
     fun onCloudEnabledChange(value: Boolean) {
@@ -452,25 +468,69 @@ class VoiceHomeViewModel(
             }
 
             val cloudSettings = state.cloudSettings()
+            val clarify = pendingClarify
             if (cloudSettings.looksConfigured() && cloudSettings.preferCloud) {
-                _uiState.update { it.copy(statusMessage = "Облачный агент…") }
-                val outcome = withContext(Dispatchers.IO) {
-                    cloudAgent.resolve(
-                        phrase = state.phrase,
-                        settings = cloudSettings,
-                        catalog = catalog,
-                        automations = cachedAutomations,
+                _uiState.update {
+                    it.copy(
+                        statusMessage = if (clarify != null) {
+                            "Уточнение…"
+                        } else {
+                            "Облачный агент…"
+                        },
                     )
+                }
+                val outcome = withContext(Dispatchers.IO) {
+                    if (clarify != null) {
+                        cloudAgent.continueClarify(
+                            reply = state.phrase,
+                            session = clarify,
+                            settings = cloudSettings,
+                            catalog = catalog,
+                            automations = cachedAutomations,
+                        )
+                    } else {
+                        cloudAgent.resolve(
+                            phrase = state.phrase,
+                            settings = cloudSettings,
+                            catalog = catalog,
+                            automations = cachedAutomations,
+                        )
+                    }
                 }
                 when (outcome) {
                     is CloudAgentOutcome.Intent -> {
-                        handleIntent(outcome.intent, state, port, catalog, sourceTag = "cloud")
+                        pendingClarify = null
+                        _uiState.update { it.copy(awaitingClarify = false) }
+                        handleIntent(
+                            outcome.intent,
+                            state,
+                            port,
+                            catalog,
+                            sourceTag = if (clarify != null) "cloud-clarify" else "cloud",
+                        )
                         return@launch
                     }
-                    is CloudAgentOutcome.Speak -> {
+                    is CloudAgentOutcome.Clarify -> {
+                        pendingClarify = outcome.session
                         _uiState.update {
                             it.copy(
                                 busy = false,
+                                awaitingClarify = true,
+                                lastHealthOk = true,
+                                answerMessage = outcome.question,
+                                phrase = "",
+                                statusMessage = "intent=cloud-clarify — ответьте фразой или «Слушать»",
+                            )
+                        }
+                        speakAnswer(outcome.question)
+                        return@launch
+                    }
+                    is CloudAgentOutcome.Speak -> {
+                        pendingClarify = null
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                awaitingClarify = false,
                                 lastHealthOk = true,
                                 answerMessage = outcome.text,
                                 statusMessage = "intent=cloud-speak",
@@ -480,9 +540,17 @@ class VoiceHomeViewModel(
                         return@launch
                     }
                     CloudAgentOutcome.Fallback -> {
-                        _uiState.update { it.copy(statusMessage = "Aliases…") }
+                        pendingClarify = null
+                        _uiState.update {
+                            it.copy(
+                                awaitingClarify = false,
+                                statusMessage = "Aliases…",
+                            )
+                        }
                     }
                 }
+            } else {
+                pendingClarify = null
             }
 
             val intent = nlu.match(state.phrase, catalog, cachedAutomations)
