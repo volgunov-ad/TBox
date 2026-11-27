@@ -22,6 +22,8 @@ import vad.dashing.voice.api.ExternalApiClient
 import vad.dashing.voice.api.ExternalApiHttpException
 import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
+import vad.dashing.voice.nlu.LocalIntentClassifier
+import vad.dashing.voice.nlu.NgramLocalIntentClassifier
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
 import vad.dashing.voice.llm.ClarifySession
@@ -65,6 +67,7 @@ data class VoiceHomeUiState(
     val lastHealthOk: Boolean? = null,
     /** Waiting for one clarifying reply after a cloud clarify question. */
     val awaitingClarify: Boolean = false,
+    val localClassifierEnabled: Boolean = true,
 ) {
     fun cloudSettings(): CloudLlmSettings =
         CloudLlmSettings(
@@ -85,6 +88,7 @@ class VoiceHomeViewModel(
     private val apiClient: ExternalApiClient = ExternalApiClient(),
     private val cloudClient: OpenAiCompatibleClient = OpenAiCompatibleClient(),
     private val cloudAgent: VoiceCloudAgent = VoiceCloudAgent(cloudClient),
+    private val localClassifier: LocalIntentClassifier = NgramLocalIntentClassifier(),
     private val nlu: AliasNluMatcher = AliasNluMatcher(),
     private val tts: VoiceTts = PiperVoiceTts.createOrNoOp(application),
     private val stt: VoiceStt = VoskVoiceStt.createOrNoOp(application),
@@ -122,6 +126,7 @@ class VoiceHomeViewModel(
                         cloudBaseUrl = cloud.baseUrl,
                         cloudApiKey = cloud.apiKey,
                         cloudModel = cloud.model,
+                        localClassifierEnabled = settings.localClassifierEnabled,
                     )
                 }
             }
@@ -182,6 +187,10 @@ class VoiceHomeViewModel(
         _uiState.update { it.copy(cloudAllowFreeform = value) }
     }
 
+    fun onLocalClassifierEnabledChange(value: Boolean) {
+        _uiState.update { it.copy(localClassifierEnabled = value) }
+    }
+
     fun onCloudPresetChange(preset: CloudLlmPreset) {
         _uiState.update {
             val url = if (preset == CloudLlmPreset.CUSTOM) {
@@ -232,7 +241,13 @@ class VoiceHomeViewModel(
             model = state.cloudModel.trim(),
         )
         viewModelScope.launch {
-            settingsRepository.save(state.host, port, token, cloud)
+            settingsRepository.save(
+                host = state.host,
+                port = port,
+                accessToken = token,
+                cloud = cloud,
+                localClassifierEnabled = state.localClassifierEnabled,
+            )
             _uiState.update {
                 it.copy(
                     token = token,
@@ -551,7 +566,7 @@ class VoiceHomeViewModel(
                         _uiState.update {
                             it.copy(
                                 awaitingClarify = false,
-                                statusMessage = "Aliases…",
+                                statusMessage = "Локальный NLU…",
                             )
                         }
                     }
@@ -560,6 +575,18 @@ class VoiceHomeViewModel(
                 pendingClarify = null
             }
 
+            if (state.localClassifierEnabled) {
+                _uiState.update { it.copy(statusMessage = "Локальный классификатор…") }
+                val localIntent = withContext(Dispatchers.Default) {
+                    localClassifier.classify(state.phrase, catalog, cachedAutomations)
+                }
+                if (localIntent !is VoiceIntent.Unknown) {
+                    handleIntent(localIntent, state, port, catalog, sourceTag = "local")
+                    return@launch
+                }
+            }
+
+            _uiState.update { it.copy(statusMessage = "Aliases…") }
             val intent = nlu.match(state.phrase, catalog, cachedAutomations)
             handleIntent(intent, state, port, catalog, sourceTag = "alias")
         }

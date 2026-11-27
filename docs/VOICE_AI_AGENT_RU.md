@@ -1,8 +1,8 @@
 # Voice AI Agent — дизайн (облако + локально + aliases)
 
-Статус: **дизайн + этапы A–D + freeform speak**. В Voice: настройки облака,
-ping `/models`, tool-calling, один уточняющий follow-up, опциональные длинные
-свободные ответы (озвучка Piper по предложениям), fallback на `voiceAliasesRu`.
+Статус: **дизайн + этапы A–E + freeform**. Маршрут NLU:
+`cloud → локальный n-gram классификатор → aliases`. Нейросеть ONNX/GGUF на ГУ —
+следующая итерация того же интерфейса `LocalIntentClassifier`.
 
 Связанные документы:
 
@@ -65,9 +65,11 @@ Vosk (текст)
   → Piper TTS
 ```
 
-Локальный runtime (llama.cpp / MLC / ONNX) и конкретная модель **не зафиксированы**
-в этом дизайне: сначала облако + aliases; локальный классификатор — отдельный этап,
-когда будет выбран формат под CPU ГУ (A9/A10).
+**Этап E (сейчас):** встроенный офлайн `NgramLocalIntentClassifier` (char n-gram +
+priors по RU-cue), без native-модели — безопасно по RAM/CPU для A9/A10.
+
+**Позже:** тот же интерфейс `LocalIntentClassifier` может закрыть ONNX/GGUF
+(отдельная загрузка модели, не в APK).
 
 ---
 
@@ -160,7 +162,7 @@ Aliases остаются обязательным этапом MVP и страх
 | B | Настройки Voice: пресеты, ключ, модель, opt-in, ping `/models` | **сделано** (`CloudLlmSettings`, UI, `OpenAiCompatibleClient.listModels`) |
 | C | Cloud tool-calling поверх каталога (без UI диалога) | **сделано** (`VoiceCloudAgent` → тот же `handleIntent` / TTS) |
 | D | Диалог уточнения (1 follow-up) | **сделано** (`CloudAgentOutcome.Clarify` + один `continueClarify`) |
-| E | Локальный классификатор (выбор runtime/модели под ГУ) | Офлайн intent без WAN |
+| E | Локальный классификатор (офлайн) | **сделано** (`NgramLocalIntentClassifier`; ONNX — позже) |
 | F | Слоты: потеплее / тише / can_command | Invoke с value; тесты |
 | G | Длинные свободные ответы + chunked TTS | **сделано** (`allowFreeformSpeak`, `TtsTextChunker`) |
 
@@ -176,7 +178,7 @@ Aliases остаются обязательным этапом MVP и страх
 | Галлюцинации id | Whitelist по каталогу; отказ без invoke |
 | Латентность ГУ↔API | Короткий prompt; таймаут; параллельно не блокировать UI |
 | ГУ без интернета | SoftAP / телефон как мост — вне Voice; иначе aliases/local |
-| Размер локальной модели | Не вшивать в APK; отдельная загрузка; default aliases |
+| Размер локальной модели | E1 = n-gram без веса; нейросеть — отдельная загрузка, не в APK |
 | can_command из голоса | Пока не в tools Voice; матчер aliases не выбирает can_command (см. VOICE_APK §5) |
 
 ---

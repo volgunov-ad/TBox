@@ -115,6 +115,18 @@ fun VoiceHomeScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        SettingSwitchRow(
+            label = stringResource(R.string.local_classifier_enabled),
+            checked = state.localClassifierEnabled,
+            onCheckedChange = viewModel::onLocalClassifierEnabledChange,
+            enabled = !state.busy && !state.listening,
+        )
+        Text(
+            text = stringResource(R.string.local_classifier_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         Text(
             text = stringResource(R.string.cloud_section_title),
             style = MaterialTheme.typography.titleMedium,

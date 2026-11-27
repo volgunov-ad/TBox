@@ -28,6 +28,8 @@ data class VoiceConnectionSettings(
 data class VoiceStoredSettings(
     val connection: VoiceConnectionSettings = VoiceConnectionSettings(),
     val cloud: CloudLlmSettings = CloudLlmSettings(),
+    /** Offline n-gram / future ONNX classifier between cloud and aliases (stage E). */
+    val localClassifierEnabled: Boolean = true,
 )
 
 class VoiceSettingsRepository(private val context: Context) {
@@ -43,6 +45,7 @@ class VoiceSettingsRepository(private val context: Context) {
     private val cloudBaseUrlKey = stringPreferencesKey("cloud_base_url")
     private val cloudApiKeyKey = stringPreferencesKey("cloud_api_key")
     private val cloudModelKey = stringPreferencesKey("cloud_model")
+    private val localClassifierKey = booleanPreferencesKey("local_classifier_enabled")
 
     val settings: Flow<VoiceStoredSettings> = context.voiceDataStore.data.map { prefs ->
         val preset = CloudLlmPreset.fromStorageKey(prefs[cloudPresetKey])
@@ -68,6 +71,7 @@ class VoiceSettingsRepository(private val context: Context) {
                 apiKey = AccessTokenNormalizer.normalize(prefs[cloudApiKeyKey].orEmpty()),
                 model = prefs[cloudModelKey].orEmpty().trim(),
             ),
+            localClassifierEnabled = prefs[localClassifierKey] ?: true,
         )
     }
 
@@ -76,6 +80,7 @@ class VoiceSettingsRepository(private val context: Context) {
         port: Int,
         accessToken: String,
         cloud: CloudLlmSettings,
+        localClassifierEnabled: Boolean = true,
     ) {
         context.voiceDataStore.edit { prefs ->
             prefs[hostKey] = host.trim().ifEmpty { VoiceConnectionSettings.DEFAULT_HOST }
@@ -90,6 +95,7 @@ class VoiceSettingsRepository(private val context: Context) {
             prefs[cloudBaseUrlKey] = CloudBaseUrlNormalizer.normalize(cloud.baseUrl)
             prefs[cloudApiKeyKey] = AccessTokenNormalizer.normalize(cloud.apiKey)
             prefs[cloudModelKey] = cloud.model.trim()
+            prefs[localClassifierKey] = localClassifierEnabled
         }
     }
 
