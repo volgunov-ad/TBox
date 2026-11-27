@@ -26,7 +26,7 @@ class InvokeActionPayloadBuilderTest {
     }
 
     @Test
-    fun build_canCommandRejected() {
+    fun build_canCommandRejectedWithoutSlots() {
         val action = CatalogAction(
             type = "can_command",
             bus = "vehicle",
@@ -34,6 +34,25 @@ class InvokeActionPayloadBuilderTest {
             voiceAliasesRu = listOf("климат"),
         )
         assertTrue(InvokeActionPayloadBuilder.build(action).isFailure)
+    }
+
+    @Test
+    fun buildCanCommand_putsValue() {
+        val json = InvokeActionPayloadBuilder.buildCanCommand(
+            bus = "vehicle",
+            propertyId = 188,
+            operation = "set",
+            value = "on",
+        )
+        assertEquals("can_command", json.getString("type"))
+        assertEquals(188, json.getInt("propertyId"))
+        assertEquals("on", json.getString("value"))
+    }
+
+    @Test
+    fun buildBuiltin_withVolume() {
+        val json = InvokeActionPayloadBuilder.buildBuiltin("set_media_volume", intValue = 15)
+        assertEquals(15, json.getInt("intValue"))
     }
 }
 

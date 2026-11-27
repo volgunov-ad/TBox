@@ -345,7 +345,9 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   **5** — read-only обогащение гео/модема отдельными signal id;
   **4** — у `can_command` добавлены `operations`, `signalId` и `write`, а у builtin `set_media_volume` — `write`).
 
-`write` — схема записи для сопряжённого клиента (TBox MQTT). Поле аддитивное: голосовой клиент его не читает.
+`write` — схема записи для сопряжённых клиентов (TBox MQTT и VAD Voice).
+Voice читает `write` / `signalId` / `operations` для слотов («потеплее», «тише»,
+can_command on/off).
 
 | `write.kind` | Смысл |
 |--------------|--------|

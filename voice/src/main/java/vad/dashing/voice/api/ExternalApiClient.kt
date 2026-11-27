@@ -198,6 +198,10 @@ class ExternalApiClient(
             val actions = buildList {
                 for (i in 0 until actionsJson.length()) {
                     val item = actionsJson.optJSONObject(i) ?: continue
+                    val signalId = when {
+                        item.isNull("signalId") -> null
+                        else -> item.optString("signalId").takeIf { it.isNotBlank() }
+                    }
                     add(
                         CatalogAction(
                             type = item.optString("type"),
@@ -207,6 +211,9 @@ class ExternalApiClient(
                             label = item.optString("label").takeIf { it.isNotBlank() },
                             safety = item.optString("safety").takeIf { it.isNotBlank() },
                             voiceAliasesRu = stringList(item.optJSONArray("voiceAliasesRu")),
+                            operations = stringList(item.optJSONArray("operations")),
+                            signalId = signalId,
+                            write = parseWrite(item.optJSONObject("write")),
                         ),
                     )
                 }
@@ -302,6 +309,43 @@ class ExternalApiClient(
                     val value = array.optString(i).trim()
                     if (value.isNotEmpty()) add(value)
                 }
+            }
+        }
+
+        private fun parseWrite(raw: JSONObject?): CatalogWriteSchema? {
+            if (raw == null) return null
+            val kind = raw.optString("kind").trim()
+            if (kind.isEmpty()) return null
+            val optionsArr = raw.optJSONArray("options")
+            val options = buildList {
+                if (optionsArr == null) return@buildList
+                for (i in 0 until optionsArr.length()) {
+                    val item = optionsArr.optJSONObject(i) ?: continue
+                    val state = item.optString("state").trim()
+                    if (state.isEmpty() || !item.has("value") || item.isNull("value")) continue
+                    val value = item.get("value")
+                    when (value) {
+                        is Number, is String -> add(CatalogWriteOption(state, value))
+                    }
+                }
+            }
+            return CatalogWriteSchema(
+                kind = kind,
+                options = options,
+                min = raw.optDoubleOrNull("min"),
+                max = raw.optDoubleOrNull("max"),
+                step = raw.optDoubleOrNull("step"),
+                unit = raw.optString("unit").takeIf { it.isNotBlank() },
+            )
+        }
+
+        private fun JSONObject.optDoubleOrNull(key: String): Double? {
+            if (!has(key) || isNull(key)) return null
+            val value = opt(key)
+            return when (value) {
+                is Number -> value.toDouble()
+                is String -> value.toDoubleOrNull()
+                else -> null
             }
         }
     }
